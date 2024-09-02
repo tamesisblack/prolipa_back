@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Perseo;
 
 use App\Http\Controllers\Controller;
+use App\Models\SolinfaFactura;
 use App\Models\Ventas;
 use App\Repositories\perseo\PerseoConsultasRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
@@ -72,27 +73,58 @@ class PerseoFacturacionController extends Controller
     //api:post/perseo/facturacion/facturas_crear
     public function facturas_crear(Request $request)
     {
-        // $factura     = $request->ven_codigo; //F-C24-SFN-0000004
-        $factura        = "F-C24-SFN-0000004";
-        $observacion    = "Factura de prueba"; //observacion
-        $getFactura = Ventas::where('ven_codigo',$factura)->first();
+        $factura            = $request->ven_codigo; //F0000004
+        $cliente_id         = $request->cliente_id;
+        $user_editor        = $request->user_editor;
+        $detalle            = [];
+        //empresa 1 => GONZALEZ GUAMAN WELLINGTON MAURICIO ; 2 => COBACANGO TOAPANTA CESAR BAYARDO
+        $empresa            = $request->empresa;
+        // $factura            = "F0000001";
+        $observacion        = "Factura de prueba"; //observacion
+        $getFactura         = SolinfaFactura::where('code',$factura)->first();
+        $ven_descuento      = 0;
         //validar que exista la factura
-        if(!$getFactura)                        { return ["status" => "0", "message" => "La factura no existe"]; }
+        if(!$getFactura)                           { return ["status" => "0", "message" => "La factura no existe"]; }
         //validar si la factura ya fue enviada a Perseo
-        if($getFactura->estadoPerseo == 1)      { return ["status" => "0", "message" => "La factura ya fue enviada a Perseo"]; }
-        $detalle = DB::SELECT("SELECT vd.*, (vd.det_ven_cantidad * vd.det_ven_valor_u) AS valorTotal
-            FROM f_detalle_venta vd
-            WHERE vd.ven_codigo = ?
-        ",[$factura]);
+        if($getFactura->estadoPerseo == 1)         { return ["status" => "0", "message" => "La factura ya fue enviada a Perseo"]; }
+        $id = $getFactura->id;
+        if($empresa == 1){
+            $detalle  = DB::connection('mysql2')->select("
+            SELECT o.*, p.barcode, p.name, p.price_in,
+              ROUND(o.q * p.price_in, 2) AS valorTotal,p.id_perseo_gonzales as id_perseo
+              FROM operation o
+              LEFT JOIN product p ON o.product_id = p.id
+              WHERE o.sell_id = ?;
+          ",[$id]);
+        }
+        if($empresa == 2){
+            $detalle  = DB::connection('mysql2')->select("
+            SELECT o.*, p.barcode, p.name, p.price_in,
+              ROUND(o.q * p.price_in, 2) AS valorTotal,p.id_perseo_cobacango as id_perseo
+              FROM operation o
+              LEFT JOIN product p ON o.product_id = p.id
+              WHERE o.sell_id = ?;
+          ",[$id]);
+        }
+        if(empty($detalle)) { return ["status" => "0", "message" => "La factura no tiene detalle"]; }
+        //multiplicar (el valorTotal * discount) / 100
+        foreach($detalle as $d){
+            $descuentoIndividual    = 0;
+            $descuentoIndividual    = $d->discount / 100;
+            $calcularDescuento      = ($d->valorTotal * $descuentoIndividual);
+            //guardar en ven_descuento
+            $ven_descuento        += $calcularDescuento;
+        }
+        //con 2 decimales
+        $ven_descuento = number_format($ven_descuento, 2, '.', '');
         //valor total de la factura - el descuento  - el transporte
-        $ven_valor       = $getFactura->ven_valor;
-        $ven_descuento  = $getFactura->ven_descuento;
+        $ven_valor      = $getFactura->total;
         $totalFactura   = 0;
         foreach( $detalle as $d){ $totalFactura += $d->valorTotal; }
         //con 2 decimales
         $totalFactura = number_format($totalFactura, 2, '.', '');
         //obtener la secuencia
-        $arraySecuencias                = $this->perseoConsultaReposiory->facturaSecuencia();
+        $arraySecuencias                = $this->perseoConsultaReposiory->facturaSecuencia($empresa,1);
         $getSecuencia                   = $arraySecuencias["secuencias"];
         $secuencia                      = $getSecuencia[0]["numeroactual"];
         //secuencia + 1
@@ -103,18 +135,23 @@ class PerseoFacturacionController extends Controller
         $secuenciaFinal                 = $format_secuencia;
         $detalles = [];
         foreach($detalle as $d){
+            $id_perseo = $d->id_perseo;
+            $barcode   = $d->barcode;
+            if($id_perseo == 0 || $id_perseo == null || $id_perseo == ""){
+                return ["status" => "0", "message" => "El codigo $barcode no se encuentra en perseo"];
+            }
             $detalles[] = [
                 "centros_costosid"      => 1,
                 "almacenesid"           => 1,
-                "productosid"           => 3,
+                "productosid"           => $id_perseo,
                 "medidasid"             => 1,
-                "cantidaddigitada"      => $d->det_ven_cantidad,
+                "cantidaddigitada"      => $d->q,
                 "cantidadfactor"        => 1,//Valor que se genera si se está trabajando con multimedidas, caso contrario por defecto enviar 1
-                "cantidad"              => $d->det_ven_cantidad,//Resultado que se obtiene al multiplicar cantidaddigitada*cantidadfactor. Es la cantidad real que se va a facturar en base a la medida con la que se está trabajando.
-                "precio"                => $d->det_ven_valor_u,
-                "preciovisible"         => $d->det_ven_valor_u,
-                "precioiva"             => $d->det_ven_valor_u,
-                "descuento"             => 0,
+                "cantidad"              => $d->q,//Resultado que se obtiene al multiplicar cantidaddigitada*cantidadfactor. Es la cantidad real que se va a facturar en base a la medida con la que se está trabajando.
+                "precio"                => $d->price_in,
+                "preciovisible"         => $d->price_in,
+                "precioiva"             => $d->price_in,
+                "descuento"             => $d->discount,
                 "costo"                 => 0,
                 "iva"                   => 0,//Porcentaje de IVA que tiene el producto; 12% o 0%
                 "descuentovalor"        => 0,
@@ -139,7 +176,7 @@ class PerseoFacturacionController extends Controller
                             "almacenesid"                   => 1,
                             "facturadoresid"                => 1,
                             "vendedoresid"                  => 3,
-                            "clientesid"                    => 493,//consultar
+                            "clientesid"                    => $cliente_id,//consultar
                             "clientes_sucursalesid"         => 0,
                             "tarifasid"                     => 1,
                             "establecimiento"               => "001",
@@ -170,15 +207,16 @@ class PerseoFacturacionController extends Controller
                 ]
             ];
             $url        = "facturas_crear";
-            $process    = $this->tr_PerseoPost($url, $body);
+            $process    = $this->tr_SolinfaPost($url, $body,$empresa);
             //si existe proccess["facturas"] enviar a perseo
             //actualizar a 1 en la tabla f_venta modelo Ventas campo estadoPerseo a 1
             if(isset($process["facturas"])) {
-                $facturasid_nuevo = $process["facturas"][0]["facturasid_nuevo"];
-                Ventas::where('ven_codigo',$factura)->update(['estadoPerseo' => 1,"idPerseo" => $facturasid_nuevo]);
+                $facturasid_nuevo   = $process["facturas"][0]["facturasid_nuevo"];
+                $facturas_secuencia = $process["facturas"][0]["facturas_secuencia"];
+                SolinfaFactura::where('code',$factura)->update(['estadoPerseo' => 1,"idfacturaPerseo" => $facturasid_nuevo, "facturas_secuencia_perseo" => $facturas_secuencia , "fecha_envio_perseo" => date('Y-m-d H:i:s'), "user_editor" => $user_editor ]);
             }
             else{
-                Ventas::where('ven_codigo',$factura)->update(['estadoPerseo' => 1]);
+                SolinfaFactura::where('code',$factura)->update(['estadoPerseo' => 0]);
             }
             //transaccion de laravel commit
             DB::commit();

@@ -167,20 +167,43 @@ class RemisionController extends Controller
 
     // SOLO ES PARA REALIZAR EL REPORTE DE CALMED
     public function GetRemisionCALMED_FECHA_TRANSPORTE(Request $request){
-        $query = DB::SELECT("SELECT * 
-        FROM FROM remision_copy r
-        INNER JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-        WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro' and r.trans_codigo = '$request->trans_codigo'
-        ORDER BY t.trans_nombre ASC");
+        $query = DB::SELECT("SELECT r.*, t.trans_nombre, (select i.telefonoInstitucion from f_venta f 
+        inner join institucion i on i.idInstitucion=f.institucion_id where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono
+         FROM remision_copy r
+        LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
+        WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro' and remi_ci_transportista = '$request->cedula'
+        ORDER BY remi_fecha_inicio ASC");
         return $query;
     }
 
     public function GetRemisionCALMED_FECHA(Request $request){
-        $query = DB::SELECT("SELECT * 
-        FROM remision_copy r
-        INNER JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-        WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro'
-        ORDER BY t.trans_nombre ASC");
+        if($request->op==0){
+            $query = DB::SELECT("SELECT r.*, t.trans_nombre, (select concat(i.telefonoInstitucion,' ',u.telefono) from f_venta f 
+        inner join institucion i on i.idInstitucion=f.institucion_id
+        inner join usuario u on u.idusuario=f.ven_cliente
+         where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono,
+            (select c.nombre from f_venta f
+         inner join institucion i on i.idInstitucion=f.institucion_id 
+         inner join ciudad c on i.ciudad_id=c.idciudad 
+         where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as ciudad
+            FROM remision_copy r
+            LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
+            WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro'
+            ORDER BY r.remi_fecha_inicio ASC");
+        }else if($request->op==1){
+            $query = DB::select("SELECT r.*, t.trans_nombre, (select concat(i.telefonoInstitucion,' ',u.telefono) from f_venta f 
+        inner join institucion i on i.idInstitucion=f.institucion_id
+        inner join usuario u on u.idusuario=f.ven_cliente
+         where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono,
+         (select c.nombre from f_venta f
+         inner join institucion i on i.idInstitucion=f.institucion_id 
+         inner join ciudad c on i.ciudad_id=c.idciudad 
+         where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as ciudad
+            FROM remision_copy r
+            LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
+            WHERE DATE(r.REMI_FECHA_INICIO) = CURDATE()
+            ORDER BY r.remi_fecha_inicio  ASC");
+        }
         return $query;
     }
 }

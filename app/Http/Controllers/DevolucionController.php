@@ -22,15 +22,13 @@ class DevolucionController extends Controller
     //API:GET/devoluciones
     public function index(Request $request)
     {
-       if($request->listadoDevoluciones){
-           return $this->listadoDevoluciones($request);
-        }
+       if($request->listadoProformasAgrupadas)  { return $this->listadoProformasAgrupadas($request); }
     }
-    //api:get/devoluciones?listadoDevoluciones=1
-    public function listadoDevoluciones(Request $request): \Illuminate\Http\JsonResponse
+    //api:get/devoluciones?listadoProformasAgrupadas=1&institucion=
+    public function listadoProformasAgrupadas(Request $request): \Illuminate\Http\JsonResponse
     {
         $institucion = $request->input('institucion');
-        return $this->proformaRepository->listadoDevoluciones($institucion);
+        return $this->proformaRepository->listadoProformasAgrupadas($institucion);
     }
     /**
      * Show the form for creating a new resource.

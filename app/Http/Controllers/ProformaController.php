@@ -111,12 +111,13 @@ class ProformaController extends Controller
         $datos = [];
         $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
             ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stock  as facturas,
-             p.pro_deposito as bodega,p.pro_reservar
+             p.pro_deposito as bodega,p.pro_reservar, l.descripcionlibro, ls.id_serie
               FROM f_detalle_proforma as dpr
             INNER JOIN  f_proforma as fp on dpr.prof_id=fp.id
             INNER JOIN libros_series as ls ON dpr.pro_codigo=ls.codigo_liquidacion
             INNER JOIN 1_4_cal_producto as p on dpr.pro_codigo=p.pro_codigo
             INNER JOIN series as s ON ls.id_serie=s.id_serie
+            INNER JOIN libro l ON ls.idLibro = l.idlibro
             WHERe dpr.prof_id='$request->prof_id'
         ");
         foreach($array1 as $key => $item){
@@ -143,6 +144,8 @@ class ProformaController extends Controller
                 'bodega' => $item->bodega,
                 'cant'   => (int)$cantidad,
                 'pro_reservar' => $item->pro_reservar,
+                'descripcion' => $item->descripcionlibro,
+                'id_serie' => $item->id_serie,
             );
 
         }
@@ -315,12 +318,14 @@ class ProformaController extends Controller
             if($tipo ==1){
                 $query = DB::SELECT("SELECT fpr.*,  em.nombre, em.img_base64,
                 us.nombres as username, us.apellidos as lastname, COUNT(dpr.pro_codigo) AS item, SUM(dpr.det_prof_cantidad) AS libros,
-                CONCAT(usa.nombres, ' ',usa.apellidos) as cliente
+                CONCAT(COALESCE(usa.nombres, ''), ' ', COALESCE(usa.apellidos, '')) AS cliente,
+                i.nombreInstitucion,i.ruc as rucPuntoVenta
                 FROM f_proforma fpr
                 LEFT JOIN usuario us ON fpr.user_editor = us.idusuario
                 LEFT JOIN empresas em ON fpr.emp_id =em.id
                 INNER JOIN f_detalle_proforma dpr ON dpr.prof_id=fpr.id
                 left join usuario usa on fpr.ven_cliente = usa.idusuario
+                LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
                 WHERE fpr.idPuntoventa= '$request->prof_id'
                 GROUP BY fpr.id, fpr.prof_id,fpr.prof_observacion,em.nombre, em.img_base64
                 order by fpr.created_at desc");
@@ -360,16 +365,57 @@ class ProformaController extends Controller
 
             return $array;
     }
+    public function getNumeroDocumento($empresa){
+        $letra ="";
+        if($empresa == 1){
+            $letra = "P";
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }else if ($empresa==3){
+            $letra = "C";
+            $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+        }
+        $getSecuencia = 1;
+            if(!empty($query1)){
+                $pre= $query1[0]->tdo_letra;
+                $codi=$query1[0]->cod;
+               $getSecuencia=(int)$codi+1;
+                if($getSecuencia>0 && $getSecuencia<10){
+                    $secuencia = "000000".$getSecuencia;
+                } else if($getSecuencia>9 && $getSecuencia<100){
+                    $secuencia = "00000".$getSecuencia;
+                } else if($getSecuencia>99 && $getSecuencia<1000){
+                    $secuencia = "0000".$getSecuencia;
+                }else if($getSecuencia>999 && $getSecuencia<10000){
+                    $secuencia = "000".$getSecuencia;
+                }else if($getSecuencia>9999 && $getSecuencia<100000){
+                    $secuencia = "00".$getSecuencia;
+                }else if($getSecuencia>99999 && $getSecuencia<1000000){
+                    $secuencia = "0".$getSecuencia;
+                }else if($getSecuencia>999999 && $getSecuencia<10000000){
+                    $secuencia = $getSecuencia;
+                }
+            }
+
+            return $letra."-".$secuencia;
+    }
     //registro y edicion de datos de la proforma y detalles de proforma
     public function Proforma_Registrar_modificar(Request $request)
        {
+
         try{
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         $miarray=json_decode($request->data_detalle);
         DB::beginTransaction();
             $proforma = new Proforma;
-            $proforma->prof_id = $request->prof_id;
+            if($request->id_group != 33){
+                $id_empresa         = $request->emp_id;
+                $cod_usuario        = $request->cod_usuario;
+                $getNumeroDocumento = $this->getNumeroDocumento($id_empresa);
+                $ven_codigo         = "PP-".$cod_usuario."-".$getNumeroDocumento;
+                $proforma->prof_id = $ven_codigo;
+            }
+
             $proforma->usu_codigo = $request->usu_codigo;
             $proforma->pedido_id = $request->pedido_id;
             $proforma->emp_id = $request->emp_id;
@@ -446,8 +492,20 @@ class ProformaController extends Controller
                 $oldvalue = Proforma::findOrFail($request->id);
                 $proforma = Proforma::findOrFail($request->id);
                 $emp_idEdit = $proforma->emp_id;
-                $proforma->prof_id = $request->prof_id;
+                $profIdStatus = $oldvalue->prof_id;
+                // $proforma->prof_id = $request->prof_id;
                 $proforma->emp_id = $request->emp_id;
+                if($request->id_group != 33){
+                //CODIGO PROF_IF
+                    if($oldvalue->prof_id == null || $oldvalue->prof_id ==""){
+                        $id_empresa         = $request->emp_id;
+                        $cod_usuario        = $request->cod_usuario;
+                        $getNumeroDocumento = $this->getNumeroDocumento($id_empresa);
+                        $ven_codigo         = "PP-".$cod_usuario."-".$getNumeroDocumento;
+                        $proforma->prof_id  = $ven_codigo;
+                    }
+                }
+                //CODIGO PROF_IF
                 if($request->prof_observacion){
                     $proforma->prof_observacion = $request->prof_observacion;
                 }
@@ -469,28 +527,30 @@ class ProformaController extends Controller
                 $proforma->ruc_cliente  = $getCedula;
                 }
                 $proforma->clientesidPerseo = $request->clientesidPerseo;
-                //si la libreria crea la solicitud y el facturador al editar ricien elige la empresa para asignar el codigo de proforma
-                if($emp_idEdit == null || $emp_idEdit == 0){
-                    if($request->emp_id==1){
-                        $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
-                    }else if($request->emp_id==3){
-                        $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
-                    }
-                    if(!empty($query1)){
-                        $id=$query1[0]->id;
-                        $codi=$query1[0]->cod;
-                        $co=(int)$codi+1;
-                        $tipo_doc = f_tipo_documento::findOrFail($id);
-                        if($request->emp_id==1){
-                            $tipo_doc->tdo_secuencial_Prolipa = $co;
-                        }else if($request->emp_id==3){
-                            $tipo_doc->tdo_secuencial_calmed = $co;
-                        }
-                        $tipo_doc->save();
-                    }
-                }
                 $proforma->save();
                 if($proforma){
+                    //======SECUENCIA======
+                    //si la libreria crea la solicitud y el facturador al editar ricien elige la empresa para asignar el codigo de proforma
+                    if($emp_idEdit == null || $emp_idEdit == 0 || $profIdStatus == null || $profIdStatus == ""){
+                        if($request->emp_id==1){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }else if($request->emp_id==3){
+                            $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_nombre='PRE-PROFORMA'");
+                        }
+                        if(!empty($query1)){
+                            $id=$query1[0]->id;
+                            $codi=$query1[0]->cod;
+                            $co=(int)$codi+1;
+                            $tipo_doc = f_tipo_documento::findOrFail($id);
+                            if($request->emp_id==1){
+                                $tipo_doc->tdo_secuencial_Prolipa = $co;
+                            }else if($request->emp_id==3){
+                                $tipo_doc->tdo_secuencial_calmed = $co;
+                            }
+                            $tipo_doc->save();
+                        }
+                    }
+                    //======SECUENCIA======
                     $newvalue = Proforma::findOrFail($request->id);
                     $this->tr_GuardarEnHistorico($request->prof_id,$request->id_usua,$oldvalue,$newvalue);
                 }

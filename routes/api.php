@@ -31,4 +31,5 @@ Route::get('estudiante_sopa/{id}', [EstudianteController::class, 'show']);
 
 ///=======PERSEO=========
 require_once "others/perseo/PerseoRouter.php";
-
+////ACORTADORES==
+Route::get('verDataLink/{codigo}', 'LinkAcortadorController@verDataLink');

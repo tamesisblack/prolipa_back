@@ -116,7 +116,7 @@ trait TraitCodigosGeneral{
         ib.nombreInstitucion as institucionBarra, i.nombreInstitucion,
         p.periodoescolar as periodo,
         pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
-        c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado'))
+        c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,c.codigo_proforma,c.proforma_empresa'))
         ->leftJoin('usuario as  u',         'c.idusuario',                  'u.idusuario')
         ->leftJoin('institucion  as ib',    'c.bc_institucion',             'ib.idInstitucion')
         ->leftJoin('institucion as  i',     'u.institucion_idInstitucion',  'i.idInstitucion')
@@ -194,7 +194,9 @@ trait TraitCodigosGeneral{
                 "codigo_paquete"                => strtoupper($item->codigo_paquete),
                 "fecha_registro_paquete"        => $item->fecha_registro_paquete,
                 "verificacion"                  => $item->verificacion,
-                "liquidado_regalado"            => $item->liquidado_regalado
+                "liquidado_regalado"            => $item->liquidado_regalado,
+                "codigo_proforma"               => $item->codigo_proforma,
+                "proforma_empresa"              => $item->proforma_empresa
             ];
         }
         return $datos;

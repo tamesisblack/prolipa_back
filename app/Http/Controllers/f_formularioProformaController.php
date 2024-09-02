@@ -9,6 +9,19 @@ use Illuminate\Http\Request;
 
 class f_formularioProformaController extends Controller
 {
+    public function GetTablaComentarioformularioProforma()
+    {
+        $commentQuery = DB::select("
+            SELECT table_comment 
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_name = ?
+        ", ['f_formulario_proforma']);
+
+        $comment = !empty($commentQuery) ? $commentQuery[0]->table_comment : null;
+
+        return $comment;
+    }
     public function Get_formularioProformaContador(Request $request){
         $valormasuno = $request->conteo+1;
         $query = DB::SELECT("SELECT ffp_id FROM f_formulario_proforma LIMIT $valormasuno");
@@ -137,6 +150,29 @@ class f_formularioProformaController extends Controller
             return $formularioProforma;
         } else {
             return "No está ingresando ningún ffp_id";
+        }
+    }
+
+    public function ActualizarComentarioFormularioProforma(Request $request)
+    {
+        DB::beginTransaction();
+        try {
+            // Obtener el comentario de la solicitud
+            $comentario = $request->Actualizar_comentario;
+            $tabla = 'f_formulario_proforma';
+
+            // Escapar el comentario para evitar problemas de inyección SQL
+            $comentarioEscapado = DB::getPdo()->quote($comentario);
+
+            // Actualizar el comentario de la tabla
+            // DB::statement('ALTER TABLE ' . $tabla . ' COMMENT = ?', [$comentario]);
+            DB::statement("ALTER TABLE {$tabla} COMMENT = {$comentarioEscapado}");
+
+            DB::commit();
+            return response()->json(["status" => "1", 'message' => 'Comentario actualizado correctamente'], 200);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json(["status" => "0", 'message' => 'Error al actualizar el comentario: ' . $e->getMessage()], 500);
         }
     }
 

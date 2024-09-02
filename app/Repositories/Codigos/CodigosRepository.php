@@ -11,7 +11,7 @@ class  CodigosRepository extends BaseRepository
     {
         parent::__construct($CodigoRepository);
     }
-    public function procesoUpdateGestionBodega($numeroProceso,$codigo,$union,$request,$factura,$paquete=null,$tipoBodega=null){
+    public function procesoUpdateGestionBodega($numeroProceso,$codigo,$union,$request,$factura,$paquete=null,$ifChangeProforma=false,$datosProforma=[]){
         $venta_estado = $request->venta_estado;
         $campoInstitucion = "";
         if($venta_estado == 1) { $campoInstitucion = "bc_institucion"; }
@@ -23,10 +23,13 @@ class  CodigosRepository extends BaseRepository
         $arrayPaquete            = [];
         $arrayPaqueteInstitucion = [];
         $arrayPaqueteVentaEstado = [];
+        $arrayProforma           = [];
         //paquete
-        if($paquete == null){ $arrayPaquete = []; }else{ $arrayPaquete  = [ 'codigo_paquete' => $paquete, 'fecha_registro_paquete'    => $fecha]; }
+        if($paquete == null)           { $arrayPaquete = []; }else{ $arrayPaquete  = [ 'codigo_paquete' => $paquete, 'fecha_registro_paquete'    => $fecha]; }
         //codigo de union
-        if($union == null){ $arrayUnion  = [];    } else{ $arrayUnion  = [ 'codigo_union' => $union ]; }
+        if($union == null)             { $arrayUnion  = [];  } else{ $arrayUnion  = [ 'codigo_union' => $union ]; }
+        //si proforma es true
+        if($ifChangeProforma == false) { $arrayProforma = []; } else{ $arrayProforma = [ 'codigo_proforma' => $datosProforma['codigo_proforma'], 'proforma_empresa' => $datosProforma['proforma_empresa'] ]; }
         //para import de gestion de paquetes si envia la institucion
         if($request->institucion_id) { $arrayPaqueteInstitucion = [ 'bc_institucion' => $request->institucion_id, 'bc_periodo' => $request->periodo_id ];   }
         //para import de gestion de paquetes si el estado de venta directa
@@ -122,7 +125,7 @@ class  CodigosRepository extends BaseRepository
             $arraySave = array_merge($arraySave, $arrayPaqueteInstitucion,$arrayPaqueteVentaEstado);
         }
         //fusionar todos los arrays
-        $arrayResutado = array_merge($arraySave, $arrayUnion,$arrayPaquete);
+        $arrayResutado = array_merge($arraySave, $arrayUnion,$arrayPaquete,$arrayProforma);
         //actualizar el primer codigo
         $codigo = DB::table('codigoslibros')
         ->where('codigo', '=', $codigo)
@@ -164,7 +167,9 @@ class  CodigosRepository extends BaseRepository
             'venta_lista_institucion'   => '0',
             'porcentaje_descuento'      => '0',
             'factura'                   => null,
-            'liquidado_regalado'        => '0'
+            'liquidado_regalado'        => '0',
+            'codigo_proforma'           => null,
+            'proforma_empresa'          => null,
         ];
         $arrayPaquete = [
             'codigo_paquete'            => null,

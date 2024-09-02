@@ -10,7 +10,7 @@ class EmpaqueDetalle extends Model
     use HasFactory;
     protected $table  ='rempaque_detallecopy';
 
-    protected $primaryKey = 'det_empa_codigo';
+    protected $primaryKey = 'id';
     public $timestamps = false;
 
     protected $fillable = [

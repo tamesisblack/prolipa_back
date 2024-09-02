@@ -316,6 +316,49 @@ class AdminController extends Controller
     public function pruebaData(Request $request){
 
 
+
+        // $password                           = sha1(md5($request->cedula));
+        // $user                               = new User();
+        // $user->cedula                       = $request->cedula;
+        // $user->nombres                      = $request->nombres;
+        // $user->apellidos                    = $request->apellidos;
+        // $user->name_usuario                 = $request->email;
+        // $user->password                     = $password;
+        // $user->email                        = $request->email;
+        // $user->id_group                     = $request->id_grupo;
+        // $user->institucion_idInstitucion    = $request->institucion;
+        // $user->estado_idEstado              = 1;
+        // $user->idcreadorusuario             = $request->user_created;
+        // $user->telefono                     = $request->telefono;
+        // $user->save();
+        return;
+        // $clientIP = \Request::getClientIp(true);
+        // // $clientIP =  $request->ip();
+        // $apiKey = "aba8c348cd6d4d14af6af2294f04d356";
+        // // $ip = "186.4.218.168";
+        // $ip = $clientIP;
+        // $location = $this->get_geolocation($apiKey, $ip);
+        // $decodedLocation = json_decode($location, true);
+
+        // echo "<pre>";
+        // print_r($decodedLocation);
+        // echo "</pre>";
+
+        // return;
+        $formData = [
+            "api_key" => "RfVaC9hIMhn49J4jSq2_I_.QLazmDGrbZQ8o8ePUEcU-"
+        ];
+        $data           = Http::post('http://190.12.43.171:8181/api/consulta_provincias',$formData);
+        $datos          = json_decode($data, true);
+        return $datos;
+
+        // $tracerouteOutput = $this->runSystemCommand('traceroute 190.12.43.171');
+        // $telnetOutput = $this->runSystemCommand('telnet 190.12.43.171 443');
+
+        // return response()->json([
+        //     'traceroute' => $tracerouteOutput,
+        //     'telnet' => $telnetOutput,
+        // ]);
     }
     private function runSystemCommand($command)
     {
@@ -455,36 +498,74 @@ class AdminController extends Controller
     public function guardarData(Request $request){
         set_time_limit(6000);
         ini_set('max_execution_time', 600000);
+        // $contadorSolinfaGONZALEZ = 0;
+        // $contadorSolinfaCOBACANGO= 0;
+        // $resultsGonzales = DB::connection('mysql2')->select('SELECT * FROM product p
+        //  WHERE p.id_perseo_gonzales IS NULL
+        // limit 90');
+        // $resultsCobacango = DB::connection('mysql2')->select('SELECT * FROM product p
+        // WHERE p.id_perseo_cobacango IS NULL
+        // limit 90');
+        // //GONZALES
+        // foreach($resultsGonzales as $key => $item){
+        //         $formData = [
+        //             "productocodigo"=> $item->barcode,
+        //         ];
+        //         $url                        = "productos_consulta";
+        //         $processSolinfa             = $this->tr_SolinfaPost($url, $formData,1);
+        //         $getContador                = $this->guardarIdProductoSolinfa($processSolinfa,$item->barcode,"id_perseo_gonzales");
+        //         $contadorSolinfaGONZALEZ    = $contadorSolinfaGONZALEZ + $getContador;
+        // }
+        // //COBACANGO
+        // foreach($resultsCobacango as $key => $item){
+        //     $formData = [
+        //         "productocodigo"=> $item->barcode,
+        //     ];
+        //     $url                        = "productos_consulta";
+        //     $processSolinfa             = $this->tr_SolinfaPost($url, $formData,2);
+        //     $getContador                = $this->guardarIdProductoSolinfa($processSolinfa,$item->barcode,"id_perseo_cobacango");
+        //     $contadorSolinfaCOBACANGO    = $contadorSolinfaCOBACANGO + $getContador;
+        // }
+        // return ["contadorSolinfaGONZALEZ" => $contadorSolinfaGONZALEZ, "contadorSolinfaCOBACANGO" => $contadorSolinfaCOBACANGO];
+
+
         try {
             $contadorProlipa = 0;
             $contadorCalmed  = 0;
-            //PROLIPA
+
             $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.id_perseo_prolipa IS NULL
-            LIMIT 90
+            WHERE p.pro_nombre  LIKE '%sina%';
             ");
+            //PROLIPA
+            // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            // WHERE p.id_perseo_prolipa_produccion IS NULL
+            // LIMIT 90
+            // ");
             foreach($queryProlipa as $key => $item){
                 $formData = [
                     "productocodigo"=> $item->pro_codigo,
                 ];
                 $url                = "productos_consulta";
                 $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
-                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa");
+                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
                 //contadorProlipa + getContador
                 $contadorProlipa    = $contadorProlipa + $getContador;
             }
             //CALMED
             $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.id_perseo_calmed IS NULL
-            LIMIT 100
+            WHERE p.pro_nombre  LIKE '%sina%';
             ");
+            // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            // WHERE p.id_perseo_calmed_produccion IS NULL
+            // LIMIT 100
+            // ");
             foreach($queryCalmed as $key => $item){
                 $formData = [
                     "productocodigo"=> $item->pro_codigo,
                 ];
                 $url                = "productos_consulta";
                 $processCalmed      = $this->tr_PerseoPost($url, $formData,3);
-                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed");
+                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
                 //contadorCalmed + getContador
                 $contadorCalmed     = $contadorCalmed + $getContador;
             }
@@ -509,6 +590,23 @@ class AdminController extends Controller
         DB::table('1_4_cal_producto')
         ->where('pro_codigo',$pro_codigo)
         ->update($datos);
+        return $contador;
+    }
+    public function guardarIdProductoSolinfa($process,$pro_codigo,$campoPerseo){
+        $contador = 0;
+        $datos    = [];
+        if(isset($process["productos"])){
+            $idPerseo = $process["productos"][0]["productosid"];
+            $datos = [ $campoPerseo => $idPerseo ];
+            $contador = 1;
+        }else{
+            $datos = [ $campoPerseo => 0 ];
+            $contador = 0;
+        }
+        DB::connection('mysql2')
+            ->table('product')
+            ->where('barcode', $pro_codigo)
+            ->update($datos);
         return $contador;
     }
     public function hijosConvenio($idConvenio){

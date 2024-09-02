@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 use App\Models\OrdenTrabajo;
 use App\Models\DetalleOrdenTrabajo;
+use App\Models\_14ProductoCaracteristica;
 use DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -135,13 +136,13 @@ ORDER BY or_fecha DESC LIMIT 1");
         try {
             set_time_limit(6000000);
             ini_set('max_execution_time', 6000000);
-    
+
             DB::beginTransaction();
-    
+
             $miarray = json_decode($request->data_detalleorden);
-    
+
             $orden = OrdenTrabajo::where('or_codigo', $request->or_codigo)->first();
-    
+
             if ($orden) {
                 // Si la orden existe, actualizamos
                 $orden->or_empresa = $request->or_empresa;
@@ -150,13 +151,51 @@ ORDER BY or_fecha DESC LIMIT 1");
                 $orden->or_solicitado = $request->or_solicitado;
                 $orden->or_elaborado = $request->or_elaborado;
                 $orden->save();
-    
+
                 foreach ($miarray as $item) {
-                    $detalle = DetalleOrdenTrabajo::findOrFail($item->det_or_codigo);
-                    $detalle->det_or_cantidad = $item->det_or_cantidad;
-                    $detalle->det_or_posible_entrega = $item->det_or_posible_entrega;
-                    $detalle->det_or_observaciones = $item->det_or_observaciones;
-                    $detalle->save();
+                    // Verifica si el mat_cub_codigo existe en la tabla de referencia
+                    if (DB::table('1_4_cal_material_cubierta')->where('mat_cub_codigo', $item->mat_cub_codigo)->exists() &&
+                        DB::table('1_4_cal_material_interior')->where('mat_in_codigo', $item->det_or_in_codigo)->exists()) {
+                        // Actualiza los detalles
+                        $detalle = DetalleOrdenTrabajo::findOrFail($item->det_or_codigo);
+                        $detalle->update([
+                            'det_or_cantidad' => $item->det_or_cantidad,
+                            'det_or_posible_entrega' => $item->det_or_posible_entrega,
+                            'det_or_observaciones' => $item->det_or_observaciones,
+                            'det_or_tamaño' => $item->det_or_tamaño,
+                            'det_or_int_paginas' => $item->det_or_int_paginas,
+                            'det_or_in_codigo' => $item->det_or_in_codigo,
+                            'det_or_in_tintas' => $item->det_or_in_tintas,
+                            'mat_cub_codigo' => $item->mat_cub_codigo,
+                            'det_or_cub_tintas' => $item->det_or_cub_tintas,
+                            'det_or_acabados' => $item->det_or_acabados,
+                            'det_or_recubrimiento' => $item->det_or_recubrimiento,
+                        ]);
+                
+                        // Actualiza las características del producto
+                        $productocaracteristica = _14ProductoCaracteristica::where('pro_car_codigo', $item->pro_codigo)->first();
+                        if ($productocaracteristica) {
+                            $productocaracteristica->update([
+                                'pro_tamaño' => $item->det_or_tamaño,
+                                'pro_int_pagina' => $item->det_or_int_paginas,
+                                'mat_in_codigo' => $item->det_or_in_codigo,
+                                'pro_int_tinta' => $item->det_or_in_tintas,
+                                'mat_cub_codigo' => $item->mat_cub_codigo,
+                                'pro_cub_recubrimiento' => $item->det_or_recubrimiento,
+                                'pro_cub_tintas' => $item->det_or_cub_tintas,
+                                'pro_acabados' => $item->det_or_acabados,
+                            ]);
+                        }
+                    } else {
+                        $missingItems = [];
+                        if (!DB::table('1_4_cal_material_cubierta')->where('mat_cub_codigo', $item->mat_cub_codigo)->exists()) {
+                            $missingItems[] = "mat_cub_codigo '{$item->mat_cub_codigo}'";
+                        }
+                        if (!DB::table('1_4_cal_material_interior')->where('mat_in_codigo', $item->det_or_in_codigo)->exists()) {
+                            $missingItems[] = "mat_in_codigo '{$item->det_or_in_codigo}'";
+                        }
+                        throw new Exception("Los siguientes valores no existen en las tablas de referencia: " . implode(", ", $missingItems));
+                    }
                 }
             } else {
                 // Si la orden no existe, creamos una nueva
@@ -174,7 +213,7 @@ ORDER BY or_fecha DESC LIMIT 1");
                 $orden->user_created = $request->user_created;
                 $orden->updated_at = now();
                 $orden->save();
-    
+
                 foreach ($miarray as $item) {
                     DetalleOrdenTrabajo::create([
                         'or_codigo' => $request->or_codigo,
@@ -193,18 +232,21 @@ ORDER BY or_fecha DESC LIMIT 1");
                     ]);
                 }
             }
-    
+
             DB::commit();
-    
+
             return response()->json($orden, 200);
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json([
                 'error' => $e->getMessage(),
-                'message' => 'No se pudo guardar/actualizar la orden'
+                'line' => $e->getLine(), // getLine() da el número de línea en el archivo
+                'message' => 'No se pudo guardar/actualizar la orden',
+                'trace' => $e->getTraceAsString() // Da el rastro completo del error
             ], 500);
         }
-    }    
+    }
+    
      public function Desactivar_Orden(Request $request)
     {
         if ($request->or_codigo) {

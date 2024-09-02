@@ -15,11 +15,12 @@ class  PerseoConsultasRepository extends BaseRepository
     {
         parent::__construct($perseoConsultasRepository);
     }
-    public function facturaSecuencia()
+    public function facturaSecuencia($empresa,$solinfa = 0)
     {
         $formData   = [];
         $url        = "secuencias_consulta";
-        $process    = $this->tr_PerseoPost($url, $formData);
+        if($solinfa == 1) { $process    = $this->tr_SolinfaPost($url, $formData,$empresa);
+        }else             { $process    = $this->tr_PerseoPost($url, $formData,$empresa); }
         return $process;
     }
 }

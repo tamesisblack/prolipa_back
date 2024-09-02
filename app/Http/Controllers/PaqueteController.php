@@ -64,9 +64,7 @@ class PaqueteController extends Controller
         return $query;
     }
     public function getExistsPaquete($paquete){
-        $query = DB::SELECT("SELECT * FROM codigos_paquetes p
-        WHERE p.codigo = '$paquete'
-        ");
+        $query = DB::SELECT("SELECT * FROM codigos_paquetes p WHERE p.codigo = '$paquete'");
         return $query;
     }
     //paquetes/guadarPaquete
@@ -350,6 +348,7 @@ class PaqueteController extends Controller
             ]);
         return $codigo;
     }
+    //api:post/paquetes/importPaqueteGestion
     public function importPaqueteGestion(Request $request){
         set_time_limit(600000);
         ini_set('max_execution_time', 600000);
@@ -367,6 +366,13 @@ class PaqueteController extends Controller
         $factura                    = "";
         $obsevacion                 = $request->comentario;
         $tipoBodega                 = $request->tipoBodega;
+        $proforma_empresa            = $request->proforma_empresa;
+        $codigo_proforma             = $request->codigo_proforma;
+        $ifSetProforma               = $request->ifSetProforma;
+        $datosProforma               = [
+            "proforma_empresa"      => $proforma_empresa,
+            "codigo_proforma"       => $codigo_proforma,
+        ];
         //====PROCESO===================================
         foreach($miArrayDeObjetos as $key => $item){
             $problemasconCodigo         = [];
@@ -376,14 +382,15 @@ class PaqueteController extends Controller
             $contadorD                  = 0;
             $noExisteA                  = 0;
             $noExisteD                  = 0;
-            //estadoPaquete => 0 utilizado; 1 => abierto;
-            $estadoPaquete              = 0;
-            //VALIDAR QUE EL CODIGO DE PAQUETE ESTE UTILIZADO
-            $ExistsPaquete      = $this->getPaquete($item->codigoPaquete);
-            if(empty($ExistsPaquete)) { $estadoPaquete = 0; }
+
             //validar
             $getExistsPaquete   = $this->getExistsPaquete($item->codigoPaquete);
             if(!empty($getExistsPaquete)){
+                //estadoPaquete => 0 utilizado; 1 => abierto;
+                $estadoPaquete              = 0;
+                //VALIDAR QUE EL CODIGO DE PAQUETE ESTE UTILIZADO
+                $ExistsPaquete      = $this->getPaquete($item->codigoPaquete);
+                if(empty($ExistsPaquete)) { $estadoPaquete = 0; }
                 //codigos hijos del paquete
                 $codigosHijos =  $this->getCodigos($item->codigoPaquete,0,3);
                 foreach($codigosHijos as $key2 => $tr){
@@ -399,20 +406,57 @@ class PaqueteController extends Controller
                     $validarA               = [$tr];
                     $validarD               = $this->getCodigos($codigoDiagnostico,0);
                     $comentario             = "Se agrego al paquete ".$item->codigoPaquete . " - " .$obsevacion;
+                    $ifChangeProforma       = false;
+                    $ifcodigo_proformaA     = $validarA[0]->codigo_proforma;
+                    $ifcodigo_proformaD     = $validarD[0]->codigo_proforma;
                     //======si ambos codigos existen========
                     if(count($validarA) > 0 && count($validarD) > 0){
                         $validate = $this->paqueteRepository->validateGestion($tipoProceso,$estadoPaquete,$validarA,$validarD,$item,$codigoActivacion,$codigoDiagnostico,$request);
-                        $errorA = $validate["errorA"]; $errorD = $validate["errorD"]; $factura = $validate["factura"];
+                        $errorA = $validate["errorA"]; $errorD = $validate["errorD"]; $factura = $validate["factura"]; $ifChangeProforma = $validate["ifChangeProforma"];
                         //===MENSAJE VALIDACION====
-                        if($errorA == 1 && $errorD == 0) { $mensajeError = "Problema con el código de activación";  $codigoConProblemas->push($validarA); }
-                        if($errorA == 0 && $errorD == 1) { $mensajeError = "Problema con el código de diagnóstico"; $codigoConProblemas->push($validarD); }
-                        if($errorA == 1 && $errorD == 1) { $mensajeError = "Ambos códigos tienen problemas";        $codigoConProblemas->push($validarA); $codigoConProblemas->push($validarD);}
+                        if($errorA == 1 && $errorD == 0) {
+                            $mensajeError = "Problema con el código de activación";
+                            if($ifSetProforma == 1 && $ifChangeProforma == false){
+                                $validarA[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarA);
+                            }else{
+                                $codigoConProblemas->push($validarA);
+                            }
+                        }
+                        if($errorA == 0 && $errorD == 1) {
+                             $mensajeError = "Problema con el código de diagnóstico";
+                            if($ifSetProforma == 1 && $ifChangeProforma == false){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
+                        }
+                        if($errorA == 1 && $errorD == 1) {
+                            $mensajeError = "Ambos códigos tienen problemas";
+                            if($ifSetProforma == 1 && $ifChangeProforma == false){
+                                $validarA[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarA); $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarA); $codigoConProblemas->push($validarD);
+                            }
+                            //$codigoConProblemas->push($validarA); $codigoConProblemas->push($validarD);
+                        }
                         //SI AMBOS CODIGOS PASAN LA VALIDACION GUARDO
                         if($errorA == 0 && $errorD == 0){
                             $old_valuesA    = CodigosLibros::Where('codigo',$codigoActivacion)->get();
                             $old_valuesD    = CodigosLibros::findOrFail($codigoDiagnostico);
                             //tipoProceso => 0 = Usan y liquidan; 1 =  regalado; 2 = regalado y bloqueado ; 3 = bloqueado ; 4 = guia; 5 = regalado sin institucion ; 6 = bloqueado y regalado sin institucion; 7 = bloqueado sin institucion ; 8 =  guia sin institucion
-                            $ingreso = $this->paqueteRepository->procesoGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,$item->codigoPaquete,$tipoBodega);
+                            $ingreso = $this->paqueteRepository->procesoGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,$item->codigoPaquete,$ifChangeProforma,$datosProforma);
                             //si se guarda codigo de activacion
                             if($ingreso == 1){
                                 $contadorA++;
@@ -1068,10 +1112,16 @@ class PaqueteController extends Controller
                             //OMITIR CUANDO SEA REGALADO ; BLOQUEADO; GUIA
                             $ifOmitirA = false;
                             $ifOmitirD = false;
+
                             //si el codigo de activacion esta  regalado  GUIA o bloqueado
                             if( $ifDevueltoA == '2' || $ifDevueltoA == '4' || $estadoA == '2' ) { $ifOmitirA = true; }
                             //si el codigo de diagnostico esta regalado GUIA o bloqueado
                             if( $ifDevueltoD == '2' || $ifDevueltoD == '4' || $estadoD == '2' ) { $ifOmitirD = true; }
+                            //1 => permitir omitir los bloqueados 2 => no permitir bloqueados
+                            if($request->permitirOmitirBloqueado == 2){
+                                if($estadoA == '2') { $ifOmitirA = false; }
+                                if($estadoD == '2') { $ifOmitirD = false; }
+                            }
                             //===========VALIDACION====
                             if($ifOmitirA){
                                 $mensajeFront   = "_(No esta bloqueado o regalado o no tiene guia)";

@@ -119,6 +119,14 @@ class LinkAcortadorController extends Controller
         return $filtrar;
     }
 
+    public function verDataLink($id){
+        $link  = DB::SELECT("SELECT l.*
+        FROM links_acortadores l
+        WHERE l.codigo = '$id'
+        ");
+        return $link;
+    }
+
     /**
      * Update the specified resource in storage.
      *

@@ -17,6 +17,7 @@ class CuentaBancaria extends Model
         'cue_pag_descripcion',
         'cue_pag_nombre',
         'cue_pag_secuencial',
+        'cue_pag_estado',
         'created_at',
         'updated_at',
         'user_created',

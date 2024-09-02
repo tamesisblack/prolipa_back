@@ -8,13 +8,13 @@ use Illuminate\Database\Eloquent\Model;
 class Remision extends Model
 {
     use HasFactory;
-    protected $table  ='1_4_remision';
+    protected $table  ='remision_copy';
 
     protected $primaryKey = 'remi_codigo';
+    public $incrementing = false;
     public $timestamps = false;
 
     protected $fillable = [
-        'remi_codigo',
         'remi_motivo',
         'remi_dir_partida', 
         'remi_destinatario',

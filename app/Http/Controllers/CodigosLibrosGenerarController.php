@@ -54,6 +54,8 @@ class CodigosLibrosGenerarController extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         $codigos = json_decode($request->data_codigos);
+        //checkTipo 0 => normales; 1 => con institucion y venta lista y periodo
+        $checkTipo = $request->checkTipo;
         $codigosIngresados = [];
         $contador = 0;
         foreach($codigos as $key => $item){
@@ -66,7 +68,7 @@ class CodigosLibrosGenerarController extends Controller
                     $validate = DB::SELECT("SELECT * FROM codigoslibros WHERE codigo = '$code'");
                     if(empty($validate)){
                         //si el codigo no existe lo creo
-                        $this->ingresarCodigo($item->nombre_serie,$item->nombre,$item->year,$item->idLibro,$request->responsable,$code,$request->estado_codigo_fisico);
+                        $this->ingresarCodigo($item->nombre_serie,$item->nombre,$item->year,$item->idLibro,$request->responsable,$code,$request->estado_codigo_fisico,$checkTipo,$request);
                         //almaceno en un array los codigos
                         $codigosIngresados[$contador] = [
                             "codigo" => $code,
@@ -98,7 +100,7 @@ class CodigosLibrosGenerarController extends Controller
         }
         return ["codigos" => $codigosIngresados,"porcentaje" => $contador,"codigosVerificados" => $codigosVerificados];
     }
-    public function ingresarCodigo($serie,$libro,$anio,$idlibro,$idusuario,$codigo,$estado_codigo_fisico){
+    public function ingresarCodigo($serie,$libro,$anio,$idlibro,$idusuario,$codigo,$estado_codigo_fisico,$checkTipo=0,$request=null){
         $codigos_libros                             = new CodigosLibros();
         $codigos_libros->serie                      = $serie;
         $codigos_libros->libro                      = $libro;
@@ -110,6 +112,14 @@ class CodigosLibrosGenerarController extends Controller
         $codigos_libros->idusuario_creador_codigo   = $idusuario;
         $codigos_libros->codigo                     = $codigo;
         $codigos_libros->estado_codigo_fisico       = $estado_codigo_fisico;
+        if($checkTipo == 1){
+            $codigos_libros->bc_periodo              = $request->periodo_id;
+            $codigos_libros->venta_lista_institucion = $request->institucion_id;
+            $codigos_libros->venta_estado            = 2;
+            //guardar en el historico
+            // $observacion = "Código ingresado desde el modulo generar codigos con institución y venta lista";
+            // $this->GuardarEnHistorico(0,$request->institucion_id,$request->periodo_id,$codigo,$idusuario,$observacion,null,null);
+        }
         $codigos_libros->save();
     }
     public function generarCodigos(Request $request){

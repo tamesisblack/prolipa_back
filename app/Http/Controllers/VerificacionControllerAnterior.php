@@ -1071,7 +1071,20 @@ class VerificacionControllerAnterior extends Controller
         $query = DB::SELECT("SELECT * FROM 1_4_documento_liq l
         WHERE l.institucion_id  = ?
         AND l.periodo_id = ?
-        AND l.tipo_pago_id = ?",
+        AND l.tipo_pago_id = ?
+        AND l.estado  = 1
+        ",
+        [$id_institucion,$id_periodo,$tipo]);
+        return $query;
+    }
+    public function tipoPagoReporte($id_institucion,$id_periodo,$tipo){
+        $query = DB::SELECT("SELECT * FROM 1_4_documento_liq l
+        WHERE l.institucion_id  = ?
+        AND l.periodo_id = ?
+        AND l.tipo_pago_id = ?
+        AND l.mostrar_reporte = '1'
+        AND l.estado  = 1
+        ",
         [$id_institucion,$id_periodo,$tipo]);
         return $query;
     }
@@ -1099,6 +1112,8 @@ class VerificacionControllerAnterior extends Controller
         }
         //Pago Tipo “otros valores para cancelar”
         $otrosValores       = $this->tipoPago($id_institucion,$id_periodo,7);
+        //Pago Tipo liquidacion con opcion imprimir en el reporte
+        $valoresLiquidadosReporte = $this->tipoPagoReporte($id_institucion,$id_periodo,2);
         //sumar los valores de otros valores
         foreach($otrosValores as $key => $item){
             $campo_dinamico     = $item->campo_dinamico;
@@ -1150,6 +1165,7 @@ class VerificacionControllerAnterior extends Controller
                 "campo_dinamico"                => $campo_dinamico,
                 "devolucionEscuela"             => $sumaDevolucionEsc,
                 "totalVenta"                    => $item->totalVenta,
+                "valoresLiquidadosReporte"      => $valoresLiquidadosReporte
             ];
         }
         return $datos;

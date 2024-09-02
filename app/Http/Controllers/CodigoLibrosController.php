@@ -234,12 +234,16 @@ class CodigoLibrosController extends Controller
         }
         return $estadoIngreso;
     }
-    public function procesoGestionBodega($numeroProceso,$codigo,$codigo_union,$request,$objectCodigoUnion,$factura){
+    public function procesoGestionBodega($numeroProceso,$codigo,$codigo_union,$request,$objectCodigoUnion,$factura,$setProforma=false,$datosProforma=[]){
         //numero proceso => 0 = usan y liquidan; 1 = venta lista; 2 = regalado; 3 regalado y bloqueado
-        $withCodigoUnion = 1;
-        $estadoIngreso   = 0;
-        $periodo_id      = $request->periodo_id;
-        $unionCorrecto   = false;
+        $withCodigoUnion    = 1;
+        $estadoIngreso      = 0;
+        $periodo_id         = $request->periodo_id;
+        $unionCorrecto      = false;
+        $codigo_proforma    = $datosProforma['codigo_proforma'];
+        $proforma_empresa   = $datosProforma['proforma_empresa'];
+        $ifChangeProforma   = false;
+        $ifErrorProforma    = false;
         ///estadoIngreso => 1 = ingresado; 2 = no se puedo ingresar el codigo de union;
         if($codigo_union == null) $withCodigoUnion = 0;
         else                      $withCodigoUnion = 1;
@@ -268,8 +272,34 @@ class CodigoLibrosController extends Controller
             $ifliquidado_regalado       = $objectCodigoUnion[0]->liquidado_regalado;
             //validar que no tenga paquete
             $codigo_paquete             = $objectCodigoUnion[0]->codigo_paquete;
+            //validar si el codigo tiene proforma empresa proforma_empresa
+            $ifproforma_empresa         = $objectCodigoUnion[0]->proforma_empresa;
+            //validar si el codigo tiene proforma codigo_proforma
+            $ifcodigo_proforma          = $objectCodigoUnion[0]->codigo_proforma;
+            //validar si tiene codigo de union
             $ifNotPaquete               = false;
             $ifNotPaquete               = (($codigo_paquete == null || $codigo_paquete == ""));
+            //=============PROFORMA ==========
+                //cambiar codigo de proforma
+                if($setProforma){
+                    //si codigo proforma es nulo le permito que actualize el codigo proforma
+                    if($ifcodigo_proforma == null || $ifcodigo_proforma == "" ){
+                        $ifChangeProforma = true;
+                        $ifErrorProforma  = false;
+                    }else{
+                        //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                        if($ifcodigo_proforma == $codigo_proforma && $ifproforma_empresa == $proforma_empresa){
+                            $ifChangeProforma = true;
+                            $ifErrorProforma  = false;
+                        }
+                        //si no es igual guardo en un array
+                        else{
+                            $ifChangeProforma = false;
+                            $ifErrorProforma  = true;
+                        }
+                    }
+                }
+            ///============PROFORMA =======
             //=====USAN Y LIQUIDAN=========================
             if($numeroProceso == '0'){
                 if(($ifid_periodo  == $periodo_id || $ifid_periodo == 0 ||  $ifid_periodo == null  ||  $ifid_periodo == "")  && ($ifLeido == '1') && $ifLiquidado == '1' && $ifBloqueado !=2 && $ifNotPaquete) $unionCorrecto = true;
@@ -314,9 +344,9 @@ class CodigoLibrosController extends Controller
                 if($booleanGuia) { $unionCorrecto = true; }
                 else  { $unionCorrecto = false; }
             }
-            if($unionCorrecto){
-                $codigoU             = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo_union,$codigo,$request,$factura);
-                if($codigoU) $codigo = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo,$codigo_union,$request,$factura);
+            if($unionCorrecto && $ifErrorProforma == false){
+                $codigoU             = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo_union,$codigo,$request,$factura,null,$ifChangeProforma,$datosProforma);
+                if($codigoU) $codigo = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo,$codigo_union,$request,$factura,null,$ifChangeProforma,$datosProforma);
             }else{
                 //no se ingreso
                 return 2;
@@ -324,19 +354,32 @@ class CodigoLibrosController extends Controller
         }
         //SI EL CODIGO NO TIENE CODIGO DE UNION
         else{
-            $codigo = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo,null,$request,$factura);
+            $ifChangeProforma = $setProforma;
+            $codigo = $this->codigosRepository->procesoUpdateGestionBodega($numeroProceso,$codigo,null,$request,$factura,null,$ifChangeProforma,$datosProforma);
         }
         //resultado
         //con codigo union
         ///estadoIngreso => 1 = ingresado; 2 = no se puedo ingresar el codigo de union;
-        if($withCodigoUnion == 1){
-            if($codigo && $codigoU)  $estadoIngreso = 1;
-            else                     $estadoIngreso = 2;
+        if($setProforma){
+            if($withCodigoUnion == 1){
+                if($codigo && $codigoU && $ifErrorProforma == false)  $estadoIngreso = 1;
+                else                     $estadoIngreso = 2;
+            }
+            //si no existe el codigo de union
+            if($withCodigoUnion == 0){
+                if($codigo && $ifErrorProforma == false)              $estadoIngreso = 1;
+            }
+        }else{
+            if($withCodigoUnion == 1){
+                if($codigo && $codigoU)  $estadoIngreso = 1;
+                else                     $estadoIngreso = 2;
+            }
+            //si no existe el codigo de union
+            if($withCodigoUnion == 0){
+                if($codigo)              $estadoIngreso = 1;
+            }
         }
-        //si no existe el codigo de union
-        if($withCodigoUnion == 0){
-            if($codigo)              $estadoIngreso = 1;
-        }
+
         return $estadoIngreso;
     }
     //api:post//codigos/import/gestion
@@ -344,30 +387,41 @@ class CodigoLibrosController extends Controller
     {
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
-        $codigos            = json_decode($request->data_codigos);
+        $codigos                    = json_decode($request->data_codigos);
         //variables
-        $usuario_editor     = $request->id_usuario;
-        $institucion        = $request->institucion_id;
-        $comentario         = $request->comentario;
-        $periodo_id         = $request->periodo_id;
+        $usuario_editor             = $request->id_usuario;
+        $institucion                = $request->institucion_id;
+        $comentario                 = $request->comentario;
+        $periodo_id                 = $request->periodo_id;
         //0=> USAN Y LIQUIDAN ; 1=> regalado; 2 regalado y bloqueado; 3 = bloqueado
-        $tipoProceso        = $request->regalado;
-        $codigoNoExiste     = [];
-        $codigosDemas       = [];
-        $contadorNoExiste   = 0;
-        $codigosNoCambiados = [];
-        $codigosSinCodigoUnion = [];
-        $usuarioQuemado     = 45017;
-        $instUserQuemado    = 66;
-        $contador           = 0;
-        $contadorNoCambiado = 0;
-        $numeroProceso      = $request->regalado;
-        $porcentaje         = 0;
-        $factura            = "";
-        $tipoBodega         = $request->tipo_bodega;
+        $tipoProceso                = $request->regalado;
+        $codigoNoExiste             = [];
+        $codigosDemas               = [];
+        $contadorNoExiste           = 0;
+        $codigosNoCambiados         = [];
+        $codigosSinCodigoUnion      = [];
+        $arrayCodigosWithProforma   = [];
+        $usuarioQuemado             = 45017;
+        $instUserQuemado            = 66;
+        $contador                   = 0;
+        $contadorNoCambiado         = 0;
+        $contadorWithProforma       = 0;
+        $numeroProceso              = $request->regalado;
+        $porcentaje                 = 0;
+        $factura                    = "";
+        $tipoBodega                 = $request->tipo_bodega;
+        $proforma_empresa           = $request->proforma_empresa;
+        $codigo_proforma            = $request->codigo_proforma;
+        $ifSetProforma              = $request->ifSetProforma;
+        $datosProforma              = [
+            "proforma_empresa"      => $proforma_empresa,
+            "codigo_proforma"       => $codigo_proforma,
+        ];
         foreach($codigos as $key => $item){
             //validar si el codigo existe
             $validacionCodigo               = false;
+            $ifChangeProforma               = false;
+            $ifErrorProforma                = false;
             $user                           = 0;
             $validar = $this->getCodigos($item->codigo,0);
             //valida que el codigo existe
@@ -394,10 +448,35 @@ class CodigoLibrosController extends Controller
                 $codigo_paquete             = $validar[0]->codigo_paquete;
                 //validar si un regalado esta liquidado
                 $ifliquidado_regalado       = $validar[0]->liquidado_regalado;
+                //validar si el codigo tiene proforma empresa proforma_empresa
+                $ifproforma_empresa         = $validar[0]->proforma_empresa;
+                //validar si el codigo tiene proforma codigo_proforma
+                $ifcodigo_proforma          = $validar[0]->codigo_proforma;
                 if($request->factura == null || $request->factura == "")   { $factura = $facturaA; }
                 else{ $factura = $request->factura; }
                 $ifNotPaquete  = false;
                 $ifNotPaquete  = (($codigo_paquete == null || $codigo_paquete == ""));
+                //=============PROFORMA ==========
+                    //cambiar codigo de proforma
+                    if($ifSetProforma == 1){
+                        //si codigo proforma es nulo le permito que actualize el codigo proforma
+                        if($ifcodigo_proforma == null || $ifcodigo_proforma == "" ){
+                            $ifChangeProforma = true;
+                            $ifErrorProforma  = false;
+                        }else{
+                            //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                            if($ifcodigo_proforma == $codigo_proforma && $ifproforma_empresa == $proforma_empresa){
+                                $ifChangeProforma = true;
+                                $ifErrorProforma  = false;
+                            }
+                            //si no es igual guardo en un array
+                            else{
+                                $ifChangeProforma = false;
+                                $ifErrorProforma  = true;
+                            }
+                        }
+                    }
+                ///============PROFORMA =======
                 //===PROCESO===========
                 //=====USAN Y LIQUIDAN=========================
                 if($tipoProceso == '0'){
@@ -459,13 +538,13 @@ class CodigoLibrosController extends Controller
                     else  { $validacionCodigo = false; }
                 }
                 //si todo sale bien
-                if($validacionCodigo){
+                if($validacionCodigo && $ifErrorProforma == false){
                     //VALIDAR CODIGOS QUE NO TENGA CODIGO UNION
                     $getcodigoPrimero = CodigosLibros::Where('codigo',$item->codigo)->get();
                     $getcodigoUnion   = CodigosLibros::Where('codigo',$codigo_union)->get();
                     if($codigo_union != null || $codigo_union != ""){
                         //numero proceso => 0 = Usan y liquidan; 1 =  regalado; 2 = regalado y bloqueado ; 3 = bloqueado; 4 = guia; 5 = regalado; 6 = regalado y bloqueado; 7 = bloqueado; 8 = guia
-                        $ingreso = $this->procesoGestionBodega($numeroProceso,$item->codigo,$codigo_union,$request,$getcodigoUnion,$factura);
+                        $ingreso = $this->procesoGestionBodega($numeroProceso,$item->codigo,$codigo_union,$request,$getcodigoUnion,$factura,$ifChangeProforma,$datosProforma);
                         //si ingresa correctamente
                         if($ingreso == 1){
                             $porcentaje++;
@@ -484,7 +563,7 @@ class CodigoLibrosController extends Controller
                     }
                     //ACTUALIZAR CODIGO SIN UNION
                     else{
-                        $ingreso = $this->procesoGestionBodega($numeroProceso,$item->codigo,null,$request,null,$factura);
+                        $ingreso = $this->procesoGestionBodega($numeroProceso,$item->codigo,null,$request,null,$factura,$ifChangeProforma,$datosProforma);
                         if($ingreso == 1){
                             $porcentaje++;
                             //ingresar en el historico
@@ -500,7 +579,15 @@ class CodigoLibrosController extends Controller
                         }
                     }
                 }else{
-                    $codigosDemas[$contador] = $validar[0];
+                    //si el codigo no cumple con la validacion de la proforma lo guardo en un array
+                    if($ifSetProforma == 1 && $ifErrorProforma){
+                        $validar[0]->errorProforma      = 1;
+                        //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                        $validar[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proforma, Proforma a ingresar: $codigo_proforma";
+                        $codigosDemas[$contador]        = $validar[0];
+                    }else{
+                        $codigosDemas[$contador]        = $validar[0];
+                    }
                     $contador++;
                 }
             }else{
@@ -524,21 +611,28 @@ class CodigoLibrosController extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         //0=> venta directa ; 1=> regalado; 2 regalado y bloqueado, 3 = bloqueado, 4 = guia, 5 = regalado
-        $tipoProceso        = $request->regalado;
-        $miArrayDeObjetos   = json_decode($request->data_codigos);
+        $tipoProceso                = $request->regalado;
+        $miArrayDeObjetos           = json_decode($request->data_codigos);
         //variables
-        $usuario_editor     = $request->id_usuario;
-        $institucion_id     = $request->institucion_id;
-        $comentario         = $request->comentario;
-        $periodo_id         = $request->periodo_id;
-        $contadorA          = 0;
-        $contadorD          = 0;
-        $getLongitud        = sizeof($miArrayDeObjetos);
-        $longitud           = $getLongitud/2;
-        $TipoVenta          = $request->venta_estado;
-        $tipoBodega         = $request->tipoBodega;
-        $usuarioQuemado     = 45017;
-        $facturaA           = "";
+        $usuario_editor             = $request->id_usuario;
+        $institucion_id             = $request->institucion_id;
+        $comentario                 = $request->comentario;
+        $periodo_id                 = $request->periodo_id;
+        $contadorA                  = 0;
+        $contadorD                  = 0;
+        $getLongitud                = sizeof($miArrayDeObjetos);
+        $longitud                   = $getLongitud/2;
+        $TipoVenta                  = $request->venta_estado;
+        $tipoBodega                 = $request->tipoBodega;
+        $usuarioQuemado             = 45017;
+        $facturaA                   = "";
+        $proforma_empresa           = $request->proforma_empresa;
+        $codigo_proforma            = $request->codigo_proforma;
+        $ifSetProforma              = $request->ifSetProforma;
+        $datosProforma              = [
+            "proforma_empresa"      => $proforma_empresa,
+            "codigo_proforma"       => $codigo_proforma,
+        ];
         // Supongamos que tienes una colección vacía
         $codigosNoExisten   = collect();
         $codigoConProblemas = collect();
@@ -551,6 +645,10 @@ class CodigoLibrosController extends Controller
             $validarD               = [];
             $old_valuesA            = [];
             $old_valuesD            = [];
+            $ifChangeProformaA      = false;
+            $ifErrorProformaA       = false;
+            $ifChangeProformaD      = false;
+            $ifErrorProformaD       = false;
             // Eliminamos los dos primeros objetos del array original y los agregamos al nuevo array
             $nuevoArray[]           = array_shift($miArrayDeObjetos);
             $nuevoArray[]           = array_shift($miArrayDeObjetos);
@@ -575,71 +673,129 @@ class CodigoLibrosController extends Controller
                 $booleanValidacionD = false;
                 //====Activacion=====
                 //validar si el codigo ya esta liquidado
-                $ifLiquidadoA                = $validarA[0]->estado_liquidacion;
+                $ifLiquidadoA                   = $validarA[0]->estado_liquidacion;
                 //validar si el codigo no este leido
-                $ifBcEstadoA                  = $validarA[0]->bc_estado;
+                $ifBcEstadoA                    = $validarA[0]->bc_estado;
                 //validar si el codigo no este liquidado
-                $ifBloqueadoA                = $validarA[0]->estado;
+                $ifBloqueadoA                   = $validarA[0]->estado;
                 //validar si tiene bc_institucion
-                $ifBc_InstitucionA           = $validarA[0]->bc_institucion;
+                $ifBc_InstitucionA              = $validarA[0]->bc_institucion;
                 //validar que el periodo del estudiante sea 0 o sea igual al que se envia
-                $ifid_periodoA               = $validarA[0]->id_periodo;
+                $ifid_periodoA                  = $validarA[0]->id_periodo;
                 //validar si el codigo tiene venta_estado
-                $venta_estadoA               = $validarA[0]->venta_estado;
+                $venta_estadoA                  = $validarA[0]->venta_estado;
                 //venta lista
-                $ifventa_lista_institucionA  = $validarA[0]->venta_lista_institucion;
+                $ifventa_lista_institucionA     = $validarA[0]->venta_lista_institucion;
                 //codigo de union
-                $codigo_unionA               = strtoupper($validarA[0]->codigo_union);
-                $ifliquidado_regaladoA       = $validarA[0]->liquidado_regalado;
+                $codigo_unionA                  = strtoupper($validarA[0]->codigo_union);
+                $ifliquidado_regaladoA          = $validarA[0]->liquidado_regalado;
                 //que el paquete sea vacio
-                $codigo_paqueteA             = $validarA[0]->codigo_paquete;
+                $codigo_paqueteA                = $validarA[0]->codigo_paquete;
+                //validar si el codigo tiene proforma empresa proforma_empresa
+                $ifproforma_empresaA             = $validarA[0]->proforma_empresa;
+                //validar si el codigo tiene proforma codigo_proforma
+                $ifcodigo_proformaA             = $validarA[0]->codigo_proforma;
                 //======Diagnostico=====
                 //validar si el codigo ya esta liquidado
-                $ifLiquidadoD                = $validarD[0]->estado_liquidacion;
+                $ifLiquidadoD                   = $validarD[0]->estado_liquidacion;
                 //validar si el codigo no este leido
-                $ifBcEstadoD                  = $validarA[0]->bc_estado;
+                $ifBcEstadoD                    = $validarA[0]->bc_estado;
                 //validar si el codigo no este liquidado
-                $ifBloqueadoD                = $validarD[0]->estado;
+                $ifBloqueadoD                   = $validarD[0]->estado;
                 //validar si tiene bc_institucion
-                $ifBc_InstitucionD           = $validarD[0]->bc_institucion;
+                $ifBc_InstitucionD              = $validarD[0]->bc_institucion;
                 //validar que el periodo del estudiante sea 0 o sea igual al que se envia
-                $ifid_periodoD               = $validarD[0]->id_periodo;
+                $ifid_periodoD                  = $validarD[0]->id_periodo;
                 //validar si el codigo tiene venta_estado
-                $venta_estadoD               = $validarD[0]->venta_estado;
+                $venta_estadoD                  = $validarD[0]->venta_estado;
                 //venta lista
-                $ifventa_lista_institucionD  = $validarD[0]->venta_lista_institucion;
+                $ifventa_lista_institucionD     = $validarD[0]->venta_lista_institucion;
                 //codigo de union
-                $codigo_unionD               = strtoupper($validarD[0]->codigo_union);
-                $ifliquidado_regaladoD       = $validarD[0]->liquidado_regalado;
+                $codigo_unionD                  = strtoupper($validarD[0]->codigo_union);
+                $ifliquidado_regaladoD          = $validarD[0]->liquidado_regalado;
                 //que el paquete sea vacio
-                $codigo_paqueteD             = $validarD[0]->codigo_paquete;
-                $old_valuesA = CodigosLibros::Where('codigo',$codigoActivacion)->get();
-                $old_valuesD = CodigosLibros::findOrFail($codigoDiagnostico);
+                $codigo_paqueteD                = $validarD[0]->codigo_paquete;
+                //validar si el codigo tiene proforma empresa proforma_empresa
+                $ifproforma_empresaD            = $validarD[0]->proforma_empresa;
+                //validar si el codigo tiene proforma codigo_proforma
+                $ifcodigo_proformaD             = $validarD[0]->codigo_proforma;
+                $old_valuesA                    = CodigosLibros::Where('codigo',$codigoActivacion)->get();
+                $old_valuesD                    = CodigosLibros::findOrFail($codigoDiagnostico);
                 //obtener la factura si no envian nada le dejo lo mismo
-                $facturaA                   = $validarA[0]->factura;
+                $facturaA                       = $validarA[0]->factura;
                 if($request->factura == null || $request->factura == "")   $factura = $facturaA;
                 else  $factura = $request->factura;
                 $ifNotPaqueteA  = false;
                 $ifNotPaqueteD  = false;
                 $ifNotPaqueteA  = (($codigo_paqueteA == null || $codigo_paqueteA == ""));
                 $ifNotPaqueteD  = (($codigo_paqueteD == null || $codigo_paqueteD == ""));
+                //=============PROFORMA ==========
+                //cambiar codigo de proforma
+                    if($ifSetProforma == 1){
+                        //si codigo proforma es nulo le permito que actualize el codigo proforma activacion
+                        if($ifcodigo_proformaA == null || $ifcodigo_proformaA == "" ){
+                            $ifChangeProformaA = true;
+                            $ifErrorProformaA  = false;
+                        }else{
+                            //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                            if($ifcodigo_proformaA == $codigo_proforma && $ifproforma_empresaA == $proforma_empresa){
+                                $ifChangeProformaA = true;
+                                $ifErrorProformaA  = false;
+                            }
+                            //si no es igual guardo en un array
+                            else{
+                                $ifChangeProformaA = false;
+                                $ifErrorProformaA  = true;
+                            }
+                        }
+                        //si codigo proforma es nulo le permito que actualize el codigo proforma diagnostico
+                        if($ifcodigo_proformaD == null || $ifcodigo_proformaD == "" ){
+                            $ifChangeProformaD = true;
+                            $ifErrorProformaD  = false;
+                        }else{
+                            //valido que el ifcodigo_proforma sea igual codigo_proforma y el ifproforma_empresa es igual a proforma_empresa
+                            if($ifcodigo_proformaD == $codigo_proforma && $ifproforma_empresaD == $proforma_empresa){
+                                $ifChangeProformaD = true;
+                                $ifErrorProformaD  = false;
+                            }
+                            //si no es igual guardo en un array
+                            else{
+                                $ifChangeProformaD = false;
+                                $ifErrorProformaD  = true;
+                            }
+                        }
+                    }
+                ///============PROFORMA =======
                 //===PROCESO===========
                 //=====USAN Y LIQUIDAN=========================
                 if($tipoProceso == '0'){
-                    if(($ifid_periodoA  == $periodo_id || $ifid_periodoA == 0 ||  $ifid_periodoA == null  ||  $ifid_periodoA == "")  && ($ifBcEstadoA == '1')  && $ifLiquidadoA == '1' && $ifBloqueadoA !=2 &&  (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0')  && $ifNotPaqueteA ){
-                        if(($ifid_periodoD  == $periodo_id || $ifid_periodoD == 0 ||  $ifid_periodoD == null  ||  $ifid_periodoD == "") && ($ifBcEstadoD == '1')  && $ifLiquidadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD ){
+                    if(($ifid_periodoA  == $periodo_id || $ifid_periodoA == 0 ||  $ifid_periodoA == null  ||  $ifid_periodoA == "")  && ($ifBcEstadoA == '1')  && $ifLiquidadoA == '1' && $ifBloqueadoA !=2 &&  (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0')  && $ifNotPaqueteA && $ifErrorProformaA == false ){
+                        if(($ifid_periodoD  == $periodo_id || $ifid_periodoD == 0 ||  $ifid_periodoD == null  ||  $ifid_periodoD == "") && ($ifBcEstadoD == '1')  && $ifLiquidadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD && $ifErrorProformaD == false ){
                         //Ingresar Union a codigo de activacion
-                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura);
+                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
                         if($codigoA){ $contadorA++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
                         //Ingresar Union a codigo de prueba diagnostico
-                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura);
-                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null
-                        ); }
+                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
+                        if($codigoB){  $contadorD++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
                         }else{
-                            $codigoConProblemas->push($validarD);
+                            if($ifSetProforma == 1 && $ifErrorProformaD){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
                         }
                     }else{
-                        $codigoConProblemas->push($validarA);
+                        if($ifSetProforma == 1 && $ifErrorProformaA){
+                            $validarA[0]->errorProforma      = 1;
+                            //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                            $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                            $codigoConProblemas->push($validarA);
+                        }else{
+                            $codigoConProblemas->push($validarA);
+                        }
                     }
                 }
                 //======REGALADO NO ENTRA A LA LIQUIDACION============
@@ -651,23 +807,37 @@ class CodigoLibrosController extends Controller
                     }
                     //si no es el import de paquete valido que el codigo no tenga paquete
                     else{
-                        $booleanValidacionA = ($ifLiquidadoA == '1' && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA);
+                        $booleanValidacionA = ($ifLiquidadoA == '1' && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA );
                         $booleanValidacionD = ($ifLiquidadoD == '1' && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD);
                     }
-                    if($booleanValidacionA ){
-                        if($booleanValidacionD ){
+                    if($booleanValidacionA && $ifErrorProformaA == false){
+                        if($booleanValidacionD && $ifErrorProformaD == false){
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
-                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura);
+                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
                         if($codigoA){  $contadorA++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
                         //Cambiar a regalado a codigo de diagnostico
-                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura);
+                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
                         if($codigoB){  $contadorD++; $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
                         }else{
-                            $codigoConProblemas->push($validarD);
+                            if($ifSetProforma == 1 && $ifErrorProformaD){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
                         }
                     }else{
-                        $codigoConProblemas->push($validarA);
+                        if($ifSetProforma == 1 && $ifErrorProformaA){
+                            $validarA[0]->errorProforma      = 1;
+                            //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                            $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                            $codigoConProblemas->push($validarA);
+                        }else{
+                            $codigoConProblemas->push($validarA);
+                        }
                     }
                 }
                 //======REGALADO Y BLOQUEADO(No usan y no liquidan)=============
@@ -681,20 +851,34 @@ class CodigoLibrosController extends Controller
                         $booleanValidacionA = (( $ifLiquidadoA !='0' && $ifLiquidadoA !='4') && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA);
                         $booleanValidacionD = (($ifLiquidadoD !='0' && $ifLiquidadoD !='4') && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD);
                     }
-                    if($booleanValidacionA){
-                        if($booleanValidacionD){
+                    if($booleanValidacionA && $ifErrorProformaA == false){
+                        if($booleanValidacionD && $ifErrorProformaD == false){
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
-                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura);
+                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
                         if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
                         //Cambiar a regalado a codigo de diagnostico
-                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura);
+                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
                         if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
                         }else{
-                            $codigoConProblemas->push($validarD);
+                            if($ifSetProforma == 1 && $ifErrorProformaD){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
                         }
                     }else{
-                        $codigoConProblemas->push($validarA);
+                        if($ifSetProforma == 1 && $ifErrorProformaA){
+                            $validarA[0]->errorProforma      = 1;
+                            //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                            $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                            $codigoConProblemas->push($validarA);
+                        }else{
+                            $codigoConProblemas->push($validarA);
+                        }
                     }
                 }
                 //===== BLOQUEADO(No usan y no liquidan)=============
@@ -708,20 +892,34 @@ class CodigoLibrosController extends Controller
                         $booleanValidacionA = (( $ifLiquidadoA !='0' && $ifLiquidadoA !='4') && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA );
                         $booleanValidacionD = (($ifLiquidadoD !='0' && $ifLiquidadoD !='4') && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0') && $ifNotPaqueteD );
                     }
-                    if($booleanValidacionA){
-                        if($booleanValidacionD){
+                    if($booleanValidacionA && $ifErrorProformaA == false){
+                        if($booleanValidacionD && $ifErrorProformaD == false){
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
-                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura);
+                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
                         if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
                         //Cambiar a regalado a codigo de diagnostico
-                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura);
+                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
                         if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
                         }else{
-                            $codigoConProblemas->push($validarD);
+                            if($ifSetProforma == 1 && $ifErrorProformaD){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
                         }
                     }else{
-                        $codigoConProblemas->push($validarA);
+                        if($ifSetProforma == 1 && $ifErrorProformaA){
+                            $validarA[0]->errorProforma      = 1;
+                            //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                            $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                            $codigoConProblemas->push($validarA);
+                        }else{
+                            $codigoConProblemas->push($validarA);
+                        }
                     }
                 }
                 //==GUIA===
@@ -735,20 +933,34 @@ class CodigoLibrosController extends Controller
                         $booleanValidacionA = ((  $ifLiquidadoA   =='1') && $ifBcEstadoA == '1' && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') && $ifNotPaqueteA);
                         $booleanValidacionD = (($ifLiquidadoD =='1')   && $ifBcEstadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion)  || ($codigo_unionD == null || $codigo_unionD == "" || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0')  && $ifNotPaqueteD);
                     }
-                    if($booleanValidacionA){
-                        if($booleanValidacionD){
+                    if($booleanValidacionA && $ifErrorProformaA == false){
+                        if($booleanValidacionD && $ifErrorProformaD == false){
                         //Cambiar a regalado a codigo de activacion
                         //(numeroProceso,codigo,$request)
-                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura);
+                        $codigoA     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoActivacion,$codigoDiagnostico,$request,$factura,null,$ifChangeProformaA,$datosProforma);
                         if($codigoA){  $contadorA++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoActivacion,$usuario_editor,$comentario,$old_valuesA,null); }
                         //Cambiar a regalado a codigo de diagnostico
-                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura);
+                        $codigoB     = $this->codigosRepository->procesoUpdateGestionBodega($tipoProceso,$codigoDiagnostico,$codigoActivacion,$request,$factura,null,$ifChangeProformaD,$datosProforma);
                         if($codigoB){  $contadorD++; $this->GuardarEnHistorico($usuarioQuemado,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,null); }
                         }else{
-                            $codigoConProblemas->push($validarD);
+                            if($ifSetProforma == 1 && $ifErrorProformaD){
+                                $validarD[0]->errorProforma      = 1;
+                                //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                                $validarD[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaD, Proforma a ingresar: $codigo_proforma";
+                                $codigoConProblemas->push($validarD);
+                            }else{
+                                $codigoConProblemas->push($validarD);
+                            }
                         }
                     }else{
-                        $codigoConProblemas->push($validarA);
+                        if($ifSetProforma == 1 && $ifErrorProformaA){
+                            $validarA[0]->errorProforma      = 1;
+                            //agregar un mensaje error de proforma donde traigo la proforma del request y la proforma de codigos
+                            $validarA[0]->mensajeErrorProforma = "Proforma del codigo: $ifcodigo_proformaA, Proforma a ingresar: $codigo_proforma";
+                            $codigoConProblemas->push($validarA);
+                        }else{
+                            $codigoConProblemas->push($validarA);
+                        }
                     }
                 }
             }
@@ -2090,9 +2302,184 @@ class CodigoLibrosController extends Controller
             FROM codigoslibros c
             LEFT JOIN libros_series ls ON c.libro_idlibro = ls.idLibro
             LEFT JOIN series s ON ls.id_serie = s.id_serie
-            WHERE c.bc_periodo = '$request->periodo' 
+            WHERE c.bc_periodo = '$request->periodo'
             AND ls.id_serie = '6'
             GROUP BY c.libro_idlibro, ls.nombre, ls.codigo_liquidacion;");
-        return $query;        
+        return $query;
+    }
+    public function importCodigosRemplazoPaquetes(Request $request)
+    {
+        $dataCodigosRemplazo = json_decode($request->input('dataCodigosRemplazo'), true);
+
+        // Arrays para almacenar resultados
+        $confirmacionesQuitarPaquete = [];
+        $confirmacionesActualizarPaquete = [];
+        $errores = [
+            'error_codigo' => [],
+        ];
+
+        // Arrays para gestionar códigos válidos y a actualizar
+        $codigosActualizar = [];
+        $codigosUnionActualizar = [];
+        $codigosNoActualizados = [];
+        $paquetesInvalidos = [];
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($dataCodigosRemplazo as $item) {
+                $paquete = $item['paquete'];
+                $codigoRemplazo = $item['codigo_remplazo'];
+
+                // Buscar códigos con estado 2 y prueba_diagnostica 0 para el paquete
+                $codigos = DB::table('codigoslibros')
+                    ->where('codigo_paquete', $paquete)
+                    ->where('estado', 2)
+                    ->where('prueba_diagnostica', 0)
+                    ->get();
+
+                if ($codigos->isEmpty()) {
+                    $errores['error_codigo'][] = [
+                        'Codigo' => $paquete,
+                        'Identificador' => 'Paquete',
+                        'error' => 'Codigo del Paquete no valido.'
+                    ] ;
+                    continue;
+                }
+
+                // Busca el codigo relacion del codigo_remplazo
+                $codigoUnionNuevoRemplazo = DB::table('codigoslibros')
+                    ->where('codigo', $codigoRemplazo)
+                    ->first();
+
+                if (empty($codigoUnionNuevoRemplazo)) {
+                    $errores['error_codigo'][] = [
+                        'Codigo' => $codigoRemplazo,
+                        'Identificador' => 'Codigo',
+                        'error' => "No se encontró el código de unión correcto. Referencia: Paquete-$paquete"
+                    ] ;
+                    $codigoRemplazo;
+                    continue;
+                }
+
+                $códigoUnionEncontrado = false;
+
+                foreach ($codigos as $codigo) {
+                    // Buscar el código de unión correspondiente
+                    $codigoUnion = DB::table('codigoslibros')
+                        ->where('codigo', $codigo->codigo_union)
+                        ->first();
+
+                    if ($codigoUnion) {
+                        $códigoUnionEncontrado = true;
+                        $codigosActualizar[] = $codigo->codigo;
+                        $codigosUnionActualizar[] = $codigoUnion->codigo;
+                    } else {
+                        $errores['error_codigo'][] = [
+                            'codigo' => $codigoUnion,
+                            'Identificador' => 'Codigo',
+                            'error' => 'No se encontró el código de unión correcto.'
+                        ];
+                    }
+                }
+
+                if (!$códigoUnionEncontrado) {
+                    $codigosNoActualizados[] = $codigoRemplazo;
+                }
+            }
+
+            // Actualizar los códigos después del procesamiento
+            if (count($codigosActualizar)) {
+
+                DB::table('codigoslibros')
+                ->whereIn('codigo', $codigosActualizar)
+                ->update([
+                    'codigo_paquete' => null,
+                    'estado_liquidacion' => 3
+                ]);
+
+                // Obtener los códigos antes de actualizar para confirmación
+                $confirmacionesQuitarPaquete = DB::table('codigoslibros')
+                    ->whereIn('codigo', $codigosActualizar)
+                    ->get(['codigo', 'estado_liquidacion', 'codigo_paquete'])
+                    ->toArray();
+
+
+            }
+
+            if (count($codigosUnionActualizar)) {
+
+                DB::table('codigoslibros')
+                    ->whereIn('codigo', $codigosUnionActualizar)
+                    ->update([
+                        'codigo_paquete' => null,
+                        'estado_liquidacion' => 3
+                    ]);
+
+                // Obtener los códigos antes de actualizar para confirmación
+                $confirmacionesQuitarPaquete = array_merge($confirmacionesQuitarPaquete, DB::table('codigoslibros')
+                    ->whereIn('codigo', $codigosUnionActualizar)
+                    ->get(['codigo', 'estado_liquidacion', 'codigo_paquete'])
+                    ->toArray());
+            }
+
+            // Actualizar el codigo de reemplazo y su código de unión
+            foreach ($dataCodigosRemplazo as $item) {
+                $paquete = $item['paquete'];
+                $codigoRemplazo = $item['codigo_remplazo'];
+
+                $codigoUnionRemplazo = DB::table('codigoslibros')
+                    ->where('codigo', $codigoRemplazo)
+                    ->value('codigo_union');
+
+                if ($codigoUnionRemplazo) {
+                    DB::table('codigoslibros')
+                    ->whereIn('codigo', [$codigoRemplazo, $codigoUnionRemplazo])
+                    ->update([
+                        'codigo_paquete' => $paquete,
+                        'estado' => 2
+                    ]);
+
+                    // Obtener los códigos antes de actualizar para confirmación
+                    $confirmacionesActualizarPaquete[] = DB::table('codigoslibros')
+                        ->whereIn('codigo', [$codigoRemplazo, $codigoUnionRemplazo])
+                        ->get(['codigo', 'estado', 'codigo_paquete'])
+                        ->toArray();
+
+
+                } else {
+                    // $errores['codigos_invalidos'][] = [
+                    //     'paquete' => $paquete,
+                    //     'codigo_remplazo' => $codigoRemplazo,
+                    //     'error' => 'El código de reemplazo no tiene código unión.'
+                    // ];
+                }
+            }
+
+            // Confirmar la transacción
+            DB::commit();
+
+            return response()->json([
+                'mensaje' => 'Proceso completado exitosamente.',
+                'confirmaciones' => [
+                    'quitar_paquete' => $confirmacionesQuitarPaquete,
+                    'actualizar_paquete' => $confirmacionesActualizarPaquete,
+                ],
+                'errores' => $errores
+            ]);
+        } catch (\Exception $e) {
+            // Deshacer la transacción en caso de error
+            DB::rollBack();
+
+            return response()->json([
+                'confirmaciones' => [
+                    'quitar_paquete' => $confirmacionesQuitarPaquete,
+                    'actualizar_paquete' => $confirmacionesActualizarPaquete,
+                ],
+                'errores' => array_merge($errores, [
+                    'mensaje' => 'Error en el proceso: ' . $e->getMessage()
+                ])
+            ]);
+        }
     }
 }

@@ -8,12 +8,19 @@ use DB;
 use Illuminate\Support\Facades\Http;
 trait TraitPedidosGeneral
 {
+    //=====PERSEO=======
     public $api_keyProlipaProduction    = "RfVaC9hIMhn49J4jSq2_I7GbWYHrlGRtitYwIuTepQg-";
     public $api_keyCalmedProduction     = "RfVaC9hIMhn49J4jSq2_IzB1.iNzqGb9M38jmd1DfQs-";
     public $api_keyProlipaLocal         = "RfVaC9hIMhn49J4jSq2_I_.QLazmDGrbZQ8o8ePUEcU-";
     public $api_keyCalmedLocal          = "RfVaC9hIMhn49J4jSq2_I91geWPRm0IWEft2beVW9NI-";
+    //=====END PERSEO=======
+    //=====SOLINFA==========
+    public $api_KeyGONZALEZ             = "RfVaC9hIMhn49J4jSq2_Iw3h5qF1Dg0ecy.kFTzdqnA-";
+    public $api_KeyCOBACANGO            = "RfVaC9hIMhn49J4jSq2_I6jl_oMHwM8TrJbBo8ztdHA-";
+    //=====END SOLINFA======
     public $ipProlipa                   = "http://186.4.218.168:9095/api/";
     public $ipPerseo                    = "http://190.12.43.171:8181/api/";
+    public $gl_perseoProduccion         = 1;
     // public $ipLocal        = "http://localhost:5000/api/";
     public function FacturacionGet($endpoint)
     {
@@ -24,18 +31,31 @@ trait TraitPedidosGeneral
         $dato = Http::post($this->ipProlipa.$endpoint,$data);
         return $JsonContrato = json_decode($dato, true);
     }
-    public function tr_PerseoGet($endpoint,$data=[])
-    {
-        //agregar la api key al array de data
-        $data['api_key'] = $this->api_keyProlipa;
-        $dato = Http::get($this->ipProlipa.$endpoint,$data);
-        return $jsonData = json_decode($dato, true);
-    }
+    //===PERSEO PROLIPA===
     public function tr_PerseoPost($endpoint,$data,$empresa=1){
         //empresa 1 => prolipa; 3 => calmed
+        $dato = [];
+        if ($this->gl_perseoProduccion == 1) {
+            //agregar la api key al array de data
+            if($empresa == 1){ $data['api_key'] = $this->api_keyProlipaProduction; }
+            if($empresa == 3){ $data['api_key'] = $this->api_keyCalmedProduction;  }
+            $dato = Http::post($this->ipPerseo.$endpoint,$data);
+
+        } else {
+           //agregar la api key al array de data
+            if($empresa == 1){ $data['api_key'] = $this->api_keyProlipaLocal; }
+            if($empresa == 3){ $data['api_key'] = $this->api_keyCalmedLocal;  }
+            $dato = Http::post($this->ipPerseo.$endpoint,$data);
+        }
+        return $jsonData = json_decode($dato, true);
+    }
+    //==SOLINFA===
+    public function tr_SolinfaPost($endpoint,$data,$empresa=1){
+        //empresa 1 => GONZALEZ GUAMAN WELLINGTON MAURICIO ; 2 => COBACANGO TOAPANTA CESAR BAYARDO
+        $dato = [];
         //agregar la api key al array de data
-        if($empresa == 1){ $data['api_key'] = $this->api_keyProlipaLocal; }
-        if($empresa == 3){ $data['api_key'] = $this->api_keyCalmedLocal;  }
+        if($empresa == 1){ $data['api_key'] = $this->api_KeyGONZALEZ; }
+        if($empresa == 2){ $data['api_key'] = $this->api_KeyCOBACANGO;  }
         $dato = Http::post($this->ipPerseo.$endpoint,$data);
         return $jsonData = json_decode($dato, true);
     }
@@ -81,6 +101,15 @@ trait TraitPedidosGeneral
             AND a.estado_alcance  = "1"
             AND ped.estado = "1"
         ) as contadorAlcanceCerrado,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND (
+            o.estado_libros_obsequios = "0"
+            OR o.estado_libros_obsequios  = "3"
+            OR o.estado_libros_obsequios  = "4"
+            )
+        ) as contadorObsequiosAbiertosEnviados,
         pe.periodoescolar as periodo,pe.codigo_contrato,
         CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
         i.region_idregion as region,uf.cod_usuario,
@@ -210,6 +239,14 @@ trait TraitPedidosGeneral
        ");
         return $query;
     }
+    public function tr_getPreproformas($ca_codigo_agrupado){
+        $query = DB::SELECT("SELECT DISTINCT fp.prof_id
+        FROM  f_proforma fp
+        WHERE fp.idPuntoventa = '$ca_codigo_agrupado'
+        ORDER BY fp.created_at DESC
+       ");
+        return $query;
+    }
     public function tr_pedidosXDespacho($ca_codigo_agrupado,$id_periodo){
         // consulta sin contrato
         $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,
@@ -278,17 +315,23 @@ trait TraitPedidosGeneral
         return $query;
     }
     public function tr_getCliente($busqueda){
-        $query = DB::SELECT("SELECT u.idusuario,u.cedula,u.nombres,u.apellidos,u.email,u.telefono,  CONCAT(u.nombres,' ',u.apellidos) as usuario
+        $query = DB::SELECT("SELECT u.idusuario,u.cedula,u.nombres,u.apellidos,u.email,u.telefono,
+        CONCAT_WS(' ', u.nombres, u.apellidos) AS usuario
         FROM usuario u
         WHERE u.cedula = '$busqueda'
         ");
         return $query;
     }
     public function tr_getDespachoProforma($id_profroma){
-        $proforma = DB::SELECT("SELECT p.*, i.nombreInstitucion, i.direccionInstitucion,
-            i.ruc,i.telefonoInstitucion,i.email,
-            CONCAT(u.nombres, ' ', u.apellidos) AS cliente,
-            u.cedula, c.nombre AS ciudad
+        $proforma = DB::SELECT("SELECT p.*,
+                i.nombreInstitucion,
+                i.direccionInstitucion,
+                i.ruc,
+                i.telefonoInstitucion,
+                i.email,
+                CONCAT(COALESCE(u.nombres, ''), ' ', COALESCE(u.apellidos, '')) AS cliente,
+                u.cedula,
+                c.nombre AS ciudad
             FROM f_proforma p
             LEFT JOIN institucion i ON p.id_ins_depacho = i.idInstitucion
             LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad

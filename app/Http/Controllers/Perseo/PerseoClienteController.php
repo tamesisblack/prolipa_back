@@ -31,15 +31,15 @@ class PerseoClienteController extends Controller
                             "clientes_gruposid" => 1,
                             "provinciasid" => "09",
                             "ciudadesid" => "0901",
-                            "razonsocial" => "Testing",
+                            "razonsocial" => " JOSEFINA ROSARIO SUING NAGUA",
                             "parroquiasid" => "090111",
                             "clientes_zonasid" => 1,
-                            "nombrecomercial" => "Pruebas",
-                            "direccion" => "Carcelen",
-                            "identificacion" => "1727264515001",
+                            "nombrecomercial" => " JOSEFINA ROSARIO SUING NAGUA",
+                            "direccion" => "MITAD DEL MUNDO",
+                            "identificacion" => "1100411824",
                             "tipoidentificacion" => "C",
                             "email" => "test@tmail.com",
-                            "telefono1" => "21112112",
+                            "telefono1" => "9999999999",
                             "telefono2" => "",
                             "telefono3" => "",
                             "vendedoresid" => 3,
@@ -59,47 +59,9 @@ class PerseoClienteController extends Controller
                     ]
                 ]
             ];
-
-            // $formData = [
-            //     "registros" => [
-            //         [
-            //             "clientes"                          => [
-            //                 "clientesid"                    => $request->clientesid,
-            //                 "clientescodigo"                => $request->clientescodigo,
-            //                 "codigocontable"                => $request->codigocontable,
-            //                 "clientes_gruposid"             => $request->clientes_gruposid,
-            //                 "provinciasid"                  => $request->provinciasid,
-            //                 "ciudadesid"                    => $request->ciudadesid,
-            //                 "razonsocial"                   => $request->razonsocial,
-            //                 "parroquiasid"                  => $request->parroquiasid,
-            //                 "clientes_zonasid"              => $request->clientes_zonasid,
-            //                 "nombrecomercial"               => $request->nombrecomercial,
-            //                 "direccion"                     => $request->direccion,
-            //                 "identificacion"                => $request->identificacion,
-            //                 "tipoidentificacion"            => $request->tipoidentificacion,
-            //                 "email"                         => $request->email,
-            //                 "telefono1"                     => $request->telefono1,
-            //                 "telefono2"                     => $request->telefono2,
-            //                 "telefono3"                     => $request->telefono3,
-            //                 "vendedoresid"                  => $request->vendedoresid,
-            //                 "cobradoresid"                  => $request->cobradoresid,
-            //                 "creditocupo"                   => $request->creditocupo,
-            //                 "creditodias"                   => $request->creditodias,
-            //                 "estado"                        => $request->estado,
-            //                 "tarifasid"                     => $request->tarifasid,
-            //                 "forma_pago_empresaid"          => $request->forma_pago_empresaid,
-            //                 "ordenvisita"                   => $request->ordenvisita,
-            //                 "latitud"                       => $request->latitud,
-            //                 "longitud"                      => $request->longitud,
-            //                 "usuariocreacion"               => $request->usuariocreacion,
-            //                 "fechacreacion"                 => $request->fechacreacion,
-            //                 "fechamodificacion"             => $request->fechamodificacion
-            //             ]
-            //         ]
-            //     ]
-            // ];
             $url        = "clientes_crear";
-            $process    = $this->tr_PerseoPost($url, $formData);
+            $process    = $this->tr_SolinfaPost($url, $formData,2);
+            // $process    = $this->tr_PerseoPost($url, $formData);
             return $process;
         } catch (\Exception $e) {
             return response()->json([
@@ -248,19 +210,18 @@ class PerseoClienteController extends Controller
     //api:post/perseo/clientes/clientes_consulta
     public function clientes_consulta(Request $request)
     {
-        $cedula  = $request->busqueda;
-        $empresa = $request->empresa;
+        $ifSolinfa  = 0;
+        $cedula     = $request->busqueda;
+        $empresa    = $request->empresa;
+        $process    = [];
+        if($request->ifSolinfa){ $ifSolinfa = 1; }
         try {
             $formData = [
-                // "clienteid"         => "9",
-                // "clientescodigo"    => "",
                 "identificacion"       => $cedula,
-                // "identificacion"       => "1725024283",
-
-                // "contenido"         => ""
             ];
             $url        = "clientes_consulta";
-            $process    = $this->tr_PerseoPost($url, $formData, $empresa);
+            if($ifSolinfa == 1) { $process = $this->tr_SolinfaPost($url, $formData, $empresa); }
+            else                { $process = $this->tr_PerseoPost($url, $formData, $empresa); }
             return $process;
         } catch (\Exception $e) {
             return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar la proforma a perseo", "error" => $e->getMessage()];

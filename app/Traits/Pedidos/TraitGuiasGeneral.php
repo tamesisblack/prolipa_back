@@ -21,4 +21,31 @@ trait TraitGuiasGeneral
         ",[$estado_entrega]);
         return $query;
     }
+    public function tr_pedidoxLibro($request){
+        $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro
+        FROM libros_series ls
+        LEFT JOIN libro l ON ls.idLibro = l.idlibro
+        LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+        WHERE ls.id_serie = '$request->id_serie'
+        AND a.area_idarea  = '$request->id_area'
+        AND l.Estado_idEstado = '1'
+        AND a.estado = '1'
+        AND ls.year = '$request->libro'
+        LIMIT 1
+       ");
+       return $query;
+    }
+    public function tr_pedidoxLibroPlanLector($request){
+        $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro
+        FROM libros_series ls
+        LEFT JOIN libro l ON ls.idLibro = l.idlibro
+        LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+        WHERE ls.id_serie = '6'
+        AND l.Estado_idEstado = '1'
+        AND a.estado = '1'
+        AND l.idlibro = '$request->plan_lector'
+        LIMIT 1
+        ");
+        return $query;
+    }
 }

@@ -324,7 +324,7 @@ class SallePreguntasController extends Controller
     {
         set_time_limit(60000);
         ini_set('max_execution_time', 60000);
-        $fecha_actual = date("Y-m-d G:i:s");
+        $fecha_actual = date("Y-m-d H:i:s");
         $periodo = date('Y');
         $configuracion = $this->configuracionXInstitucion($id_institucion,$n_evaluacion);
         if( !empty($configuracion) ){

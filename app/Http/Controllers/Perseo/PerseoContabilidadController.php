@@ -116,13 +116,13 @@ class PerseoContabilidadController extends Controller
     public function cuentascontables_consulta(Request $request){
         try {
             $formData = [
-                "id"  => 631
+                "id"  => 19
             ];
             // $formData = [
             //     "id"  => $request->id,
             // ];
             $url        = "cuentascontables_consulta";
-            $process    = $this->tr_PerseoPost($url, $formData);
+            $process    = $this->tr_PerseoPost($url,[]);
             return $process;
         } catch (\Exception $e) {
             return response()->json([

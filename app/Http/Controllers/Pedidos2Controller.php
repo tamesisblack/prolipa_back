@@ -7,6 +7,7 @@ use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\Institucion;
 use App\Models\User;
 use App\Models\Usuario;
+use App\Models\Ventas;
 use App\Repositories\pedidos\PedidosRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
 use DB;
@@ -32,6 +33,7 @@ class Pedidos2Controller extends Controller
         ini_set('max_execution_time', 6000000);
         if($request->getLibrosFormato)              { return $this->getLibrosFormato($request->periodo_id); }
         if($request->geAllLibrosxAsesor)            { return $this->geAllLibrosxAsesor($request->asesor_id,$request->periodo_id); }
+        if($request->getLibrosXAreaXSerieUsados)    { return $this->getLibrosXAreaXSerieUsados($request->periodo_id,$request->area,$request->serie); }
         //api:get/pedidos2/pedidos?getAsesoresPedidos=1
         if($request->getAsesoresPedidos)            { return $this->getAsesoresPedidos(); }
         if($request->getInstitucionesDespacho)      { return $this->getInstitucionesDespacho($request); }
@@ -76,6 +78,7 @@ class Pedidos2Controller extends Controller
                 'id_periodo'        => $item->id_periodo,
                 'codigo_contrato'   => $item->codigo_contrato,
                 'pedidos'           => $this->tr_pedidosXDespacho($item->ca_codigo_agrupado,$id_periodo),
+                'preproformas'      => $this->tr_getPreproformas($item->ca_codigo_agrupado),
                 'ca_descripcion'    => $item->ca_descripcion,
                 'ca_tipo_pedido'    => $item->ca_tipo_pedido,
                 'ca_id'             => $item->ca_id,
@@ -98,11 +101,37 @@ class Pedidos2Controller extends Controller
             return "No se pudo guardar/actualizar";
         }
     }
+    //api:post/marcarComoAnuladoPerseoPrefactura
+    public function marcarComoAnuladoPerseoPrefactura(Request $request){
+        try {
+            // Obtener datos del request
+            $ven_codigo = $request->ven_codigo;
+            $id_empresa = $request->id_empresa;
+
+            // Realizar la actualización
+            Ventas::where('ven_codigo', $ven_codigo)
+                ->where('id_empresa', $id_empresa)
+                ->update(['anuladoEnPerseo' => '1']);
+
+            // Devolver una respuesta de éxito
+            return response()->json([
+                "status" => "1",
+                "message" => "Se marcó como anulado correctamente"
+            ]);
+        } catch (\Exception $e) {
+            // Manejar cualquier otra excepción
+            return response()->json([
+                "status" => "0",
+                "message" => "Error inesperado: " . $e->getMessage()
+            ], 200);
+        }
+    }
     //API:GET/pedidos2/pedidos?getLibrosXDespacho=yes&id_pedidos=1,2,3
     public function getLibrosXDespacho($request){
         $query = $this->geAllLibrosxAsesor(0,$request->id_periodo,1,$request->id_pedidos);
         return $query;
     }
+
     //API:GET/pedidos2/pedidos?getLibrosXInstituciones=yes&id_periodo=23&tipo_venta=1
     public function getLibrosXInstituciones($id_periodo,$tipo_venta){
         $query = $this->tr_getInstitucionesVentaXTipoVenta($id_periodo,$tipo_venta);
@@ -285,7 +314,7 @@ class Pedidos2Controller extends Controller
             $valores = [];
             //plan lector
             if($item->plan_lector > 0 ){
-                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar,
+                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
                 (
                     SELECT f.pvp AS precio
                     FROM pedidos_formato f
@@ -301,7 +330,7 @@ class Pedidos2Controller extends Controller
                 ");
                 $valores = $getPlanlector;
             }else{
-                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar,
+                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
                 (
                     SELECT f.pvp AS precio
                     FROM pedidos_formato f
@@ -338,6 +367,7 @@ class Pedidos2Controller extends Controller
                 "precio"            => $valores[0]->precio,
                 "codigo"            => $valores[0]->codigo_liquidacion,
                 "stock"             => $valores[0]->pro_reservar,
+                "descripcion"       => $valores[0]->descripcionlibro,
             ];
             $contador++;
         }
@@ -367,6 +397,27 @@ class Pedidos2Controller extends Controller
         // $resultado  = array_unique($datos, SORT_REGULAR);
         // $coleccion  = collect($resultado);
         // return $coleccion->values();
+    }
+    //API:GET/pedidos2/pedidos?getLibrosXAreaXSerieUsados=yes&periodo_id=24&area=19&serie=169
+    public function getLibrosXAreaXSerieUsados($periodo,$area,$serie){
+        $query = DB::SELECT("SELECT DISTINCT pv.valor,
+        pv.id_area, pv.tipo_val, pv.id_serie, pv.year,pv.plan_lector,pv.alcance,
+        p.id_periodo,
+        CONCAT(se.nombre_serie,' ',ar.nombrearea) as serieArea,
+        se.nombre_serie,p.id_pedido
+        FROM pedidos_val_area pv
+        LEFT JOIN area ar ON  pv.id_area = ar.idarea
+        LEFT JOIN series se ON pv.id_serie = se.id_serie
+        LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
+        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+        WHERE  p.id_periodo  = '$periodo'
+        AND p.tipo        = '0'
+        AND p.estado      = '1'
+        AND ar.idarea     = '$area'
+        AND se.id_serie   = '$serie'
+        GROUP BY pv.id
+        ");
+        return $query;
     }
     public function getAlcanceAbiertoXId($id){
         $query = DB::SELECT("SELECT * FROM pedidos_alcance a
@@ -501,20 +552,26 @@ class Pedidos2Controller extends Controller
     //API:POST/pedidos2/pedidos/crearUsuario=1
     public function crearUsuario($request){
         $password                           = sha1(md5($request->cedula));
+        $email                              = $request->email;
+        //si el email es nulo o vacio guardar la cedula en el email
+        if($email == null || $email == ""){
+            $email = $request->cedula;
+        }
         $user                               = new User();
         $user->cedula                       = $request->cedula;
         $user->nombres                      = $request->nombres;
         $user->apellidos                    = $request->apellidos;
-        $user->name_usuario                 = $request->email;
+        $user->name_usuario                 = $email;
         $user->password                     = $password;
-        $user->email                        = $request->email;
+        $user->email                        = $email;
         $user->id_group                     = $request->id_grupo;
         $user->institucion_idInstitucion    = $request->institucion;
         $user->estado_idEstado              = 1;
         $user->idcreadorusuario             = $request->user_created;
         $user->telefono                     = $request->telefono;
         $user->save();
-        $query = DB::SELECT("SELECT u.idusuario,u.cedula,u.nombres,u.apellidos,u.email,u.telefono,  CONCAT(u.nombres,' ',u.apellidos) as usuario
+        $query = DB::SELECT("SELECT u.idusuario,u.cedula,u.nombres,u.apellidos,u.email,u.telefono,
+          CONCAT_WS(' ', u.nombres, u.apellidos) AS usuario
         FROM usuario u
         WHERE u.cedula = '$request->cedula'
         ");
@@ -601,7 +658,9 @@ class Pedidos2Controller extends Controller
                 "libro_id"           => $item->libro_id,
                 "valor"              => $total,
                 "stock"              => $item->stock,
-                "cantidad"           => 0
+                "cantidad"           => 0,
+                "id_serie"           => $item->id_serie,
+                "descripcion"        => $item->descripcion,
             ];
         }
         return $resultado;

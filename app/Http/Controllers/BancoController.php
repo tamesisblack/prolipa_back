@@ -32,7 +32,8 @@ class BancoController extends Controller
     public function GetCheque_todo(Request $request){
         $query = DB::SELECT("SELECT chq.*, ban.ban_nombre FROM cheque chq 
         INNER JOIN 1_1_bancos ban ON ban.ban_codigo = chq.ban_codigo
-        WHERE chq_institucion = $request->institucion
+        -- WHERE chq_institucion = $request->institucion
+        WHERE chq_cliente = $request->cliente
         AND chq_periodo = $request->periodo
         AND chq_empresa = $request->empresa");
         return $query;
@@ -118,9 +119,10 @@ class BancoController extends Controller
             'chq_cuenta' => 'required|integer',
             'chq_referenca' => 'required|integer',
             'chq_numero' => 'required|integer',
-            'chq_institucion' => 'required|string', // Ajustar según tipo de dato
-            'chq_periodo' => 'required|string', // Ajustar según tipo de dato
-            'chq_empresa' => 'required', // Ajustar según tipo de dato
+            // 'chq_institucion' => 'required|string',
+            'chq_periodo' => 'required|string',
+            'chq_empresa' => 'required',
+            'chq_cliente' => 'required',
         ]);
 
         // Verificar si el número de cheque ya existe
@@ -131,7 +133,7 @@ class BancoController extends Controller
         if ($chequeExistente) {
             return response()->json([
                 'status' => 0,
-                'message' => 'El número de cheque ya está registrado en la base de datos',
+                'message' => 'El número de cheque ' . $request->chq_numero . ' ya está registrado para la cuenta ' . $request->chq_cuenta,
             ]);
         }
 
@@ -144,9 +146,10 @@ class BancoController extends Controller
             'chq_cuenta' => $request->chq_cuenta,
             'chq_referenca' => $request->chq_referenca,
             'chq_numero' => $request->chq_numero,
-            'chq_institucion' => $request->chq_institucion,
+            // 'chq_institucion' => $request->chq_institucion,
             'chq_periodo' => $request->chq_periodo,
             'chq_empresa' => $request->chq_empresa,
+            'chq_cliente' => $request->chq_cliente,
         ]);
 
         // Retornar una respuesta JSON adecuada
@@ -157,4 +160,110 @@ class BancoController extends Controller
         ]);
     }
 
+    public function cuenta_registro(Request $request)
+    {
+        // Validación de los datos recibidos
+        $request->validate([
+            'ban_codigo' => 'required|integer',
+            'cue_pag_numero' => 'required|integer',
+            'cue_pag_nombre' => 'required|string',
+        ]);
+
+        if ($request->has('editar') && $request->editar === 'yes') {
+            // Actualizar la cuenta existente
+            $cuentaExistente = CuentaBancaria::where('cue_pag_codigo', $request->cue_pag_codigo)
+                                            ->first();
+            if ($cuentaExistente) {
+                $cuentaExistente->update([
+                    'cue_pag_descripcion' => $request->cue_pag_descripcion,
+                    'cue_pag_nombre' => $request->cue_pag_nombre,
+                    'cue_pag_numero' => $request->cue_pag_numero,
+                    'ban_codigo' => $request->ban_codigo,
+                ]);
+
+                return response()->json([
+                    'status' => 1,
+                    'message' => 'Cuenta actualizada correctamente',
+                    'cuenta' => $cuentaExistente
+                ]);
+            } else {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'Cuenta no encontrada',
+                ]);
+            }
+        } else {
+            // Verificar si la cuenta ya existe
+            $cuentaExistente = CuentaBancaria::where('cue_pag_numero', $request->cue_pag_numero)
+                                            ->where('ban_codigo', $request->ban_codigo)
+                                            ->exists();
+
+            if ($cuentaExistente) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'La cuenta ' . $request->cue_pag_numero . ' ya está registrada para el banco ' . $request->ban_codigo,
+                ]);
+            } else {
+                // Crear una nueva cuenta
+                $cuenta = CuentaBancaria::create([
+                    'ban_codigo' => $request->ban_codigo,
+                    'cue_pag_numero' => $request->cue_pag_numero,
+                    'cue_pag_descripcion' => $request->cue_pag_descripcion,
+                    'cue_pag_nombre' => $request->cue_pag_nombre,
+                    'user_created' => $request->user_created,
+                ]);
+
+                return response()->json([
+                    'status' => 1,
+                    'message' => 'Cuenta registrada correctamente',
+                    'cuenta' => $cuenta
+                ]);
+            }
+        }
+    }
+
+    public function GetCuentasBanco(Request $request){
+        $query = DB::SELECT("SELECT * FROM 1_1_cuenta_pago cpg");
+        return $query;
+    }
+    public function desactivar_activar_cuenta(Request $request)
+    {
+        $cue_pag_codigo = $request->cue_pag_codigo;
+        $cue_pag_estado = $request->cue_pag_estado;
+
+        $cuenta = CuentaBancaria::find($cue_pag_codigo);
+
+        if ($cuenta) {
+            $cuenta->cue_pag_estado = $cue_pag_estado;
+            $cuenta->save();
+
+            return response()->json(['mensaje' => 'Cambio de estado exitoso'], 200);
+        } else {
+            return response()->json(['mensaje' => 'No se encontró la cuenta'], 404);
+        }
+    }
+
+    public function eliminar_cuenta(Request $request)
+    {
+        $cue_pag_codigo = $request->cue_pag_codigo;
+
+        try {
+            \DB::beginTransaction();
+
+            $cuenta = CuentaBancaria::find($cue_pag_codigo);
+
+            if ($cuenta) {
+                $cuenta->delete();
+            } else {
+                throw new \Exception('No se encontró la cuenta');
+            }
+
+            \DB::commit();
+
+            return response()->json(['message' => 'Cuenta eliminada correctamente'], 200);
+        } catch (\Exception $e) {
+            \DB::rollBack();
+            return response()->json(['error' => 'Error al eliminar la cuenta: ' . $e->getMessage()], 500);
+        }
+    }
 }

@@ -315,7 +315,7 @@ class PerseoProductoController extends Controller
         try {
             $formData = [
                 // "productosid"=>"67",
-                "productocodigo"=>"GSMC2",
+                "productocodigo"=>"FOLL4",
                 // "barras"=>"6181220422071",
                 // "contenido"=>"producto"
 
@@ -432,7 +432,7 @@ class PerseoProductoController extends Controller
     public function existencia_producto(Request $request){
         try {
             $formData = [
-                "productosid" => 1
+                "productosid" => 33
             ];
             // $formData = [
             //     "productosid" => $request->productosid
