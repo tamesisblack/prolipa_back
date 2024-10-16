@@ -10,7 +10,7 @@ trait TraitVerificacionGeneral
         $getnumVerificacion = "verif".$num_verificacion;
         $query = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo,  COUNT(ls.codigo_liquidacion) AS cantidad,
             c.serie,
-            c.libro_idlibro,ls.nombre as nombrelibro,ls.id_serie,a.area_idarea
+            c.libro_idlibro,ls.nombre as nombrelibro,ls.id_serie,a.area_idarea,ls.year
             FROM codigoslibros c
             LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
@@ -36,11 +36,29 @@ trait TraitVerificacionGeneral
                 AND f.id_libro      = '$item->libro_idlibro'
                 AND f.id_periodo    = '$periodo'");
             }else{
-                $query = DB::SELECT("SELECT f.pvp AS precio
-                FROM pedidos_formato f
-                WHERE f.id_serie    = '$item->id_serie'
-                AND f.id_area       = '$item->area_idarea'
-                AND f.id_periodo    = '$periodo'
+                // $query = DB::SELECT("SELECT f.pvp AS precio
+                // FROM pedidos_formato f
+                // WHERE f.id_serie    = '$item->id_serie'
+                // AND f.id_area       = '$item->area_idarea'
+                // AND f.id_periodo    = '$periodo'
+                // ");
+                $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$item->id_serie'
+                AND a.area_idarea  = '$item->area_idarea'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$item->year'
+                LIMIT 1
                 ");
             }
             if(count($query) > 0){

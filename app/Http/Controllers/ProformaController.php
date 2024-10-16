@@ -106,6 +106,21 @@ class ProformaController extends Controller
         }
         return $datos;
     }
+    public function Get_proformasCliente(Request $request){
+        $datos = DB::SELECT("SELECT fp.*, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
+            ls.nombre, s.nombre_serie, p.pro_stock  as facturas,
+            p.pro_deposito as bodega,p.pro_reservar, l.descripcionlibro, ls.id_serie, fcg.ca_codigo_agrupado, fcg.id_periodo
+            FROM f_detalle_proforma as dpr
+            INNER JOIN  f_proforma as fp on dpr.prof_id=fp.id
+            INNER JOIN libros_series as ls ON dpr.pro_codigo=ls.codigo_liquidacion
+            INNER JOIN 1_4_cal_producto as p on dpr.pro_codigo=p.pro_codigo
+            INNER JOIN series as s ON ls.id_serie=s.id_serie
+            INNER JOIN libro l ON ls.idLibro = l.idlibro
+            LEFT JOIN f_contratos_agrupados fcg ON fcg.ca_codigo_agrupado = fp.idPuntoventa
+            WHERE fp.ven_cliente = '$request->usuario'
+        ");
+        return $datos;
+    }
 
     public function Get_DatosFactura(Request $request){
         $datos = [];
@@ -408,7 +423,7 @@ class ProformaController extends Controller
         $miarray=json_decode($request->data_detalle);
         DB::beginTransaction();
             $proforma = new Proforma;
-            if($request->id_group != 33){
+            if($request->id_group == 1 || $request->id_group == 22|| $request->id_group == 23){
                 $id_empresa         = $request->emp_id;
                 $cod_usuario        = $request->cod_usuario;
                 $getNumeroDocumento = $this->getNumeroDocumento($id_empresa);
@@ -495,7 +510,7 @@ class ProformaController extends Controller
                 $profIdStatus = $oldvalue->prof_id;
                 // $proforma->prof_id = $request->prof_id;
                 $proforma->emp_id = $request->emp_id;
-                if($request->id_group != 33){
+                if($request->id_group == 1 || $request->id_group == 22|| $request->id_group == 23){
                 //CODIGO PROF_IF
                     if($oldvalue->prof_id == null || $oldvalue->prof_id ==""){
                         $id_empresa         = $request->emp_id;
@@ -693,6 +708,35 @@ class ProformaController extends Controller
             return "No está ingresando ningún prof_id";
         }
     }
+    public function DesactivarProforma(Request $request)
+    {
+        if ($request->id) {
+            try{
+                DB::beginTransaction();
+                    $oldvalue= Proforma::findOrFail($request->id);
+                    $proform= Proforma::find($request->id);
+
+                    if (!$proform){
+                        return "El prof_id no existe en la base de datos";
+                    }
+                    $proform->prof_estado = $request->prof_estado;
+                    $proform->user_editor = $request->id_usua;
+                    $proform->save();
+                    if($proform){
+                        $newvalue = Proforma::findOrFail($request->id);
+                        $this->tr_GuardarEnHistorico($request->id,$request->id_usua,$oldvalue,$newvalue);
+                    }
+                DB::commit();
+                return response()->json(['message' => 'Proforma actualizado con éxito'], 200);
+            }catch(\Exception $e){
+                DB::rollback();
+                return response()->json(["error"=>"0", "message" => "No se pudo actualizar", 'error' => $e->getMessage()], 500);
+            }
+        }
+        else {
+            return "No está ingresando ningún id";
+        }
+    }
 //eliminacion de datos del detalle de la proforma
     public function Eliminar_DetaProforma(Request $request)
     {
@@ -728,49 +772,61 @@ class ProformaController extends Controller
     public function Eliminar_Proforma(Request $request)
     {
         if ($request->id) {
-            try{
+            try {
                 set_time_limit(6000000);
                 ini_set('max_execution_time', 6000000);
-                $miarray=json_decode($request->dat);
+                $miarray = json_decode($request->dat);
                 DB::beginTransaction();
-                    $profor = DetalleProforma::Where('prof_id',$request->id)->get();
-                    $cont=count($profor);
+                $profor = DetalleProforma::where('prof_id', $request->id)->get();
 
-                        if (!$profor) {
-                            return "El prof_id no existe en la base de datos11";
-                        }else{
-                            $profor = DetalleProforma::Where('prof_id',$request->id)->delete();
+                if ($profor->isEmpty()) {
+                    return ["error" => "0", "message" =>"El prof_id no existe en la base de datos"];
+                } else {
+                    DetalleProforma::where('prof_id', $request->id)->delete();
+                }
 
-                        }
-                    $profor = DetalleProforma::Where('prof_id',$request->id)->get();
-                    if(count($profor)==0){
-                        $profort = Proforma::find($request->id);
-                        if (!$profort) {
-                            return "El prof_id no existe en la base de datos";
-                        } else {
-                            $profort->delete();
-                        }
+                $profor = DetalleProforma::where('prof_id', $request->id)->get();
+                if ($profor->isEmpty()) {
+                    $profort = Proforma::find($request->id);
+                    if (!$profort) {
+                        return ["error" => "0", "message" =>"El prof_id no existe en la base de datos"];
+                    } else {
+                        $profort->delete();
                     }
-                    foreach($miarray as $key => $item){
-                        $query1 = DB::SELECT("SELECT pro_reservar as stoc from 1_4_cal_producto where pro_codigo='$item->pro_codigo'");
-                        $codi=$query1[0]->stoc;
-                        $co=(int)$codi+(int)$item->det_prof_cantidad;
-                        $pro= _14Producto::findOrFail($item->pro_codigo);
-                        $pro->pro_reservar = $co;
-                        $pro->save();
-                    }
+                }
+
+                foreach ($miarray as $key => $item) {
+                    $query1 = DB::SELECT("SELECT pro_reservar as stoc FROM 1_4_cal_producto WHERE pro_codigo='$item->pro_codigo'");
+                    $codi = $query1[0]->stoc;
+                    $co = (int)$codi + (int)$item->det_prof_cantidad;
+                    $pro = _14Producto::findOrFail($item->pro_codigo);
+                    $pro->pro_reservar = $co;
+                    $pro->save();
+                }
                 DB::commit();
-                return response()->json(['message' => 'Proforma eliminado con éxito'], 200);
-            }catch(\Exception $e){
-                    return ["error"=>"0", "message" => "No se pudo actualizar","error"=>$e];
-                    DB::rollback();
+                return response()->json(['message' => 'Proforma eliminada con éxito'], 200);
+            } catch (\Exception $e) {
+                DB::rollback(); // Mover esto antes del return
+                return ["error" => "0", "message" => "No se pudo actualizar", "error" => $e];
             }
+        }else{
+            return ["error" => "0", "message" =>"No hay el id de la proforma"];
         }
     }
     public function InfoAgrupadoPedido($ca_codigo_agrupado,$id_periodo){
         $query = $this->tr_pedidosXDespacho($ca_codigo_agrupado,$id_periodo);
         return $query;
     }
+    public function InfoClienteAgrupado($ca_codigo_agrupado, $id_periodo){
+        $query = DB::SELECT("SELECT DISTINCT usu.*, CONCAT(usu.nombres,' ', usu.apellidos) nombres  
+        FROM f_proforma f 
+        INNER JOIN f_venta fv ON fv.ven_idproforma = f.prof_id
+        LEFT JOIN usuario usu ON fv.ven_cliente  = usu.idusuario
+        WHERE f.idPuntoventa = '$ca_codigo_agrupado'
+        AND fv.periodo_id = '$id_periodo'"); 
+
+        return $query;
+    }    
 }
 
 

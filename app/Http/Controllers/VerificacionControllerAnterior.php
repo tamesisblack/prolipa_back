@@ -476,7 +476,8 @@ class VerificacionControllerAnterior extends Controller
         $contrato       = $request->contrato;
         $detalles = DB::SELECT("SELECT  ls.codigo_liquidacion AS codigo, c.codigo as codigo_libro, c.serie,
             c.libro_idlibro,l.nombrelibro as nombrelibro,ls.id_serie,a.area_idarea,c.estado_liquidacion,
-            c.estado,c.bc_estado,c.venta_estado,c.liquidado_regalado,c.bc_institucion,c.contrato,c.venta_lista_institucion
+            c.estado,c.bc_estado,c.venta_estado,c.liquidado_regalado,c.bc_institucion,c.contrato,c.venta_lista_institucion,
+            ls.year
             FROM codigoslibros c
             LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
@@ -503,11 +504,29 @@ class VerificacionControllerAnterior extends Controller
                 AND f.id_libro      = '$item->libro_idlibro'
                 AND f.id_periodo    = '$periodo'");
             }else{
-                $query = DB::SELECT("SELECT f.pvp AS precio
-                FROM pedidos_formato f
-                WHERE f.id_serie    = '$item->id_serie'
-                AND f.id_area       = '$item->area_idarea'
-                AND f.id_periodo    = '$periodo'
+                // $query = DB::SELECT("SELECT f.pvp AS precio
+                // FROM pedidos_formato f
+                // WHERE f.id_serie    = '$item->id_serie'
+                // AND f.id_area       = '$item->area_idarea'
+                // AND f.id_periodo    = '$periodo'
+                // ");
+                $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$item->id_serie'
+                AND a.area_idarea  = '$item->area_idarea'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$item->year'
+                LIMIT 1
                 ");
             }
             if(count($query) > 0){

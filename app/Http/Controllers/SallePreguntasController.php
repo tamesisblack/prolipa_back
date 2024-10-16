@@ -424,6 +424,60 @@ class SallePreguntasController extends Controller
             return 1; // no existe configuracion para su institución
         }
     }
+    public function obtenerCalificacion_salle($id_evaluacion){
+        $calificacionFinal              = 0;
+        $totalPuntaje                   = 0;
+        $cantidadPreguntasRespondidas   = 0;
+        $cantidadPreguntas              = 0;
+        $query = DB::SELECT("SELECT DISTINCT  r.id_pregunta , r.respuesta, r.puntaje
+        FROM
+        salle_respuestas_preguntas r
+        LEFT JOIN salle_preguntas p ON r.id_pregunta = p.id_pregunta
+        WHERE r.id_evaluacion = ?
+        ",[$id_evaluacion]);
+        foreach ($query as $key => $value) {
+            $calificacionFinal += $value->puntaje;
+        }
+        //obtener cantidad preguntas respondidas
+        $getRespondidas =  DB::SELECT("SELECT DISTINCT  r.id_pregunta
+        FROM
+        salle_respuestas_preguntas r
+        WHERE r.id_evaluacion = ?
+        ",[$id_evaluacion]);
+
+        $cantidadPreguntasRespondidas = count($getRespondidas);
+        //total puntaje preguntas
+        $query2 = DB::SELECT("SELECT DISTINCT * FROM salle_preguntas_evaluacion p
+        LEFT JOIN salle_preguntas pp ON pp.id_pregunta = p.id_pregunta
+        WHERE p.id_evaluacion = ?
+        ",[$id_evaluacion]);
+        $cantidadPreguntas = count($query2);
+        foreach ($query2 as $key => $value) {
+            $totalPuntaje += $value->puntaje_pregunta;
+        }
+        return ['calificacionFinal' => $calificacionFinal, 'totalPuntaje' => $totalPuntaje, 'cantidadPreguntasRespondidas' => $cantidadPreguntasRespondidas, 'cantidadPreguntas' => $cantidadPreguntas];
+    }
+    //api:get/f_estadoPreguntas/id_evaluacion
+    public function f_estadoPreguntas($id_evaluacion){
+         //obtener cantidad preguntas respondidas
+         $getRespondidas =  DB::SELECT("SELECT DISTINCT  r.id_pregunta
+         FROM
+         salle_respuestas_preguntas r
+         WHERE r.id_evaluacion = ?
+         ",[$id_evaluacion]);
+
+        $cantidadPreguntasRespondidas = count($getRespondidas);
+        //total puntaje preguntas
+        $query2 = DB::SELECT("SELECT DISTINCT * FROM salle_preguntas_evaluacion p
+        LEFT JOIN salle_preguntas pp ON pp.id_pregunta = p.id_pregunta
+        WHERE p.id_evaluacion = ?
+        ",[$id_evaluacion]);
+        $cantidadPreguntas = count($query2);
+        return [
+            "cantidadPreguntasRespondidas"  => $cantidadPreguntasRespondidas,
+            "cantidadPreguntas"             => $cantidadPreguntas
+        ];
+    }
     public function obtener_evaluacion_salle($id_evaluacion, $id_docente,$n_evaluacion){
         set_time_limit(600000);
         ini_set('max_execution_time', 600000);
@@ -452,7 +506,8 @@ class SallePreguntasController extends Controller
             AND sa.id_area = ?",[$id_evaluacion, $value_areas->id_area]
             );
             foreach ($asignaturas as $key_asignaturas => $value_asignaturas) {
-                $preguntas = DB::SELECT("SELECT sp . *, t.nombre_tipo, t.indicaciones, t.descripcion_tipo
+                $preguntas = DB::SELECT("SELECT sp . *, t.nombre_tipo, t.indicaciones, t.descripcion_tipo,
+                (SELECT SUM(puntaje) FROM salle_respuestas_preguntas WHERE id_pregunta = sp.id_pregunta AND id_evaluacion = '$id_evaluacion') as 'total_pregunta'
                 FROM salle_preguntas_evaluacion pe, salle_preguntas sp, tipos_preguntas t
                 WHERE sp.id_tipo_pregunta = t.id_tipo_pregunta
                 AND pe.id_evaluacion = ?
@@ -486,27 +541,110 @@ class SallePreguntasController extends Controller
         return $data;
     }
     public function salle_guardarSeleccion(Request $request){
-        if( $request->tipo_pregunta == 1 ){
-            // pregunta opcion multiple
-            $opcion = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
-            WHERE `id_evaluacion` = $request->id_evaluacion
-            AND `id_pregunta` = $request->id_pregunta
-            AND `respuesta` = $request->id_opcion_pregunta
-            AND `id_usuario` = $request->id_usuario
-            ");
-            if( count($opcion) > 0 ){
-                DB::DELETE("DELETE FROM `salle_respuestas_preguntas`
-                WHERE `id_respuesta_pregunta` = ?", [$opcion[0]->id_respuesta_pregunta]
-                );
+        try{
+            if( $request->tipo_pregunta == 1 ){
+                // pregunta opcion multiple
+                $opcion = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
+                WHERE `id_evaluacion`   = $request->id_evaluacion
+                AND `id_pregunta`       = $request->id_pregunta
+                AND `respuesta`         = $request->id_opcion_pregunta
+                AND `id_usuario`        = $request->id_usuario
+                ");
+                if( count($opcion) > 0 ){
+                    DB::DELETE("DELETE FROM `salle_respuestas_preguntas`
+                    WHERE `id_respuesta_pregunta` = ?", [$opcion[0]->id_respuesta_pregunta]
+                    );
+                }else{
+                    DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
+                }
+                //calificar las preguntas
+                $this->calificarPreguntaMultiple($request->id_pregunta,$request);
             }else{
-                DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
+                DB::DELETE("DELETE FROM `salle_respuestas_preguntas` WHERE `id_evaluacion` = ? AND `id_pregunta` = ? AND `id_usuario` = ?", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario]);
+                //para que no se duplique la respuesta
+                $opcion = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
+                WHERE `id_evaluacion`   = $request->id_evaluacion
+                AND `id_pregunta`       = $request->id_pregunta
+                AND `respuesta`         = $request->id_opcion_pregunta
+                AND `id_usuario`        = $request->id_usuario
+                ");
+                if( count($opcion) > 0 ){
+                    DB::DELETE("DELETE FROM `salle_respuestas_preguntas`
+                    WHERE `id_respuesta_pregunta` = ?", [$opcion[0]->id_respuesta_pregunta]
+                    );
+                }else{
+                    DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
+                }
+                //calificar las preguntas
+                $this->calificarPreguntaNormal($request->id_pregunta,$request);
             }
-        }else{
-            DB::DELETE("DELETE FROM `salle_respuestas_preguntas` WHERE `id_evaluacion` = ? AND `id_pregunta` = ? AND `id_usuario` = ?", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario]);
-
-            DB::INSERT("INSERT INTO `salle_respuestas_preguntas`(`id_evaluacion`, `id_pregunta`, `id_usuario`, `respuesta`, `puntaje`) VALUES (?, ?, ?, ?, ?)", [$request->id_evaluacion, $request->id_pregunta, $request->id_usuario, $request->id_opcion_pregunta, $request->puntaje_seleccion]);
+            //calificar las preguntas
+            return $request;
         }
-        return $request;
+        catch(\Exception $e){
+            return ["status" => "0", "message" => $e->getMessage()] ;
+        }
+
+    }
+    public function calificarPreguntaMultiple($id_pregunta,$request){
+        //obtener el puntaje de la pregunta
+        $query = DB::SELECT("SELECT * FROM salle_preguntas WHERE id_pregunta = '$id_pregunta'");
+        $puntaje = $query[0]->puntaje_pregunta;
+        //obtener la cantida de respuestas correctas
+        $query = DB::SELECT("SELECT COUNT(*) as 'cant_correctas' FROM salle_opciones_preguntas WHERE id_pregunta = '$id_pregunta' AND tipo = 1");
+        $cant_correctas = $query[0]->cant_correctas;
+        //dividir el puntaje entre la cantidad de respuestas
+        $puntajexPregunta        = $puntaje / $cant_correctas;
+        $respuestas = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
+        WHERE `id_evaluacion`   = $request->id_evaluacion
+        AND `id_pregunta`       = $request->id_pregunta
+        AND `id_usuario`        = $request->id_usuario
+        ");
+        foreach($respuestas as $key => $item){
+            //calificar cada opcion el campo id pregunta y el campo respuesta verificacar con la tabla salle_opciones_preguntas id_opcion_pregunta
+            $opcion = DB::SELECT("SELECT * FROM `salle_opciones_preguntas`
+            WHERE `id_pregunta` = $id_pregunta
+            AND `id_opcion_pregunta` = $item->respuesta
+            ");
+            if( $opcion[0]->tipo == 1 ){
+                $puntaje = $puntajexPregunta;
+            }else{
+                $puntaje = -$puntajexPregunta;
+            }
+            //puntaje con 3 decimales
+            $puntaje = number_format($puntaje, 3, '.', '');
+            DB::UPDATE("UPDATE `salle_respuestas_preguntas` SET `puntaje` = ? WHERE `id_respuesta_pregunta` = ?",[$puntaje, $item->id_respuesta_pregunta]);
+        }
+    }
+    public function calificarPreguntaNormal($id_pregunta,$request){
+         //obtener el puntaje de la pregunta
+         $query = DB::SELECT("SELECT * FROM salle_preguntas WHERE id_pregunta = '$id_pregunta'");
+         $puntaje = $query[0]->puntaje_pregunta;
+         //obtener la cantida de respuestas correctas
+         $query = DB::SELECT("SELECT COUNT(*) as 'cant_correctas' FROM salle_opciones_preguntas WHERE id_pregunta = '$id_pregunta' AND tipo = 1");
+         $cant_correctas = $query[0]->cant_correctas;
+         //dividir el puntaje entre la cantidad de respuestas
+         $puntajexPregunta        = $puntaje / $cant_correctas;
+         $respuestas = DB::SELECT("SELECT * FROM `salle_respuestas_preguntas`
+         WHERE `id_evaluacion`   = $request->id_evaluacion
+         AND `id_pregunta`       = $request->id_pregunta
+         AND `id_usuario`        = $request->id_usuario
+         ");
+         foreach($respuestas as $key => $item){
+             //calificar cada opcion el campo id pregunta y el campo respuesta verificacar con la tabla salle_opciones_preguntas id_opcion_pregunta
+             $opcion = DB::SELECT("SELECT * FROM `salle_opciones_preguntas`
+             WHERE `id_pregunta` = $id_pregunta
+             AND `id_opcion_pregunta` = $item->respuesta
+             ");
+             if( $opcion[0]->tipo == 1 ){
+                 $puntaje = $puntajexPregunta;
+             }else{
+                 $puntaje = 0;
+             }
+             //puntaje con 3 decimales
+            $puntaje = number_format($puntaje, 3, '.', '');
+             DB::UPDATE("UPDATE `salle_respuestas_preguntas` SET `puntaje` = ? WHERE `id_respuesta_pregunta` = ?",[$puntaje, $item->id_respuesta_pregunta]);
+         }
     }
     public function salle_sincronizar_preguntas($asignatura1, $asignatura2, $usuario,$n_evaluacion){
         set_time_limit(60000);
@@ -856,5 +994,32 @@ class SallePreguntasController extends Controller
             $contadorArea++;
         }
         return $datos;
+    }
+    //api:post/obtenerCalificacionSalle
+    public function obtenerCalificacionSalle(Request $request){
+        $totalPuntaje     = 0;
+        $query = DB::SELECT("SELECT DISTINCT  r.id_pregunta , r.respuesta, r.puntaje
+        FROM
+        salle_respuestas_preguntas r
+        LEFT JOIN salle_preguntas p ON r.id_pregunta = p.id_pregunta
+        LEFT JOIN salle_asignaturas a ON p.id_asignatura = a.id_asignatura
+        WHERE r.id_evaluacion = ?
+        AND a.id_area = ?
+        ",[$request->id_evaluacion,$request->id_area]);
+        //total puntaje preguntas
+        $query2 = DB::SELECT("SELECT SUM(pp.puntaje_pregunta) AS puntaje
+        FROM salle_preguntas_evaluacion p
+        LEFT JOIN salle_preguntas pp ON pp.id_pregunta = p.id_pregunta
+        LEFT JOIN salle_asignaturas a ON pp.id_asignatura = a.id_asignatura
+        WHERE p.id_evaluacion = ?
+        AND a.id_area = ?
+        ",[$request->id_evaluacion,$request->id_area]);
+        foreach ($query2 as $key => $value) {
+            $totalPuntaje += $value->puntaje;
+        }
+        return [
+            'arrayCalificacionFinal' => $query,
+            'totalPuntaje'           => $totalPuntaje
+        ];
     }
 }

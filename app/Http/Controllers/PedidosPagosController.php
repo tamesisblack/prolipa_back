@@ -68,6 +68,10 @@ class PedidosPagosController extends Controller
         if($request->getVentaRealXAsesor)           { return $this->pagoRepository->getVentaRealXAsesor($request->idAsesor,$request->idPeriodo); }
         //venta total directa y lista
         if($request->getVentaTotalListaDirecta)     { return $this->pagoRepository->getVentaTotalListaDirecta($request); }
+        //venta total directa y lista asesores
+        if($request->getVentaTotalListaDirectaAsesor)     { return $this->pagoRepository->getVentaTotalListaDirectaAsesor($request); }
+        //venta total de documentos liq
+        if($request->getTotalDocumentosLiq)         { return $this->pagoRepository->getTotalDocumentosLiq($request); }
         //actualizar venta real
         if($request->updateVentaReal)               { return $this->pagoRepository->updateVentaReal($request); }
         //===ANTICIPO APROBADO====

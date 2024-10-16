@@ -10,7 +10,8 @@ use Illuminate\Http\Request;
 class i_zonaController extends Controller
 {
     public function GetZona_todo(){
-        $query = DB::SELECT("SELECT * FROM i_zona");
+        $query = DB::SELECT("SELECT iz.*, r.nombreregion FROM i_zona iz 
+        LEFT JOIN region r ON iz.idregion = r.idregion");
         return $query;
     }
     public function zonas(){
@@ -24,10 +25,14 @@ class i_zonaController extends Controller
         
         $zonas = i_zona::findOrFail($request->idzona);
         $zonas->zn_nombre = $request->zn_nombre;
+        $zonas->idregion = $request->idregion;
+        $zonas->updated_at = now();
        }else{
            $zonas = new i_zona;
            $zonas->zn_nombre = $request->zn_nombre;
+           $zonas->idregion = $request->idregion;
            $zonas->user_created = $request->user_created;
+           $zonas->updated_at = now();
        }
         $zonas->save();
         if($zonas){

@@ -492,13 +492,7 @@ class InstitucionController extends Controller
     public function listaInsitucion(Request $request)
     {
         if($request->asesor){
-            $cedula = "";
-            //para hacer pruebas
-            if($request->cedula == "854564544564564"){
-                $cedula = "0915171920";
-            }else{
-                $cedula = $request->cedula;
-            }
+            $cedula = $request->cedula;
             $lista = DB::SELECT("SELECT i.idInstitucion,i.region_idregion, i.nombreInstitucion,i.aplica_matricula,
             IF(i.estado_idEstado = '1','activado','desactivado') AS estado,i.estado_idEstado as estadoInstitucion,
             c.nombre AS ciudad, u.idusuario AS asesor_id,u.nombres AS nombre_asesor,
@@ -531,7 +525,6 @@ class InstitucionController extends Controller
             LEFT JOIN institucion_configuracion_periodo ic ON i.region_idregion = ic.region
             LEFT JOIN periodoescolar pec ON ic.periodo_configurado = pec.idperiodoescolar
             WHERE i.nombreInstitucion LIKE '%$request->busqueda%'
-            GROUP BY i.idInstitucion
             ORDER BY i.idInstitucion, i.fecha_registro DESC
             ");
         }
@@ -611,7 +604,13 @@ class InstitucionController extends Controller
                     ];
                 }
             }
-            return $datos;
+            if($request->todas){
+                return $datos;
+            }
+            else{
+                $resultado = collect($datos)->where('estadoInstitucion','1')->values();
+                return $resultado;
+            }
         }
     }
 

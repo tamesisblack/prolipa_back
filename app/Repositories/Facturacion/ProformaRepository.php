@@ -16,22 +16,38 @@ class  ProformaRepository extends BaseRepository
      * @param  int  $institucion
      */
     public function listadoProformasAgrupadas($institucion){
-        // $query = DB::SELECT("SELECT p.*, v.proformas_codigo
-        // FROM f_proforma p
-        // INNER  JOIN f_venta v ON p.prof_id = v.ven_idproforma
-        // INNER JOIN f_venta_agrupado vg ON vg.id_factura = v.id_factura
-        // WHERE p.id_ins_depacho = ?
-        // AND v.proformas_codigo IS NOT NULL
-        // AND v.id_factura IS NOT NULL
-        // AND p.prof_estado <> '0'
-        // AND v.est_ven_codigo <> '3'
-        // ",[$institucion]);
-        // return response()->json($query);
         $query = DB::SELECT("SELECT * FROM f_venta v
         WHERE v.institucion_id = ?
-        AND v.idtipodoc = '1'
         AND v.est_ven_codigo <> '3'",[$institucion]);
-        return response()->json($query);
+        return $query;
     }
+    public function prefacturaValidaForDevolver($preFactura,$empresa){
+        $getPreproforma    = DB::SELECT("SELECT * FROM f_venta v
+        WHERE v.ven_codigo = '$preFactura'
+        AND v.id_empresa   ='$empresa'
+        ");
+        if(empty($getPreproforma))    { return []; }
+        foreach($getPreproforma as $key => $item){
+            $query = DB::SELECT("SELECT * FROM f_venta_agrupado v
+            WHERE v.id_factura = ?
+            AND v.id_empresa = ?
+            ",[$item->id_factura,$item->id_empresa]);
+            // $query = DB::SELECT("SELECT * FROM f_venta_agrupado v
+            // WHERE v.id_factura = ?
+            // AND v.estadoPerseo = '1'
+            // AND v.id_empresa = ?
+            // ",[$item->id_factura,$item->id_empresa]);
+            if(count($query) > 0){
+                $getPreproforma[$key]->ifPedidoPerseo = 1;
+            }else{
+                $getPreproforma[$key]->ifPedidoPerseo = 0;
+            }
+        }
+        $resultado = collect($getPreproforma);
+        //filtrar por ifPedidoPerseo igual a 1
+        $resultado = $resultado->where('ifPedidoPerseo','1')->all();
+        return $resultado;
+    }
+
 }
 ?>

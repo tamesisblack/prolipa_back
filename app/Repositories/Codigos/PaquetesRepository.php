@@ -163,8 +163,8 @@ class  PaquetesRepository extends BaseRepository
             }
             //===== GUIA=============
             if($tipoProceso == '4' || $tipoProceso == '8'){
-                if( ($ifLiquidadoA == '1') && $ifBcEstadoA == '1' && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') )  $errorA = 0;
-                if( ($ifLiquidadoD == '1') && $ifBcEstadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == ""  || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0')  ) $errorD = 0;
+                if( ($ifLiquidadoA == '1' || $ifLiquidadoA == '4') && $ifBcEstadoA == '1' && $ifBloqueadoA !=2 && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0")) && ($ifliquidado_regaladoA == '0') )  $errorA = 0;
+                if( ($ifLiquidadoD == '1' || $ifLiquidadoD == '4') && $ifBcEstadoD == '1' && $ifBloqueadoD !=2 && (($codigo_unionD == $codigoActivacion) || ($codigo_unionD == null || $codigo_unionD == ""  || $codigo_unionD == "0")) && ($ifliquidado_regaladoD == '0')  ) $errorD = 0;
                 //validacion profomas
                 if($ifErrorProformaA) $errorA = 1;
                 if($ifErrorProformaD) $errorD = 1;

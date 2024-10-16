@@ -4,6 +4,7 @@ namespace App\Traits\Pedidos;
 
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\Pedidos;
+use App\Models\PedidoValArea;
 use DB;
 use Illuminate\Support\Facades\Http;
 trait TraitPedidosGeneral
@@ -108,7 +109,18 @@ trait TraitPedidosGeneral
             o.estado_libros_obsequios = "0"
             OR o.estado_libros_obsequios  = "3"
             OR o.estado_libros_obsequios  = "4"
+            OR o.estado_libros_obsequios  = "6"
             )
+        ) as contadorHijosDocentesAbiertosEnviados,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND o.estado_libros_obsequios = "5"
+        ) as contadorHijosDocentesAbiertosAprobados,
+        (
+            SELECT  COUNT(o.id) FROM p_libros_obsequios o
+            WHERE o.id_pedido = p.id_pedido
+            AND o.estado_libros_obsequios = "8"
         ) as contadorObsequiosAbiertosEnviados,
         pe.periodoescolar as periodo,pe.codigo_contrato,
         CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
@@ -227,6 +239,31 @@ trait TraitPedidosGeneral
         ");
         return $query;
     }
+    public function tr_getAsesoresPedidosXPeriodo($periodo){
+        $query = DB::SELECT("SELECT DISTINCT p.id_asesor,
+        CONCAT(COALESCE(u.nombres, ''), ' ', COALESCE(u.apellidos, '')) AS asesor
+        FROM pedidos p
+        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+        WHERE p.estado = '1'
+        AND p.id_periodo = '$periodo'
+        AND p.contrato_generado IS NOT NULL
+        ORDER BY u.nombres ASC
+        ");
+        return $query;
+    }
+     //asesores diferentes a actas
+     public function tr_getAsesoresFacturacionXPeriodo($id_periodo){
+        $query = DB::SELECT("SELECT DISTINCT i.asesor_id, CONCAT(COALESCE(u.nombres, ''), ' ', COALESCE(u.apellidos, '')) AS asesor
+        FROM f_venta f
+        LEFT JOIN institucion i ON f.institucion_id = i.idInstitucion
+        LEFT JOIN usuario u ON i.asesor_id = u.idusuario
+        WHERE f.est_ven_codigo <> '3'
+        AND f.periodo_id = ?
+        AND f.idtipodoc <> '2'
+        ORDER BY u.nombres ASC
+        ",[$id_periodo]);
+        return $query;
+    }
     public function tr_getInstitucionesDespacho($id_periodo){
         $query = DB::SELECT("SELECT DISTINCT p.ca_codigo_agrupado, i.ca_descripcion,p.id_periodo,i.ca_id,
         pe.codigo_contrato, i.ca_tipo_pedido,p.descuento
@@ -239,10 +276,60 @@ trait TraitPedidosGeneral
        ");
         return $query;
     }
+    public function tr_puntosVentaDespachadosFacturacion($id_periodo){
+        $query = DB::SELECT("SELECT DISTINCT f.institucion_id , i.nombreInstitucion
+        FROM f_venta f
+        LEFT JOIN institucion i ON f.institucion_id = i.idInstitucion
+        WHERE i.punto_venta = '1'
+        AND f.est_ven_codigo <> '3'
+        AND f.periodo_id = ?
+        ORDER BY f.institucion_id ASC
+        ",[$id_periodo]);
+        return $query;
+    }
+    //instituciones diferentes a actas
+    public function tr_InstitucionesDespachadosFacturacionAsesor($id_periodo,$id_asesor){
+        $query = DB::SELECT("SELECT DISTINCT f.institucion_id , i.nombreInstitucion
+        FROM f_venta f
+        LEFT JOIN institucion i ON f.institucion_id = i.idInstitucion
+        WHERE f.est_ven_codigo <> '3'
+        AND f.periodo_id = ?
+        AND f.idtipodoc <> '2'
+        AND i.asesor_id = ?
+        ORDER BY f.institucion_id ASC
+        ",[$id_periodo,$id_asesor]);
+        return $query;
+    }
     public function tr_getPreproformas($ca_codigo_agrupado){
         $query = DB::SELECT("SELECT DISTINCT fp.prof_id
         FROM  f_proforma fp
         WHERE fp.idPuntoventa = '$ca_codigo_agrupado'
+        ORDER BY fp.created_at DESC
+       ");
+        return $query;
+    }
+    public function tr_getPreproformasInstitucion($ca_codigo_agrupado){
+        $query = DB::SELECT("SELECT DISTINCT i.nombreInstitucion, fp.id_ins_depacho, z.zn_nombre
+        FROM  f_proforma fp
+        LEFT JOIN institucion i ON fp.id_ins_depacho = i.idInstitucion
+        LEFT JOIN i_zona z ON i.zona_id = z.idzona
+        WHERE fp.idPuntoventa = '$ca_codigo_agrupado'
+        ORDER BY fp.created_at DESC
+       ");
+        return $query;
+    }
+    public function tr_getDocumentos($ca_codigo_agrupado){
+        $query = DB::SELECT("SELECT DISTINCT fv.ven_codigo FROM f_venta fv
+        INNER JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
+        WHERE fpr.idPuntoventa = '$ca_codigo_agrupado'
+        AND fv.est_ven_codigo <> 3
+        ");
+        return $query;
+    }
+    public function tr_getAgrupado($ca_codigo_agrupado){
+        $query = DB::SELECT("SELECT *
+        FROM  f_contratos_agrupados fp
+        WHERE fp.ca_codigo_agrupado = '$ca_codigo_agrupado'
         ORDER BY fp.created_at DESC
        ");
         return $query;
@@ -296,6 +383,19 @@ trait TraitPedidosGeneral
         ");
        return $query;
     }
+    public function tr_getPuntosVentasDespachos($periodo){
+        $query = DB::SELECT("SELECT DISTINCT c.venta_lista_institucion, i.nombreInstitucion
+        FROM codigoslibros c
+        LEFT JOIN institucion i ON i.idInstitucion = c.venta_lista_institucion
+        WHERE c.bc_periodo = ?
+        AND c.venta_lista_institucion  > 0
+        AND c.estado_liquidacion <> '3'
+        AND c.estado_liquidacion <> '4'
+        ORDER BY i.nombreInstitucion
+        "
+        ,[ $periodo ]);
+        return $query;
+    }
     public function tr_getPuntosVenta($busqueda){
         $query = DB::SELECT("SELECT  i.idInstitucion, i.nombreInstitucion,i.ruc,i.email,i.telefonoInstitucion,
         i.direccionInstitucion,  c.nombre as ciudad
@@ -304,6 +404,19 @@ trait TraitPedidosGeneral
         -- LEFT JOIN usuario u ON i.idrepresentante=u.idusuario
         LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
         WHERE i.nombreInstitucion LIKE '%$busqueda%'
+        ");
+        return $query;
+    }
+    public function tr_getPuntosVentaRegion($busqueda,$region){
+        $query = DB::SELECT("SELECT  i.idInstitucion, i.nombreInstitucion,i.ruc,i.email,i.telefonoInstitucion,
+        i.direccionInstitucion,  c.nombre as ciudad
+        -- CONCAT(u.nombres,' ',u.apellidos) as representante
+        FROM institucion i
+        -- LEFT JOIN usuario u ON i.idrepresentante=u.idusuario
+        LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+        WHERE i.nombreInstitucion LIKE '%$busqueda%'
+        AND i.region_idregion = '$region'
+        AND i.estado_idEstado = '1'
         ");
         return $query;
     }
@@ -364,5 +477,245 @@ trait TraitPedidosGeneral
             WHERE i.idInstitucion = ?
         ",[$institucion]);
         return $query;
+    }
+    public function tr_institucionesAsesorPedidos($id_periodo,$id_asesor){
+        $query = DB::SELECT("SELECT DISTINCT p.id_pedido, p.id_asesor,
+        CONCAT(u.nombres, ' ',u.apellidos) AS asesor,p.id_institucion,
+        i.nombreInstitucion
+        FROM pedidos p
+        LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
+        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+        WHERE p.id_periodo = ?
+        AND p.id_asesor = ?
+        AND p.estado = '1'
+        AND p.contrato_generado IS NOT NULL
+        ORDER BY i.nombreInstitucion
+        ",[$id_periodo,$id_asesor]);
+        return $query;
+    }
+    public function tr_getLibrosAsesores($periodo,$asesor_id,$request){
+        $escuela_pedido = null;
+        $guiasAsesor    = null;
+        if (isset($request->escuela_pedido) && !empty($request->escuela_pedido)) { $escuela_pedido  = $request->escuela_pedido; }
+        if (isset($request->guiasAsesor)    && !empty($request->guiasAsesor))    { $guiasAsesor     = $request->guiasAsesor; }
+        // return $request->escuela_pedido;
+        $val_pedido = PedidoValArea::select(
+            'pv.valor',
+            'pv.id_area',
+            'pv.tipo_val',
+            'pv.id_serie',
+            'pv.year',
+            'pv.plan_lector',
+            'pv.alcance',
+            'p.id_periodo',
+            DB::raw("CONCAT(se.nombre_serie, ' ', ar.nombrearea) as serieArea"),
+            'se.nombre_serie',
+            'p.id_asesor',
+            DB::raw("CONCAT(u.nombres, ' ', u.apellidos) as asesor")
+        )
+        ->from('pedidos_val_area as pv')
+        ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
+        ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
+        ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
+        ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
+        ->where('p.id_periodo', $periodo)
+        ->where('p.id_asesor', $asesor_id)
+        ->where('p.estado', '1')
+
+        ->when($escuela_pedido,function($query,$escuela_pedido){
+            $query->where('p.id_institucion', $escuela_pedido)
+            ->where('p.tipo', '0')
+            ->where('contrato_generado', '!=', null);
+        })
+        ->when($guiasAsesor,function($query){
+            $query->where('p.tipo', '1')
+            ->where('p.estado_entrega', '2');
+        })
+        ->distinct()
+        ->groupBy('pv.id')
+        ->get();
+         if(empty($val_pedido)){
+            return $val_pedido;
+        }
+        $arreglo = [];
+        $cont    = 0;
+        //obtener solo los alcances activos
+        foreach($val_pedido as $k => $tr){
+            //Cuando es el pedido original
+            $alcance_id = 0;
+            $alcance_id = $tr->alcance;
+            if($alcance_id == 0){
+                $arreglo[$cont] =   (object)[
+                    "valor"             => $tr->valor,
+                    "id_area"           => $tr->id_area,
+                    "tipo_val"          => $tr->tipo_val,
+                    "id_serie"          => $tr->id_serie,
+                    "year"              => $tr->year,
+                    "plan_lector"       => $tr->plan_lector,
+                    "id_periodo"        => $tr->id_periodo,
+                    "serieArea"         => $tr->serieArea,
+                    "nombre_serie"      => $tr->nombre_serie,
+                    "alcance"           => $tr->alcance,
+                    "alcance"           => $alcance_id
+                ];
+            }else{
+                //validate que el alcance este cerrado o aprobado
+                $query = $this->getAlcanceAbiertoXId($alcance_id);
+                if(count($query) > 0){
+                    $arreglo[$cont] = (object) [
+                        "valor"             => $tr->valor,
+                        "id_area"           => $tr->id_area,
+                        "tipo_val"          => $tr->tipo_val,
+                        "id_serie"          => $tr->id_serie,
+                        "year"              => $tr->year,
+                        "plan_lector"       => $tr->plan_lector,
+                        "id_periodo"        => $tr->id_periodo,
+                        "serieArea"         => $tr->serieArea,
+                        "nombre_serie"      => $tr->nombre_serie,
+                        "alcance"           => $tr->alcance,
+                        "alcance"           => $alcance_id
+                    ];
+                }
+            }
+            $cont++;
+        }
+        //mostrar el arreglo bien
+        $renderSet = [];
+        $renderSet = array_values($arreglo);
+        if(count($renderSet) == 0){
+            return $renderSet;
+        }
+        $datos = [];
+        $contador = 0;
+        //return $renderSet;
+        foreach($renderSet as $key => $item){
+            $valores = [];
+            //plan lector
+            if($item->plan_lector > 0 ){
+                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = '6'
+                    AND f.id_area = '69'
+                    AND f.id_libro = '$item->plan_lector'
+                    AND f.id_periodo = '$item->id_periodo'
+                )as precio, ls.codigo_liquidacion,ls.version,ls.year
+                FROM libro l
+                left join libros_series ls  on ls.idLibro = l.idlibro
+                inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                WHERE l.idlibro = '$item->plan_lector'
+                ");
+                $valores = $getPlanlector;
+            }else{
+                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$item->id_periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$item->id_serie'
+                AND a.area_idarea  = '$item->id_area'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$item->year'
+                LIMIT 1
+                ");
+                $valores = $getLibros;
+            }
+            $datos[$contador] = (Object)[
+                "id_area"           => $item->id_area,
+                "cantidad"          => $item->valor,
+                "id_serie"          => $item->id_serie,
+                "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
+                "libro_id"          => $valores[0]->idlibro,
+                "nombrelibro"       => $valores[0]->nombrelibro,
+                "nombre_serie"      => $item->nombre_serie,
+                "precio"            => $valores[0]->precio,
+                "codigo"            => $valores[0]->codigo_liquidacion,
+                "stock"             => $valores[0]->pro_reservar,
+                "descripcion"       => $valores[0]->descripcionlibro,
+            ];
+            $contador++;
+        }
+           //si el codigo de liquidacion se repite sumar en el valor
+        // Crear un array asociativo para agrupar por codigo_liquidacion
+        $grouped = [];
+
+        foreach ($datos as $item) {
+            $codigo = $item->codigo;
+
+            if (!isset($grouped[$codigo])) {
+                $grouped[$codigo] = $item;
+            } else {
+                $grouped[$codigo]->cantidad += $item->cantidad;
+            }
+        }
+
+        // Convertir el array asociativo de nuevo a un array indexado
+        $result = array_values($grouped);
+        //subtotal
+        foreach($result as $key => $item){
+            $result[$key]->precio_total = $item->cantidad * $item->precio;
+            //precio_total 2 decimales
+            $result[$key]->precio_total = number_format($result[$key]->precio_total, 2, '.', '');
+        }
+        return $result;
+    }
+    public function tr_metodoFacturacion($request){
+        $periodo                = $request->periodo ?? 0;
+        $empresa                = $request->empresa ?? 0;
+        $variasInstituciones    = $request->variasInstituciones ?? 0;
+        $getInstitucionesId     = $request->getInstitucionesId ?? [];
+        $result = DB::table('f_detalle_venta as v')
+        ->leftJoin('f_venta as d', function($join) {
+            $join->on('v.ven_codigo', '=', 'd.ven_codigo')
+                 ->on('v.id_empresa', '=', 'd.id_empresa');
+        })
+        ->leftJoin('1_4_cal_producto as p', 'v.pro_codigo', '=', 'p.pro_codigo')
+        ->leftJoin('libros_series as ls', 'ls.codigo_liquidacion', '=', 'p.pro_codigo')
+        ->leftJoin('libro as l', 'l.idlibro', '=', 'ls.idLibro')
+        ->leftJoin('asignatura as a', 'a.idasignatura', '=', 'l.asignatura_idasignatura')
+        ->select(
+            'v.pro_codigo as codigo',
+            'p.pro_nombre as nombrelibro',
+            'ls.idLibro as libro_idlibro',
+            'ls.year',
+            'ls.id_serie',
+            'a.area_idarea',
+            'p.codigos_combos',
+            'p.ifcombo',
+            DB::raw('SUM(v.det_ven_cantidad) as cantidad'),
+            DB::raw('SUM(v.det_ven_dev) as cantidad_devuelta'),
+            DB::raw('SUM(v.det_ven_cantidad) - SUM(v.det_ven_dev) as cantidadTotal')
+        )
+        ->where('d.periodo_id', $periodo)
+        ->when($empresa > 0, function ($query) use ($empresa) {
+            $query->where('d.id_empresa', '=', $empresa)
+            ->where('v.id_empresa', '=', $empresa);
+        })
+        //when y wherein de getInstitucionesId
+        ->when($variasInstituciones > 0, function ($query) use ($getInstitucionesId) {
+            $query->whereIn('d.institucion_id', $getInstitucionesId)
+            ->where('idtipodoc','<>','2');
+        })
+        ->where('d.est_ven_codigo','<>','3')
+        ->groupBy('v.pro_codigo', 'p.pro_nombre', 'ls.idLibro', 'ls.year', 'ls.id_serie', 'a.area_idarea', 'p.codigos_combos')
+        ->get();
+        // Procesar los resultados para obtener el precio y multiplicar por la cantidad
+        foreach ($result as $item) {
+            // Obtener el precio del libro usando el repositorio
+            $precio             = $this->pedidosRepository->getPrecioXLibro($item->id_serie, $item->libro_idlibro, $item->area_idarea, $periodo, $item->year);
+            $item->precio       = $precio;
+            // Multiplicar el precio por la cantidad
+            $item->precio_total = number_format($precio * $item->cantidadTotal, 2, '.', '');
+        }
+        return $result;
     }
 }

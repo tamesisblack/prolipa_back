@@ -101,7 +101,15 @@ class CapacitacionController extends Controller
             $listadoAsesor = $this->solicitudTemasAsesor($request->asesor_id);
             return $listadoAsesor;
         }
-        $ingreso = DB::insert('insert into capacitacion_solicitudes (tema, asesor_id,observacion) values (?, ?,?)', [$request->tema, $request->asesor_id, $request->observacion]);
+        $observacion = "";
+        if($request->observacion == "null" || $request->observacion == null){
+            $observacion = null;
+        }
+        else{
+            $observacion = $request->observacion;
+        }
+        $fecha_solicitud = now();
+        $ingreso = DB::insert('insert into capacitacion_solicitudes (tema, asesor_id,observacion,fecha_solicitud) values (?, ?,?, ?)', [$request->tema, $request->asesor_id, $observacion, $fecha_solicitud]);
         if ($ingreso) {
             return ["status" => "1", "message" => "Se solicito correctamente"];
         } else {
@@ -116,7 +124,7 @@ class CapacitacionController extends Controller
             ->update([
                 'comentario_admin' => $request->comentario,
                 'estado' => $request->estado,
-
+                'fecha_aprobacion_anulacion' => now()
             ]);
         return "se editor correctamente";
     }

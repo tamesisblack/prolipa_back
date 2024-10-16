@@ -115,7 +115,7 @@ class PerseoTransaccionController extends Controller
                     "preciovisible"             => $d->det_ven_valor_u,
                     "iva"                       => 0,
                     "precioiva"                 => $d->det_ven_valor_u,
-                    "descuento"                 => 0 //consulta //Porcentaje de descuento que se va a aplicar a cada producto.
+                    "descuento"                 => $discount //consulta //Porcentaje de descuento que se va a aplicar a cada producto.
                 ];
             }
             $formData = [
@@ -177,7 +177,6 @@ class PerseoTransaccionController extends Controller
     //api:post/perseo/transaccion/pedidos_crear
     public function pedidos_crear(Request $request)
     {
-
         try {
             DB::beginTransaction();
             $factura        = $request->ven_codigo; //F-C23-ER-0000076
@@ -195,6 +194,7 @@ class PerseoTransaccionController extends Controller
             $ven_descuento   = $getFactura->ven_descuento;
             $id_empresa      = $getFactura->id_empresa;
             $clientesidPerseo = $getFactura->clientesidPerseo;
+            $discount         = $getFactura->ven_desc_por;
             $totalFactura    = 0;
             $detalle         = [];
 
@@ -218,6 +218,11 @@ class PerseoTransaccionController extends Controller
             $totalFactura   = number_format($totalFactura, 2, '.', '');
             $detalles = [];
             foreach($detalle as $d){
+                $pro_codigo = $d->pro_codigo;
+                $id_perseo = $d->idPerseoProducto;
+                if($id_perseo == 0 || $id_perseo == null || $id_perseo == ""){
+                    return ["status" => "0", "message" => "El codigo $pro_codigo no se encuentra en perseo"];
+                }
                 $detalles[] = [
                     "pedidosid"                 => 1,
                     "centros_costosid"          => 1,
@@ -231,7 +236,7 @@ class PerseoTransaccionController extends Controller
                     "preciovisible"             => $d->det_ven_valor_u,
                     "iva"                       => 0,
                     "precioiva"                 => $d->det_ven_valor_u,
-                    "descuento"                 => 0 //consulta //Porcentaje de descuento que se va a aplicar a cada producto.
+                    "descuento"                 => $discount //consulta //Porcentaje de descuento que se va a aplicar a cada producto.
                 ];
             }
             $formData = [
@@ -272,6 +277,7 @@ class PerseoTransaccionController extends Controller
             $process    = $this->tr_PerseoPost($url, $formData,$id_empresa);
              //si existe proccess["facturas"] enviar a perseo
             //actualizar a 1 en la tabla f_venta modelo Ventas campo estadoPerseo a 1
+
             if(isset($process["pedidos"])) {
                 $pedidoCodigo_nuevo = $process["pedidos"][0]["pedidos_codigo"];
                 VentasF::where('id_factura',$factura)->where('id_empresa',$empresa)->update(['estadoPerseo' => 1,"pedido_codigo" => $pedidoCodigo_nuevo, "fecha_envio_perseo" => date('Y-m-d H:i:s') ]);

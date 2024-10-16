@@ -315,7 +315,7 @@ class PerseoProductoController extends Controller
         try {
             $formData = [
                 // "productosid"=>"67",
-                "productocodigo"=>"FOLL4",
+                "productocodigo"=>"CFA1",
                 // "barras"=>"6181220422071",
                 // "contenido"=>"producto"
 
@@ -330,7 +330,7 @@ class PerseoProductoController extends Controller
             //     "contenido"      => $request->contenido
             // ];
             $url        = "productos_consulta";
-            $process    = $this->tr_PerseoPost($url, $formData,3);
+            $process    = $this->tr_PerseoPost($url, $formData,1);
             return $process;
         } catch (\Exception $e) {
             return response()->json([

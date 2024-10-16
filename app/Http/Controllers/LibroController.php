@@ -44,7 +44,8 @@ class LibroController extends Controller
     //api:get/getAllBooks
     public function getAllBooks(Request $request){
         $query = DB::SELECT("SELECT l.nombrelibro, l.demo,  l.idlibro,l.asignatura_idasignatura ,
-        a.area_idarea ,l.portada, s.nombre_serie, ar.nombrearea
+        a.area_idarea ,l.portada, s.nombre_serie, ar.nombrearea,ls.codigo_liquidacion,
+        CONCAT(ls.codigo_liquidacion,' ',l.nombrelibro) as codigolibro
          FROM libros_series ls
          LEFT JOIN series s ON ls.id_serie = s.id_serie
          LEFT JOIN libro l ON ls.idLibro = l.idlibro
@@ -52,6 +53,7 @@ class LibroController extends Controller
          LEFT JOIN area ar ON a.area_idarea = ar.idarea
          WHERE l.Estado_idEstado = '1'
          AND a.estado = '1'
+         AND s.id_serie <> '19'
         ");
         return $query;
     }
@@ -521,40 +523,35 @@ class LibroController extends Controller
     }
     public function LibroBusqueda(Request $request){
         //0 = libro; 1 = serie; 2 codigo
-        if($request->tipo == '0'){
-            $libros = DB::SELECT("SELECT l.*, a.nombreasignatura as asignatura,
-                ls.iniciales, ls.codigo_liquidacion, ls.year, ls.version, s.id_serie, s.nombre_serie,ls.nombre
-                FROM libro l
-                LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
-                LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
-                LEFT JOIN series s ON s.id_serie = ls.id_serie
-                WHERE l.nombrelibro LIKE '%$request->busqueda%'
-                ORDER  BY l.nombrelibro  asc
-           ");
-        }
-        if($request->tipo == '1'){
-            $libros = DB::SELECT("SELECT l.*, a.nombreasignatura as asignatura,
-            ls.iniciales, ls.codigo_liquidacion, ls.year, ls.version, s.id_serie, s.nombre_serie,ls.nombre
-                FROM libro l
-                LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
-                LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
-                LEFT JOIN series s ON s.id_serie = ls.id_serie
-                WHERE s.nombre_serie LIKE '%$request->busqueda%'
-                ORDER  BY l.nombrelibro  asc
-            ");
-        }
-        if($request->tipo == '2'){
-            $libros = DB::SELECT("SELECT l.*, a.nombreasignatura as asignatura,
-            ls.iniciales, ls.codigo_liquidacion, ls.year, ls.version, s.id_serie, s.nombre_serie,ls.nombre
-                FROM libro l
-                LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
-                LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
-                LEFT JOIN series s ON s.id_serie = ls.id_serie
-                WHERE ls.codigo_liquidacion LIKE '%$request->busqueda%'
-                ORDER  BY l.nombrelibro  asc
-            ");
-        }
-       return $libros;
+        $query = DB::table('libro as l')
+        ->select('l.*', 'a.nombreasignatura as asignatura',
+                'ls.iniciales', 'ls.codigo_liquidacion', 'ls.year', 'ls.version',
+                's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos')
+        ->leftJoin('asignatura as a', 'a.idasignatura', '=', 'l.asignatura_idasignatura')
+        ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'l.idlibro')
+        ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
+        ->leftJoin('1_4_cal_producto as p', 'ls.codigo_liquidacion', '=', 'p.pro_codigo');
+
+    // Determine the WHERE clause based on the 'tipo' parameter
+    switch ($request->tipo) {
+        case '0':
+            $query->where('l.nombrelibro', 'LIKE', '%' . $request->busqueda . '%');
+            break;
+        case '1':
+            $query->where('s.nombre_serie', 'LIKE', '%' . $request->busqueda . '%');
+            break;
+        case '2':
+            $query->where('ls.codigo_liquidacion', 'LIKE', '%' . $request->busqueda . '%');
+            break;
+        default:
+            // Handle unexpected 'tipo' values if necessary
+            return [];
+    }
+
+    // Order by 'l.nombrelibro' in ascending order
+    $libros = $query->orderBy('l.nombrelibro', 'asc')->get();
+
+    return $libros;
     }
     public function getLibroP(){
         $libros = DB::SELECT("SELECT l.*, a.nombreasignatura as asignatura,
@@ -563,7 +560,7 @@ class LibroController extends Controller
         LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
         LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
         LEFT JOIN series s ON s.id_serie = ls.id_serie
-        ORDER  BY l.nombrelibro  asc");         
+        ORDER  BY l.nombrelibro  asc");
         return $libros;
     }
     //para traer los libros del docente
@@ -591,9 +588,9 @@ class LibroController extends Controller
                 $libro->descripcionlibro            = $request->descripcionlibro;
                 $libro->serie                       = $request->serie;
                 $libro->weblibro                    = $request->weblibro;
-                $libro->pdfsinguia                  = $request->pdfsinguia;
-                $libro->pdfconguia                  = $request->pdfconguia;
-                $libro->guiadidactica               = $request->guiadidactica;
+                $libro->pdfsinguia                  = ($request->pdfsinguia             == null || $request->pdfsinguia == "null") ? null : $request->pdfsinguia;
+                $libro->pdfconguia                  = ($request->pdfconguia             == null || $request->pdfconguia == "null") ? null : $request->pdfconguia;
+                $libro->guiadidactica               = ($request->guiadidactica          == null || $request->guiadidactica == "null") ? null : $request->guiadidactica;
                 $libro->asignatura_idasignatura     = $request->asignatura_idasignatura;
                 $libro->portada                     = $request->portada;
                 $libro->demo                        = $request->demo;
@@ -629,9 +626,11 @@ class LibroController extends Controller
                             ->where('libros_series.codigo_liquidacion', $request->codigo_liquidacion);
                     })
                     ->update([
-                        'pro_nombre' => $libro->nombrelibro,
-                        'pro_descripcion' => $libro->descripcionlibro,
-                    ]);                  
+                        'pro_nombre'        => $libro->nombrelibro,
+                        'pro_descripcion'   => $libro->descripcionlibro,
+                        'ifcombo'           => $request->ifcombo,
+                        'codigos_combos'    => $request->codigos_combos ?? null,
+                    ]);
                 }else{
                     //para agregar en la tabla serie
                     $librosSerie = new LibroSerie();

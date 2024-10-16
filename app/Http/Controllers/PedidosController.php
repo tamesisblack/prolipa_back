@@ -1215,8 +1215,9 @@ class PedidosController extends Controller
 
     }
     public function get_val_pedidoLibrosObsequiosInfoTodoSinPedido(Request $request){
-        $datos = DB::SELECT("SELECT ls.*, l.nombrelibro, l.demo,  l.idlibro, l.descripcionlibro as descripcion, l.asignatura_idasignatura, a.area_idarea, l.portada, s.nombre_serie, ar.nombrearea,
-            (SELECT f.pvp FROM pedidos_formato f WHERE f.id_serie = ls.id_serie AND f.id_area = a.area_idarea AND f.id_periodo = '$request->periodo' LIMIT 1 ) AS precio , cp.*
+        $datos = DB::SELECT("SELECT ls.codigo_liquidacion,l.nombrelibro, ls.idlibro,(SELECT f.pvp FROM pedidos_formato f
+            WHERE f.id_serie = ls.id_serie AND f.id_area = a.area_idarea AND f.id_periodo = '$request->periodo' LIMIT 1 ) AS precio ,
+            cp.pro_codigo, cp.pro_nombre, cp.pro_descripcion, cp.pro_reservar,cp.pro_stock,cp.pro_deposito, cp.pro_stockCalmed, cp.pro_depositoCalmed
             FROM libros_series ls
             LEFT JOIN series s ON ls.id_serie = s.id_serie
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
@@ -1226,7 +1227,6 @@ class PedidosController extends Controller
             WHERE l.Estado_idEstado = '1'
             AND a.estado = '1';");
         return $datos;
-
     }
     public function getAlcanceAbiertoXId($id){
         $query = DB::SELECT("SELECT * FROM pedidos_alcance a
@@ -1239,7 +1239,7 @@ class PedidosController extends Controller
             $val_pedido = DB::SELECT("SELECT DISTINCT pv.*,
             p.descuento, p.id_periodo,
             p.anticipo, p.comision, CONCAT(se.nombre_serie,' ',ar.nombrearea) as serieArea,
-            se.nombre_serie
+            se.nombre_serie,p.fecha_aprobado_facturacion
             FROM pedidos_val_area pv
             left join area ar ON  pv.id_area = ar.idarea
             left join series se ON pv.id_serie = se.id_serie
@@ -1311,6 +1311,7 @@ class PedidosController extends Controller
                     "idasignatura"      => $valores[0]->asignatura_idasignatura,
                     "subtotal"          => $item->valor * $valores[0]->precio,
                     "codigo_liquidacion"=> $valores[0]->codigo_liquidacion,
+                    "fecha_aprobado_facturacion" => $item->fecha_aprobado_facturacion
                 ];
             }
             return $datos;
@@ -1865,19 +1866,19 @@ class PedidosController extends Controller
             'telefono' => 'required',
         ]);
         // SE GUARDA EN BASE DE MILTON, SI YA ESTA REGISTRADO NO GUARDARIA POR VALIDACION DE MILTON
-        try {
-            $form_data = [
-                'cli_ci'        => $request->cedula,
-                'cli_apellidos' => $request->apellidos,
-                'cli_nombres'   => $request->nombres,
-                'cli_direccion' => $request->direccion,
-                'cli_telefono'  => $request->telefono,
-                'cli_email'     => $request->email
-            ];
-            Http::post('http://186.4.218.168:9095/api/Cliente', $form_data);
-         } catch (\Exception  $ex) {
-            return ["status" => "0","message" => "Hubo problemas con la conexión al servidor"];
-        }
+        // try {
+        //     $form_data = [
+        //         'cli_ci'        => $request->cedula,
+        //         'cli_apellidos' => $request->apellidos,
+        //         'cli_nombres'   => $request->nombres,
+        //         'cli_direccion' => $request->direccion,
+        //         'cli_telefono'  => $request->telefono,
+        //         'cli_email'     => $request->email
+        //     ];
+        //     Http::post('http://186.4.218.168:9095/api/Cliente', $form_data);
+        //  } catch (\Exception  $ex) {
+        //     return ["status" => "0","message" => "Hubo problemas con la conexión al servidor"];
+        // }
         // LUEGO SE GUARDA EN BASE PROLIPA
         $password                           = sha1(md5($request->cedula));
         $user                               = new User();
@@ -3902,7 +3903,11 @@ class PedidosController extends Controller
                 WHERE ha.id_pedido = '$id_pedido'
                 AND ha.alcance_id = '$item->id'
                 ");
-                $fecha_aprobacion = $historico[0]->created_at;
+                if(!empty($historico)){
+                    $fecha_aprobacion = $historico[0]->created_at;
+                }else{
+                    $fecha_aprobacion  ="";
+                }
             }
             $datos[$key] = [
                 "id"                    => $item->id,
@@ -5253,7 +5258,11 @@ class PedidosController extends Controller
     }
     public function CambiarEstadoLibrosObsequios(Request $request){
         $pedidoLibroObsequio = PedidosLibroObsequio::findOrFail($request->id);
-        $pedidoLibroObsequio->estado_libros_obsequios = $request->estado_libros_obsequios;
+        if($request->obsequio === 'true'){
+            $pedidoLibroObsequio->estado_libros_obsequios = 8;
+        }else{
+            $pedidoLibroObsequio->estado_libros_obsequios = $request->estado_libros_obsequios;
+        }
         $pedidoLibroObsequio->observacion_asesor = $request->observacion_asesor;
         $pedidoLibroObsequio->save();
         $pedido = Pedidos::findOrFail($pedidoLibroObsequio->id_pedido);
@@ -5340,7 +5349,7 @@ class PedidosController extends Controller
             DB::rollBack();
 
             // Opcional: Loguear el error
-            Log::error('Error al anular libros obsequios: ' . $e->getMessage());
+            // Log::error('Error al anular libros obsequios: ' . $e->getMessage());
 
             return ["status" => "0", "message" => "No se pudo anular"];
         }
@@ -5360,7 +5369,7 @@ class PedidosController extends Controller
             WHERE a.id_pedido = '$request->id_pedido'
             AND a.estado_libros_obsequios = '0'");
             // -- OR a.estado_libros_obsequios = '3')// validacion quitada para q sigan creando pedidos 26/08/2024
-            
+
             if(empty($query)){
                 $pedido = new PedidosLibroObsequio;
                 $pedido->id_periodo                     = $request->id_periodo;
@@ -5421,7 +5430,7 @@ class PedidosController extends Controller
                 }
                 $pedido->usuario_aprobacion_id = $request->usuario_aprobacion_id;
                 $pedido->usuario_aprobacion = $request->usuario_aprobacion;
-                $pedido->fecha_at_gerencia =  now();              
+                $pedido->fecha_at_gerencia =  now();
                 $pedido->save();
 
                 $datosAdicionales = [
@@ -5429,12 +5438,12 @@ class PedidosController extends Controller
                     'usuario_aprobacion_id' => $pedido->usuario_aprobacion_id,
                     'fecha_aprobacion'=> now()
                 ];
-        
+
                 // Combinar los datos adicionales con los detalles
                 $datosCombinados = [
                     'complementos' => $datosAdicionales,
                 ];
-        
+
                 $historicoPedidosLibrosObsequios = new HistoriocoPedidosLibroObsequio;
                 $historicoPedidosLibrosObsequios->p_lo_ven_codigo = $pedido->ven_codigo;
                 $historicoPedidosLibrosObsequios->p_lo_ven_observacion = $pedido->ven_observacion;
@@ -5501,6 +5510,7 @@ class PedidosController extends Controller
             $actaLibrosObsequios->ven_codigo = $request->ven_codigo;
             $actaLibrosObsequios->id_empresa = $request->id_empresa;
             $actaLibrosObsequios->tip_ven_codigo = $request->tip_ven_codigo;
+            $actaLibrosObsequios->ven_tipo_inst = 'V';
             $actaLibrosObsequios->est_ven_codigo = 2;
             $actaLibrosObsequios->ven_observacion = $request->ven_observacion;
             $actaLibrosObsequios->periodo_id = $request->periodo_id;
@@ -5513,7 +5523,7 @@ class PedidosController extends Controller
             $actaLibrosObsequios->ven_valor = $request->valor_total - $request->ven_descuento;
             $actaLibrosObsequios->ven_desc_por = $request->ven_desc_por;
             $actaLibrosObsequios->ven_subtotal = $request->valor_total;
-            $actaLibrosObsequios->ruc_cliente = $request->ruc_cliente;            
+            $actaLibrosObsequios->ruc_cliente = $request->ruc_cliente;
             if($request->ven_desc_por == 100){
                 $actaLibrosObsequios->idtipodoc = 2;
             }else{
@@ -5731,7 +5741,8 @@ class PedidosController extends Controller
         CONCAT(uc.nombres,' ',uc.apellidos) as creador,
         i.telefonoInstitucion,u.cedula AS cedulaAsesor,
         i.direccionInstitucion, pe.codigo_contrato AS nombrePeriodo,
-        i.idInstitucion as institucion, p.descuento as porcentaje
+        i.idInstitucion as institucion, p.descuento as porcentaje,
+        pa.estado_libros_obsequios
         FROM p_libros_obsequios pa
         LEFT JOIN pedidos p ON pa.id_pedido = p.id_pedido
         LEFT JOIN usuario u ON p.id_asesor = u.idusuario
@@ -5939,8 +5950,8 @@ class PedidosController extends Controller
         return $query;
     }
     public function obtenerDetalleDocumentosLibrosObsequios(Request $request){
-        $query = DB::SELECT("SELECT DISTINCT fdv.*, ls.nombre AS pro_nombre, fv.user_created, CONCAT(us.nombres , ' ' , us.apellidos) AS facturador , cp.pro_nombre AS nombreproducto,
-        l.descripcionlibro, ls.id_serie
+        $query = DB::SELECT("SELECT DISTINCT fdv.*, ls.nombre AS pro_nombre, fv.user_created, CONCAT(us.nombres , ' ' , us.apellidos) AS facturador , ls.nombre AS nombreproducto,
+        l.descripcionlibro, ls.id_serie, cp.pro_nombre
         FROM f_detalle_venta fdv
         INNER JOIN f_venta fv ON fdv.ven_codigo = fv.ven_codigo
         INNER JOIN libros_series ls ON ls.codigo_liquidacion = fdv.pro_codigo
@@ -6075,5 +6086,13 @@ class PedidosController extends Controller
             \DB::rollBack();
             return response()->json(['error' => 'Error al eliminar el abono: ' . $e->getMessage()], 500);
         }
+    }
+    public function get_usuarios_institucion(Request $request){
+        $query = DB::SELECT("SELECT DISTINCT fv.ruc_cliente, fv.institucion_id
+            FROM f_venta fv
+            WHERE fv.institucion_id ='$request->institucion'
+            AND fv.est_ven_codigo <> 3 
+            AND fv.ven_p_libros_obsequios IS NULL ");
+        return $query;
     }
 }

@@ -53,8 +53,21 @@ class CapacitacionTemaController extends Controller
         $contenido->area        = $request->area;
         $contenido->nueva_area  = $request->nueva_area;
         $contenido->estado      = $request->estado;
-        $contenido->observacion = $request->observacion;
-        $contenido->save();        
+        $contenido->observacion = $request->observacion == null || $request->observacion == "null" ? null : $request->observacion;
+        if($request->tipoSolicitudTema == 1){
+            $contenido->id_solicitud_tema = $request->idSolicitud;
+        }
+        $contenido->save();
+        //EDITAR SOLICITUD CAPACITACION
+        if($request->tipoSolicitudTema == 1){
+            DB::table('capacitacion_solicitudes')
+            ->where('id', $request->idSolicitud)
+            ->update([
+                'comentario_admin' => $request->comentarioSolicitud,
+                'estado' => 1,
+                'fecha_aprobacion_anulacion' => now()
+            ]);
+        }
         return $contenido;
     }
 

@@ -13,4 +13,13 @@ class HistoricoVisitas extends Model
     protected $fillable = [
         'idusuario', 'institucion_id', 'periodo_id', 'id_group', 'fecha', 'hora',
     ];
+    //casts
+    protected $casts = [
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime',
+    ];
+    public function getCreatedAtFormattedAttribute()
+    {
+        return $this->created_at->setTimezone('America/Lima')->toDateTimeString();
+    }
 }

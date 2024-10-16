@@ -25,7 +25,7 @@ class SeriesController extends Controller
     {//SOLO FORMATOS YA CONFIGURADOS INNER
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
-        $series = DB::SELECT("SELECT * FROM series s WHERE s.id_serie != 6"); // omitir plan lector
+        $series = DB::SELECT("SELECT * FROM series s WHERE s.id_serie != 6 ORDER BY s.nombre_serie DESC"); // omitir plan lector
         $datos = array();
         foreach($series as $key => $value){
             $areas = DB::SELECT("SELECT DISTINCT ar.idarea, ar.nombrearea, 

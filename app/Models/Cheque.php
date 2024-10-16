@@ -26,5 +26,7 @@ class Cheque extends Model
         'chq_id_abono',
         'chq_empresa',
         'chq_cliente',
+        'user_created',
+        'chq_nombrebanco',
     ];
 }

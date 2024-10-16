@@ -30,8 +30,8 @@ class BancoController extends Controller
     }
 
     public function GetCheque_todo(Request $request){
-        $query = DB::SELECT("SELECT chq.*, ban.ban_nombre FROM cheque chq 
-        INNER JOIN 1_1_bancos ban ON ban.ban_codigo = chq.ban_codigo
+        $query = DB::SELECT("SELECT chq.* FROM cheque chq 
+        -- INNER JOIN 1_1_bancos ban ON ban.ban_codigo = chq.ban_codigo
         -- WHERE chq_institucion = $request->institucion
         WHERE chq_cliente = $request->cliente
         AND chq_periodo = $request->periodo
@@ -117,12 +117,14 @@ class BancoController extends Controller
             'chq_tipo' => 'required|integer',
             'chq_valor' => 'required|numeric|min:0',
             'chq_cuenta' => 'required|integer',
-            'chq_referenca' => 'required|integer',
+            'chq_referenca' => 'required',
             'chq_numero' => 'required|integer',
             // 'chq_institucion' => 'required|string',
             'chq_periodo' => 'required|string',
             'chq_empresa' => 'required',
             'chq_cliente' => 'required',
+            'chq_nombrebanco' => 'required',
+            'user_created' => 'required',
         ]);
 
         // Verificar si el número de cheque ya existe
@@ -150,7 +152,12 @@ class BancoController extends Controller
             'chq_periodo' => $request->chq_periodo,
             'chq_empresa' => $request->chq_empresa,
             'chq_cliente' => $request->chq_cliente,
+            'user_created' => $request->user_created,
+            'chq_nombrebanco' => $request->chq_nombrebanco
         ]);
+
+         // Registrar el historial
+         $this->registrarHistorial($cheque, 0, json_encode($cheque->toArray()), json_encode($cheque->toArray())); // Tipo 0 para 'crear'
 
         // Retornar una respuesta JSON adecuada
         return response()->json([
@@ -159,6 +166,39 @@ class BancoController extends Controller
             'cheque' => $cheque
         ]);
     }
+    private function registrarHistorial(Cheque $cheque, $tipo, $new_value, $oldValue)
+    {
+        DB::table('cheque_historico')->insert([
+            'chq_id' => $cheque->chq_id,
+            'tipo' => $tipo,
+            'old_value' => $oldValue,
+            'new_value' => $new_value,
+            'changed_at' => now(),
+            'changed_by' => $cheque->user_created,
+        ]);
+    }
+    public function cheque_eliminar(Request $request)
+        {
+            // Validación de los datos recibidos
+            $request->validate([
+                'chequeid' => 'required|integer',
+            ]);
+
+            // Buscar el cheque a eliminar
+            $cheque = Cheque::find($request->chequeid);
+
+            // Registrar el historial antes de eliminar
+            $this->registrarHistorial($cheque, 1, json_encode($cheque->toArray()), json_encode($cheque->toArray())); // Tipo 1 para 'eliminar'
+
+            // Eliminar el cheque
+            $cheque->delete();
+
+            // Retornar una respuesta JSON adecuada
+            return response()->json([
+                'status' => 1,
+                'message' => 'Cheque eliminado correctamente'
+            ]);
+        }
 
     public function cuenta_registro(Request $request)
     {

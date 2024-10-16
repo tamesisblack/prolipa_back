@@ -17,6 +17,7 @@ class f_tipo_documento extends Model
         'tdo_id',
         'tdo_nombre',
         'tdo_secuencial_calmed',
+        'tdo_secuencial_Prolipa',
         'tdo_letra',
         'tdo_estado',
         'created_at',
@@ -37,12 +38,10 @@ class f_tipo_documento extends Model
         } elseif ($empresa == 3) {
             $setEmpresa = 'tdo_secuencial_calmed';
         }
-
         // Si no se encontró una columna válida, retorna false
         if ($setEmpresa === '') {
             return false;
         }
-
         // Aplicar la actualización a la consulta
         return $query->where('tdo_nombre', $tdo_nombre)
                      ->where('tdo_estado', '1') // Actualiza solo si el estado es 1

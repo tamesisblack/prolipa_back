@@ -80,7 +80,7 @@ class PerseoFacturacionController extends Controller
         //empresa 1 => GONZALEZ GUAMAN WELLINGTON MAURICIO ; 2 => COBACANGO TOAPANTA CESAR BAYARDO
         $empresa            = $request->empresa;
         // $factura            = "F0000001";
-        $observacion        = "Factura de prueba"; //observacion
+        $observacion        = "Pedido"; //observacion
         $getFactura         = SolinfaFactura::where('code',$factura)->first();
         $ven_descuento      = 0;
         //validar que exista la factura

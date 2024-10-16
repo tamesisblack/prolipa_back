@@ -29,4 +29,8 @@ class CodigosLibros extends Model implements Auditable
         'bc_periodo',
         'bc_institucion'
     ];
+    public function libroSeries()
+    {
+        return $this->hasMany(LibroSerie::class, 'idLibro', 'libro_idlibro');
+    }
 }

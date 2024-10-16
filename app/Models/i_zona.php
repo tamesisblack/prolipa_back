@@ -16,6 +16,7 @@ class i_zona extends Model
         'idzona',
         'zn_nombre',
         'zn_estado',
+        'idregion',
         'created_at',
         'updated_at',
         'user_created',

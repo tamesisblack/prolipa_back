@@ -58,7 +58,7 @@ class EmpaqueController extends Controller
     }
     public function pendientes()
     {
-        $query = DB::SELECT("SELECT re.*, e.*, fpr.prof_observacion, i.nombreInstitucion, fv.est_ven_codigo, em.descripcion_corta,
+        $query = DB::SELECT("SELECT re.*, e.*, fpr.prof_observacion, fv.ven_observacion, i.nombreInstitucion, fv.est_ven_codigo, em.descripcion_corta,
             (select sum(det_ven_cantidad_despacho) FROM f_detalle_venta dv WHERE dv.ven_codigo=fv.ven_codigo) as libros,
            i.ruc, (select count(det_empa_codigo) FROM rempaque_detallecopy dr WHERE dr.empa_codigo=e.empa_codigo and dr.idempresa=e.idempresa) as cantidad,
             CONCAT(u.nombres,' ',u.apellidos) AS cliente  FROM remision_copy re

@@ -226,6 +226,58 @@ class  PedidosPagosRepository extends BaseRepository
         ",[$request->idPeriodo]);
         return $query;
     }
+    //api:get/pedigo_Pagos?getVentaTotalListaDirectaAsesor=1&idPeriodo=22
+    public function getVentaTotalListaDirectaAsesor($request){
+        $query = DB::select("
+        SELECT
+            p.id_asesor,
+            CONCAT(u.nombres, ' ', u.apellidos) AS Asesor,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal > 0 AND p.tipo_venta = 1 THEN p.TotalVentaReal ELSE 0 END), 2) AS TotalVentaDirecta,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal > 0 AND p.tipo_venta = 2 THEN p.TotalVentaReal ELSE 0 END), 2) AS TotalVentaLista,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal = 0 AND p.tipo_venta = 1 THEN p.total_venta ELSE 0 END), 2) AS SinVerificacionesDirecta,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal = 0 AND p.tipo_venta = 2 THEN p.total_venta ELSE 0 END), 2) AS SinVerificacionesLista,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal > 0 THEN p.TotalVentaReal ELSE 0 END), 2) AS TotalVentaBruta,
+            ROUND(SUM(CASE WHEN p.TotalVentaReal = 0 AND p.total_venta > 0 THEN p.total_venta ELSE 0 END), 2) AS TotalVentaSinVerificaciones
+        FROM
+            pedidos p
+        LEFT JOIN
+            usuario u ON u.idusuario = p.id_asesor
+        WHERE
+            p.tipo = '0'
+            AND p.estado = '1'
+            AND p.id_periodo = ?
+            AND p.contrato_generado IS NOT NULL
+        GROUP BY
+           p.id_asesor, u.nombres, u.apellidos
+        ORDER BY
+            Asesor ASC;
+    ", [$request->idPeriodo]);
+
+    return $query;
+
+    }
+    //api:get/pedigo_Pagos?getTotalDocumentosLiq=1&idPeriodo=24
+    public function getTotalDocumentosLiq($request){
+        $periodo = $request->idPeriodo;
+
+        $query = DB::SELECT("
+            SELECT
+                ROUND(SUM(CASE WHEN l.tipo_pago_id = 1 AND l.ifAntAprobado = '0' THEN l.doc_valor ELSE 0 END), 2) AS totalAnticipos,
+                ROUND(SUM(CASE WHEN l.tipo_pago_id = 2 THEN l.doc_valor ELSE 0 END), 2) AS totalLiquidaciones,
+                ROUND(SUM(CASE WHEN l.tipo_pago_id = 7 THEN l.doc_valor ELSE 0 END), 2) AS totalOtrosValores,
+                (SELECT SUM(p.anticipo_global) FROM pedidos_convenios p
+                 WHERE p.periodo_id = l.periodo_id
+                 AND p.estado <> '2') AS totalConvenio,
+                (SELECT SUM(p.anticipo_aprobado) FROM pedidos p
+                 WHERE p.id_periodo = l.periodo_id
+                 AND p.estado = '1') AS totalAnticipoAprobado
+            FROM `1_4_documento_liq` l
+            WHERE l.periodo_id = ?
+            AND l.estado = '1'
+        ", [$periodo]);
+
+        return $query;
+    }
     //api/get>>pedigo_Pagos?updateVentaReal=1&idAsesor=1&idPeriodo=1
     public function updateVentaReal($request){
         $query      = $this->getVentaRealXAsesor($request->idAsesor,$request->idPeriodo);

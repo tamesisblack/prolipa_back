@@ -39,7 +39,7 @@ class VerificacionDescuentoController extends Controller
         $periodo                        = $request->periodo_id;
         $contador                       = 0;
         $detalles = DB::SELECT("SELECT vl.* ,ls.idLibro AS libro_id,
-            ls.id_serie,t.id_periodo,a.area_idarea,vd.tipo
+            ls.id_serie,t.id_periodo,a.area_idarea,vd.tipo,ls.year
             FROM verificaciones_descuentos_detalle vl
             LEFT JOIN libros_series ls ON vl.codigo = ls.codigo_liquidacion
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
@@ -62,11 +62,29 @@ class VerificacionDescuentoController extends Controller
                 AND f.id_libro      = '$item->libro_id'
                 AND f.id_periodo    = '$periodo'");
             }else{
-                $query = DB::SELECT("SELECT f.pvp AS precio
-                FROM pedidos_formato f
-                WHERE f.id_serie    = '$item->id_serie'
-                AND f.id_area       = '$item->area_idarea'
-                AND f.id_periodo    = '$periodo'
+                // $query = DB::SELECT("SELECT f.pvp AS precio
+                // FROM pedidos_formato f
+                // WHERE f.id_serie    = '$item->id_serie'
+                // AND f.id_area       = '$item->area_idarea'
+                // AND f.id_periodo    = '$periodo'
+                // ");
+                $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$item->id_serie'
+                AND a.area_idarea  = '$item->area_idarea'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$item->year'
+                LIMIT 1
                 ");
             }
             //libro

@@ -17,6 +17,12 @@ class LibroSerie extends Model
         'year',
         'version',
         'boton',
-       
+
     ];
+    public static function obtenerProducto($codigo)
+    {
+        // Obtén el producto basado en el código usando self
+        $producto = self::where('codigo_liquidacion', $codigo)->first();
+        return $producto;
+    }
 }

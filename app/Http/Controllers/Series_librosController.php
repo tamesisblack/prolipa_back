@@ -67,6 +67,7 @@ class Series_librosController extends Controller
         from libros_series ls
         LEFT JOIN libro l ON ls.idLibro = l.idlibro
         WHERE id_serie = $id
+        AND l.Estado_idEstado = '1' 
         ");
         return $libros_series;
     }

@@ -173,6 +173,9 @@ class AdminController extends Controller
                      //PERIODO ANTES
                     $JsonAntes          = $this->getContratos($itemP->id_asesor,$iniciales,$periodo,$codigosContrato);
                 }
+                //quitar duplicar de JsonDespues y $JsonAntes
+                $JsonDespues = array_values(array_unique($JsonDespues, SORT_REGULAR));
+                $JsonAntes   = array_values(array_unique($JsonAntes, SORT_REGULAR));
                 //==========SIN CONTRATOS===================
                 $getSinContrato = $this->getSinContratoProlipa($itemP->id_asesor,$periodo);
                 if(empty($getSinContrato)){
@@ -313,7 +316,414 @@ class AdminController extends Controller
 
         return curl_exec($cURL);
     }
+    public function getLibrosAsesores($periodo,$asesor_id){
+        $val_pedido = DB::SELECT("SELECT pv.valor,
+        pv.id_area, pv.tipo_val, pv.id_serie, pv.year,pv.plan_lector,pv.alcance,
+        p.id_periodo,
+        CONCAT(se.nombre_serie,' ',ar.nombrearea) as serieArea,
+        se.nombre_serie,p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
+        FROM pedidos_val_area pv
+        LEFT JOIN area ar ON  pv.id_area = ar.idarea
+        LEFT JOIN series se ON pv.id_serie = se.id_serie
+        LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
+        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+        WHERE p.id_periodo  = '$periodo'
+        AND p.id_asesor     = '$asesor_id'
+        AND p.tipo        = '1'
+        AND p.estado      = '1'
+        AND p.estado_entrega = '2'
+        GROUP BY pv.id
+        ");
+         if(empty($val_pedido)){
+            return $val_pedido;
+        }
+        $arreglo = [];
+        $cont    = 0;
+        //obtener solo los alcances activos
+        foreach($val_pedido as $k => $tr){
+            //Cuando es el pedido original
+            $alcance_id = 0;
+            $alcance_id = $tr->alcance;
+            if($alcance_id == 0){
+                $arreglo[$cont] =   (object)[
+                    "valor"             => $tr->valor,
+                    "id_area"           => $tr->id_area,
+                    "tipo_val"          => $tr->tipo_val,
+                    "id_serie"          => $tr->id_serie,
+                    "year"              => $tr->year,
+                    "plan_lector"       => $tr->plan_lector,
+                    "id_periodo"        => $tr->id_periodo,
+                    "serieArea"         => $tr->serieArea,
+                    "nombre_serie"      => $tr->nombre_serie,
+                    "alcance"           => $tr->alcance,
+                    "alcance"           => $alcance_id
+                ];
+            }else{
+                //validate que el alcance este cerrado o aprobado
+                $query = $this->getAlcanceAbiertoXId($alcance_id);
+                if(count($query) > 0){
+                    $arreglo[$cont] = (object) [
+                        "valor"             => $tr->valor,
+                        "id_area"           => $tr->id_area,
+                        "tipo_val"          => $tr->tipo_val,
+                        "id_serie"          => $tr->id_serie,
+                        "year"              => $tr->year,
+                        "plan_lector"       => $tr->plan_lector,
+                        "id_periodo"        => $tr->id_periodo,
+                        "serieArea"         => $tr->serieArea,
+                        "nombre_serie"      => $tr->nombre_serie,
+                        "alcance"           => $tr->alcance,
+                        "alcance"           => $alcance_id
+                    ];
+                }
+            }
+            $cont++;
+        }
+        //mostrar el arreglo bien
+        $renderSet = [];
+        $renderSet = array_values($arreglo);
+        if(count($renderSet) == 0){
+            return $renderSet;
+        }
+        $datos = [];
+        $contador = 0;
+        //return $renderSet;
+        foreach($renderSet as $key => $item){
+            $valores = [];
+            //plan lector
+            if($item->plan_lector > 0 ){
+                $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = '6'
+                    AND f.id_area = '69'
+                    AND f.id_libro = '$item->plan_lector'
+                    AND f.id_periodo = '$item->id_periodo'
+                )as precio, ls.codigo_liquidacion,ls.version,ls.year
+                FROM libro l
+                left join libros_series ls  on ls.idLibro = l.idlibro
+                inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                WHERE l.idlibro = '$item->plan_lector'
+                ");
+                $valores = $getPlanlector;
+            }else{
+                $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$item->id_periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$item->id_serie'
+                AND a.area_idarea  = '$item->id_area'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$item->year'
+                LIMIT 1
+                ");
+                $valores = $getLibros;
+            }
+            $datos[$contador] = (Object)[
+                // "id_area"           => $item->id_area,
+                "valor"             => $item->valor,
+                // "id_serie"          => $item->id_serie,
+                // "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
+                // "libro_id"          => $valores[0]->idlibro,
+                "nombrelibro"       => $valores[0]->nombrelibro,
+                // "nombre_serie"      => $item->nombre_serie,
+                "precio"            => $valores[0]->precio,
+                "codigo"            => $valores[0]->codigo_liquidacion,
+                // "stock"             => $valores[0]->pro_reservar,
+                // "descripcion"       => $valores[0]->descripcionlibro,
+            ];
+            $contador++;
+        }
+           //si el codigo de liquidacion se repite sumar en el valor
+        // Crear un array asociativo para agrupar por codigo_liquidacion
+        $grouped = [];
+
+        foreach ($datos as $item) {
+            $codigo = $item->codigo;
+
+            if (!isset($grouped[$codigo])) {
+                $grouped[$codigo] = $item;
+            } else {
+                $grouped[$codigo]->valor += $item->valor;
+            }
+        }
+
+        // Convertir el array asociativo de nuevo a un array indexado
+        $result = array_values($grouped);
+        //subtotal
+        foreach($result as $key => $item){
+            $result[$key]->subtotal = $item->valor * $item->precio;
+        }
+        return $result;
+    }
     public function pruebaData(Request $request){
+        $periodo = $request->periodo;
+        $codigoBusqueda = $request->codigo;
+        $val_pedido2 = DB::SELECT("SELECT DISTINCT p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
+        FROM pedidos_val_area pv
+        LEFT JOIN area ar ON  pv.id_area = ar.idarea
+        LEFT JOIN series se ON pv.id_serie = se.id_serie
+        LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
+        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+        where p.tipo        = '1'
+        and p.id_periodo  = '$periodo'
+        AND p.estado        = '1'
+        AND p.estado_entrega = '2'
+        and p.id_asesor = '4179'
+        GROUP BY u.nombres ORDER BY u.nombres
+        ");
+        foreach($val_pedido2 as $key11 => $itemAsesor){
+            $libros = $this->getLibrosAsesores($periodo,$itemAsesor->id_asesor);
+            return $libros;
+            //filtrar por el libro_id = 652 los libros
+            $resultado = collect($libros)->where('codigo',$codigoBusqueda)->values();
+            $itemAsesor->libros = $resultado;
+
+            ////ESCUELAS
+
+            $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$itemAsesor->id_asesor);
+            foreach($pedidos as $key8 => $itempedido){
+                $val_pedido = DB::table('pedidos_val_area as pv')
+                ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
+                            p.id_periodo,
+                            CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
+                            se.nombre_serie')
+                ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
+                ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
+                ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
+                ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
+                // ->whereIn('p.id_pedido', $ids)
+                ->where('p.id_pedido',$itempedido->id_pedido)
+                ->where('p.tipo', '0')
+                ->where('p.estado', '1')
+                ->where('p.id_periodo',$periodo)
+                ->groupBy('pv.id')
+                ->get();
+                if(empty($val_pedido)){
+                    // return $val_pedido;
+                }else{
+                    $arreglo = [];
+                    $cont    = 0;
+                    //obtener solo los alcances activos
+                    foreach($val_pedido as $k => $tr){
+                        //Cuando es el pedido original
+                        $alcance_id = 0;
+                        $alcance_id = $tr->alcance;
+                        if($alcance_id == 0){
+                            $arreglo[$cont] =   (object)[
+                                "valor"             => $tr->valor,
+                                "id_area"           => $tr->id_area,
+                                "tipo_val"          => $tr->tipo_val,
+                                "id_serie"          => $tr->id_serie,
+                                "year"              => $tr->year,
+                                "plan_lector"       => $tr->plan_lector,
+                                "id_periodo"        => $tr->id_periodo,
+                                "serieArea"         => $tr->serieArea,
+                                "nombre_serie"      => $tr->nombre_serie,
+                                "alcance"           => $tr->alcance,
+                                "alcance"           => $alcance_id
+                            ];
+                        }else{
+                            //validate que el alcance este cerrado o aprobado
+                            $query = $this->getAlcanceAbiertoXId($alcance_id);
+                            if(count($query) > 0){
+                                $arreglo[$cont] = (object) [
+                                    "valor"             => $tr->valor,
+                                    "id_area"           => $tr->id_area,
+                                    "tipo_val"          => $tr->tipo_val,
+                                    "id_serie"          => $tr->id_serie,
+                                    "year"              => $tr->year,
+                                    "plan_lector"       => $tr->plan_lector,
+                                    "id_periodo"        => $tr->id_periodo,
+                                    "serieArea"         => $tr->serieArea,
+                                    "nombre_serie"      => $tr->nombre_serie,
+                                    "alcance"           => $tr->alcance,
+                                    "alcance"           => $alcance_id
+                                ];
+                            }
+                        }
+                        $cont++;
+                    }
+                    //mostrar el arreglo bien
+                    $renderSet = [];
+                    $renderSet = array_values($arreglo);
+                    if(count($renderSet) == 0){
+                        return $renderSet;
+                    }
+                    $datos = [];
+                    $contador = 0;
+                    //return $renderSet;
+                    foreach($renderSet as $key => $item){
+                        $valores = [];
+                        //plan lector
+                        if($item->plan_lector > 0 ){
+                            $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                            (
+                                SELECT f.pvp AS precio
+                                FROM pedidos_formato f
+                                WHERE f.id_serie = '6'
+                                AND f.id_area = '69'
+                                AND f.id_libro = '$item->plan_lector'
+                                AND f.id_periodo = '$item->id_periodo'
+                            )as precio, ls.codigo_liquidacion,ls.version,ls.year
+                            FROM libro l
+                            left join libros_series ls  on ls.idLibro = l.idlibro
+                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                            WHERE l.idlibro = '$item->plan_lector'
+                            ");
+                            $valores = $getPlanlector;
+                        }else{
+                            $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                            (
+                                SELECT f.pvp AS precio
+                                FROM pedidos_formato f
+                                WHERE f.id_serie = ls.id_serie
+                                AND f.id_area = a.area_idarea
+                                AND f.id_periodo = '$item->id_periodo'
+                            )as precio
+                            FROM libros_series ls
+                            LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                            WHERE ls.id_serie = '$item->id_serie'
+                            AND a.area_idarea  = '$item->id_area'
+                            AND l.Estado_idEstado = '1'
+                            AND a.estado = '1'
+                            AND ls.year = '$item->year'
+                            LIMIT 1
+                            ");
+                            $valores = $getLibros;
+                        }
+                        $datos[$contador] = (Object)[
+                            "id_area"           => $item->id_area,
+                            "valor"             => $item->valor,
+                            // "tipo_val"          => $item->tipo_val,
+                            "id_serie"          => $item->id_serie,
+                            // "year"              => $item->year,
+                            // "anio"              => $valores[0]->year,
+                            // "version"           => $valores[0]->version,
+                            // "plan_lector"       => $item->plan_lector,
+                            "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
+                            "libro_id"          => $valores[0]->idlibro,
+                            "nombrelibro"       => $valores[0]->nombrelibro,
+                            "nombre_serie"      => $item->nombre_serie,
+                            "precio"            => $valores[0]->precio,
+                            "codigo"            => $valores[0]->codigo_liquidacion,
+                            "stock"             => $valores[0]->pro_reservar,
+                            "descripcion"       => $valores[0]->descripcionlibro,
+                        ];
+                        $contador++;
+                    }
+                       //si el codigo de liquidacion se repite sumar en el valor
+                    // Crear un array asociativo para agrupar por codigo_liquidacion
+                    $grouped = [];
+
+                    foreach ($datos as $item) {
+                        $codigo = $item->codigo;
+
+                        if (!isset($grouped[$codigo])) {
+                            $grouped[$codigo] = $item;
+                        } else {
+                            $grouped[$codigo]->valor += $item->valor;
+                        }
+                    }
+
+                    // Convertir el array asociativo de nuevo a un array indexado
+                    $result = array_values($grouped);
+                    //subtotal
+                    foreach($result as $key => $item){
+                        $result[$key]->subtotal = $item->valor * $item->precio;
+                    }
+                    //filtrar por el codigo
+                    $resultadoLibros = collect($result)->where('codigo',$codigoBusqueda)->values();
+                    $itempedido->librosEscuela = $resultadoLibros;
+                }
+
+            }
+            $val_pedido2[$key11]->pedidos = $pedidos;
+        }
+        return $val_pedido2;
+
+
+
+
+        // try{
+        //     //transaccion
+        //     DB::beginTransaction();
+        //     $query = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        //     WHERE p.pro_nombre LIKE '%guia%'
+        //     AND p.temporal is null
+        //     limit 500
+        //     ");
+        //     $contador = 0;
+        //     foreach($query as $key => $item){
+        //         $stockReservaAnterior           = $item->pro_reservar;
+        //         $stockAnteriorProlipa           = $item->pro_stock;
+        //         $stockAnteriorCalmed            = $item->pro_stockCalmed;
+        //         $codigoFact                     = $item->pro_codigo;
+        //         $nuevoStockReserva              = 0;
+        //         $nuevoStockCalmed               = 0;
+        //         $nuevoStockProlipa              = 0;
+        //         $stockCalmed                    = 0;
+        //         $stockProlipa                   = 0;
+        //         //============================CALMED================================================
+
+        //         //get stock calmed
+        //         $getStockCalmed                 = DB::SELECT("SELECT * FROM cal_producto WHERE pro_codigo = '$codigoFact'");
+        //         if(empty($getStockCalmed))     { $stockCalmed = 0; }
+        //         else                           { $stockCalmed = $getStockCalmed[0]->pro_stock; }
+        //         //si stock de calmed es 5000 coloco el stockCalmed
+        //         if($stockAnteriorCalmed == 5000){ $nuevoStockCalmed = $stockCalmed; }
+        //         else                            {
+        //             $stockAnteriorCalmed        = 5000 - $stockAnteriorCalmed;
+        //             //si stock de calmed es menor a 5000 voy a restar el stock de calmed con el stock de calmed
+        //             $nuevoStockCalmed           = $stockCalmed - $stockAnteriorCalmed;
+        //         }
+
+        //         //==========================PROLIPA======================================================
+        //         //get stock prolipa
+        //         $getStockProlipa                 = DB::SELECT("SELECT * FROM pro_producto WHERE pro_codigo = '$codigoFact'");
+        //         if(empty($getStockProlipa))      { $stockProlipa = 0; }
+        //         else                             { $stockProlipa = $getStockProlipa[0]->pro_stock; }
+        //             //si stock de prolipa es 5000 coloco el stockProlipa
+        //         if($stockAnteriorProlipa == 5000){ $nuevoStockProlipa = $stockProlipa; }
+        //         else                             {
+        //             $stockAnteriorProlipa        = 5000 - $stockAnteriorProlipa;
+        //             //si stock de prolipa es menor a 5000 voy a restar el stock de prolipa con el stock de prolipa
+        //             $nuevoStockProlipa           = $stockProlipa - $stockAnteriorProlipa;
+        //         }
+        //         //==========================PROCESO======================================================
+        //         $nuevoStockReserva          = $nuevoStockCalmed + $nuevoStockProlipa;
+        //         DB::table('1_4_cal_producto')
+        //         ->where('pro_codigo', $codigoFact)
+        //         ->update([
+        //             'pro_reservar'      => $nuevoStockReserva ,
+        //             "pro_stockCalmed"   => $nuevoStockCalmed,
+        //             "pro_stock"         => $nuevoStockProlipa,
+        //             "temporal"          => 1
+        //         ]);
+        //         $contador++;
+        //     }
+        //     DB::commit();
+        //     return "se actualizo correctamente ".$contador;
+        // }
+        // catch (\Exception $e) {
+        //     DB::rollBack();
+        //     return response()->json([
+        //         'error' => $e->getMessage()
+        //     ], 500);
+        // }
+
 
 
 
@@ -493,11 +903,180 @@ class AdminController extends Controller
     {
         //
     }
-
+    public function getAlcanceAbiertoXId($id){
+        $query = DB::SELECT("SELECT * FROM pedidos_alcance a
+        WHERE a.id = '$id'
+        AND a.estado_alcance = '1'");
+        return $query;
+    }
 
     public function guardarData(Request $request){
-        set_time_limit(6000);
-        ini_set('max_execution_time', 600000);
+        $periodo = 24;
+        $idasesor = 26087;
+        $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$idasesor);
+        foreach($pedidos as $key8 => $itempedido){
+            $val_pedido = DB::table('pedidos_val_area as pv')
+            ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
+                        p.id_periodo,
+                        CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
+                        se.nombre_serie')
+            ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
+            ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
+            ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
+            ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
+            // ->whereIn('p.id_pedido', $ids)
+            ->where('p.id_pedido',$itempedido->id_pedido)
+            ->where('p.tipo', '0')
+            ->where('p.estado', '1')
+            ->where('p.id_periodo',$periodo)
+            ->groupBy('pv.id')
+            ->get();
+            if(empty($val_pedido)){
+                return $val_pedido;
+            }
+            $arreglo = [];
+            $cont    = 0;
+            //obtener solo los alcances activos
+            foreach($val_pedido as $k => $tr){
+                //Cuando es el pedido original
+                $alcance_id = 0;
+                $alcance_id = $tr->alcance;
+                if($alcance_id == 0){
+                    $arreglo[$cont] =   (object)[
+                        "valor"             => $tr->valor,
+                        "id_area"           => $tr->id_area,
+                        "tipo_val"          => $tr->tipo_val,
+                        "id_serie"          => $tr->id_serie,
+                        "year"              => $tr->year,
+                        "plan_lector"       => $tr->plan_lector,
+                        "id_periodo"        => $tr->id_periodo,
+                        "serieArea"         => $tr->serieArea,
+                        "nombre_serie"      => $tr->nombre_serie,
+                        "alcance"           => $tr->alcance,
+                        "alcance"           => $alcance_id
+                    ];
+                }else{
+                    //validate que el alcance este cerrado o aprobado
+                    $query = $this->getAlcanceAbiertoXId($alcance_id);
+                    if(count($query) > 0){
+                        $arreglo[$cont] = (object) [
+                            "valor"             => $tr->valor,
+                            "id_area"           => $tr->id_area,
+                            "tipo_val"          => $tr->tipo_val,
+                            "id_serie"          => $tr->id_serie,
+                            "year"              => $tr->year,
+                            "plan_lector"       => $tr->plan_lector,
+                            "id_periodo"        => $tr->id_periodo,
+                            "serieArea"         => $tr->serieArea,
+                            "nombre_serie"      => $tr->nombre_serie,
+                            "alcance"           => $tr->alcance,
+                            "alcance"           => $alcance_id
+                        ];
+                    }
+                }
+                $cont++;
+            }
+            //mostrar el arreglo bien
+            $renderSet = [];
+            $renderSet = array_values($arreglo);
+            if(count($renderSet) == 0){
+                return $renderSet;
+            }
+            $datos = [];
+            $contador = 0;
+            //return $renderSet;
+            foreach($renderSet as $key => $item){
+                $valores = [];
+                //plan lector
+                if($item->plan_lector > 0 ){
+                    $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                    (
+                        SELECT f.pvp AS precio
+                        FROM pedidos_formato f
+                        WHERE f.id_serie = '6'
+                        AND f.id_area = '69'
+                        AND f.id_libro = '$item->plan_lector'
+                        AND f.id_periodo = '$item->id_periodo'
+                    )as precio, ls.codigo_liquidacion,ls.version,ls.year
+                    FROM libro l
+                    left join libros_series ls  on ls.idLibro = l.idlibro
+                    inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                    WHERE l.idlibro = '$item->plan_lector'
+                    ");
+                    $valores = $getPlanlector;
+                }else{
+                    $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
+                    (
+                        SELECT f.pvp AS precio
+                        FROM pedidos_formato f
+                        WHERE f.id_serie = ls.id_serie
+                        AND f.id_area = a.area_idarea
+                        AND f.id_periodo = '$item->id_periodo'
+                    )as precio
+                    FROM libros_series ls
+                    LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                    inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
+                    LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                    WHERE ls.id_serie = '$item->id_serie'
+                    AND a.area_idarea  = '$item->id_area'
+                    AND l.Estado_idEstado = '1'
+                    AND a.estado = '1'
+                    AND ls.year = '$item->year'
+                    LIMIT 1
+                    ");
+                    $valores = $getLibros;
+                }
+                $datos[$contador] = (Object)[
+                    "id_area"           => $item->id_area,
+                    "valor"             => $item->valor,
+                    // "tipo_val"          => $item->tipo_val,
+                    "id_serie"          => $item->id_serie,
+                    // "year"              => $item->year,
+                    // "anio"              => $valores[0]->year,
+                    // "version"           => $valores[0]->version,
+                    // "plan_lector"       => $item->plan_lector,
+                    "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
+                    "libro_id"          => $valores[0]->idlibro,
+                    "nombrelibro"       => $valores[0]->nombrelibro,
+                    "nombre_serie"      => $item->nombre_serie,
+                    "precio"            => $valores[0]->precio,
+                    "codigo"            => $valores[0]->codigo_liquidacion,
+                    "stock"             => $valores[0]->pro_reservar,
+                    "descripcion"       => $valores[0]->descripcionlibro,
+                ];
+                $contador++;
+            }
+               //si el codigo de liquidacion se repite sumar en el valor
+            // Crear un array asociativo para agrupar por codigo_liquidacion
+            $grouped = [];
+
+            foreach ($datos as $item) {
+                $codigo = $item->codigo;
+
+                if (!isset($grouped[$codigo])) {
+                    $grouped[$codigo] = $item;
+                } else {
+                    $grouped[$codigo]->valor += $item->valor;
+                }
+            }
+
+            // Convertir el array asociativo de nuevo a un array indexado
+            $result = array_values($grouped);
+            //subtotal
+            foreach($result as $key => $item){
+                $result[$key]->subtotal = $item->valor * $item->precio;
+            }
+            $itempedido->libros = $result;
+        }
+
+        return $pedidos;
+        // set_time_limit(6000);
+        // ini_set('max_execution_time', 600000);
+
+
+
+
+
         // $contadorSolinfaGONZALEZ = 0;
         // $contadorSolinfaCOBACANGO= 0;
         // $resultsGonzales = DB::connection('mysql2')->select('SELECT * FROM product p

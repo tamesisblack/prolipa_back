@@ -3,23 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\CodigosLibros;
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\Institucion;
 use App\Models\User;
 use App\Models\Usuario;
 use App\Models\Ventas;
+use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\pedidos\PedidosRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
 use DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 
 class Pedidos2Controller extends Controller
 {
     use TraitPedidosGeneral;
     protected $pedidosRepository = null;
-    public function __construct(PedidosRepository $pedidosRepository)
+    private $codigosRepository;
+    public function __construct(PedidosRepository $pedidosRepository,CodigosRepository $codigosRepository)
     {
         $this->pedidosRepository = $pedidosRepository;
+        $this->codigosRepository = $codigosRepository;
     }
     /**
      * Display a listing of the resource.
@@ -32,6 +37,8 @@ class Pedidos2Controller extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         if($request->getLibrosFormato)              { return $this->getLibrosFormato($request->periodo_id); }
+        if($request->geAllLibrosxAsesorEscuelas)    { return $this->geAllLibrosxAsesorEscuelas($request->asesor_id,$request->periodo_id); }
+        if($request->geAllGuiasxAsesor)             { return $this->geAllGuiasxAsesor($request->asesor_id,$request->periodo_id); }
         if($request->geAllLibrosxAsesor)            { return $this->geAllLibrosxAsesor($request->asesor_id,$request->periodo_id); }
         if($request->getLibrosXAreaXSerieUsados)    { return $this->getLibrosXAreaXSerieUsados($request->periodo_id,$request->area,$request->serie); }
         //api:get/pedidos2/pedidos?getAsesoresPedidos=1
@@ -41,12 +48,17 @@ class Pedidos2Controller extends Controller
         if($request->getLibrosXInstituciones)       { return $this->getLibrosXInstituciones($request->id_periodo,$request->tipo_venta); }
         if($request->getLibrosXInstitucionesAsesor) { return $this->getLibrosXInstitucionesAsesor($request->id_periodo,$request->tipo_venta,$request->id_asesor); }
         if($request->getproStockReserva)            { return $this->getproStockReserva($request); }
+        if($request->getPuntosVentaDespachadosComparativo) { return $this->getPuntosVentaDespachadosComparativo($request); }
+        if($request->getPuntosVentaDespachados)     { return $this->getPuntosVentaDespachados($request); }
+        if($request->getpuntosVentaDespachadosFacturacion) { return $this->getpuntosVentaDespachadosFacturacion($request); }
+        if($request->getDatosPuntosAllVenta)        { return $this->getDatosPuntosAllVenta($request); }
         if($request->getDatosPuntosVenta)           { return $this->getDatosPuntosVenta($request); }
         if($request->getDatosClient)                { return $this->getDatosClient($request); }
         if($request->getDatosClientes)              { return $this->getDatosClientes($request); }
         if($request->getDatosDespachoProforma)      { return $this->getDatosDespachoProforma($request); }
         if($request->InformacionAgrupado)           { return $this->InformacionAgrupado($request->codigo); }
         if($request->informacionInstitucionPerseo)  { return $this->informacionInstitucionPerseo($request); }
+        if($request->getReporteFacturacionAsesores) { return $this->getReporteFacturacionAsesores($request); }
     }
     //API:GET/pedidos2/pedidos?getLibrosFormato=yes&periodo_id=22
     /**
@@ -79,6 +91,9 @@ class Pedidos2Controller extends Controller
                 'codigo_contrato'   => $item->codigo_contrato,
                 'pedidos'           => $this->tr_pedidosXDespacho($item->ca_codigo_agrupado,$id_periodo),
                 'preproformas'      => $this->tr_getPreproformas($item->ca_codigo_agrupado),
+                'datoAgrupado'      => $this->tr_getAgrupado($item->ca_codigo_agrupado),
+                'Instituciones'     => $this->tr_getPreproformasInstitucion($item->ca_codigo_agrupado),
+                'documentos'        => $this->tr_getDocumentos($item->ca_codigo_agrupado),
                 'ca_descripcion'    => $item->ca_descripcion,
                 'ca_tipo_pedido'    => $item->ca_tipo_pedido,
                 'ca_id'             => $item->ca_id,
@@ -159,11 +174,78 @@ class Pedidos2Controller extends Controller
         $query = DB::SELECT("SELECT pro_codigo,pro_reservar FROM 1_4_cal_producto WHERE pro_codigo = '$pro_codigo' ");
         return $query;
     }
+    //API:GET/pedidos2/pedidos?getPuntosVentaDespachados=1&periodo=25&idusuario=1
+    public function getPuntosVentaDespachados($request){
+        $periodo   = $request->periodo;
+        $idusuario = $request->idusuario;
+
+        $clave = "getPuntosVentaDespachados".$periodo.$idusuario;
+        if (Cache::has($clave)) {
+            $response = Cache::get($clave);
+        } else {
+            $query     = $this->tr_getPuntosVentasDespachos($periodo);
+            $response = $query;
+            Cache::put($clave,$response);
+        }
+        return $response;
+    }
+     //API:GET/pedidos2/pedidos?getPuntosVentaDespachadosComparativo=1&periodo=25&idusuario=1
+     public function getPuntosVentaDespachadosComparativo($request){
+        $periodo   = $request->periodo;
+        $idusuario = $request->idusuario;
+
+        // $clave = "getPuntosVentaDespachadosComparativo".$periodo.$idusuario;
+        // if (Cache::has($clave)) {
+        //     $response = Cache::get($clave);
+        // } else {
+            $filtro   = 0;
+            $query     = $this->tr_getPuntosVentasDespachos($periodo);
+            foreach($query as $key => $item){
+                $libros = [];
+                $libros = $this->codigosRepository->getCodigosBodega($filtro,$periodo,$item->venta_lista_institucion);
+                if(count($libros) > 0){
+                    $query[$key]->totalCantidadBodegaPuntoVenta = count($libros);
+                    $query[$key]->totalValorBodegaPuntoVenta    = collect($libros)->sum('precio_total');
+                }else{
+                    $query[$key]->totalCantidadBodegaPuntoVenta = 0;
+                    $query[$key]->totalValorBodegaPuntoVenta    = 0;
+                }
+            }
+            return $query;
+            //$response = $query;
+        //     Cache::put($clave,$response);
+        // }
+        // return $response;
+    }
+    //API:GET/pedidos2/pedidos?getpuntosVentaDespachadosFacturacion=1&periodo=25&idusuario=1
+    public function getpuntosVentaDespachadosFacturacion($request){
+        $periodo   = $request->periodo;
+        $idusuario = $request->idusuario;
+        $clave = "getpuntosVentaDespachadosFacturacion".$periodo.$idusuario;
+        if (Cache::has($clave)) {
+            $response = Cache::get($clave);
+        } else {
+            $query     = $this->tr_puntosVentaDespachadosFacturacion($periodo);
+            $response = $query;
+            Cache::put($clave,$response);
+        }
+        return $response;
+    }
+    //API:GET/pedidos2/pedidos?getDatosPuntosAllVenta=1&busqueda=prolipa
+    public function getDatosPuntosAllVenta($request){
+        $busqueda   = $request->busqueda;
+        $query      = $this->tr_getPuntosVenta($busqueda);
+        return $query;
+    }
     //API:GET/pedidos2/pedidos?getDatosPuntosVenta=1&busqueda=prolipa&id_periodo=22
     public function getDatosPuntosVenta($request){
         $busqueda   = $request->busqueda;
         $id_periodo = $request->id_periodo;
-        $query = $this->tr_getPuntosVenta($busqueda);
+        $getPeriodo = DB::table("periodoescolar")
+        ->where('idperiodoescolar',$id_periodo)
+        ->get();
+        $region = $getPeriodo[0]->region_idregion;
+        $query = $this->tr_getPuntosVentaRegion($busqueda,$region);
         //traer datos de la tabla f_formulario_proforma por id_periodo
         foreach($query as $key => $item){ $query[$key]->datosInstitucion = DB::SELECT("SELECT * FROM f_formulario_proforma fp WHERE fp.idInstitucion = '$item->idInstitucion' AND fp.idperiodoescolar = '$id_periodo'"); }
         return $query;
@@ -214,6 +296,82 @@ class Pedidos2Controller extends Controller
         $query = $this->tr_getInformacionInstitucionPerseo($institucion_id);
         return $query;
     }
+    //API:GET/pedidos2/pedidos?getReporteFacturacionAsesores=1&periodo_id=25
+    public function getReporteFacturacionAsesores($request){
+      
+
+        $periodo_id = $request->periodo_id;
+        $query      = $this->tr_getAsesoresFacturacionXPeriodo($periodo_id);
+        
+        foreach($query as $key => $item){
+            $getInstituciones       = $this->tr_InstitucionesDespachadosFacturacionAsesor($periodo_id,$item->asesor_id);
+            // Convertir a colección en caso de que no lo sea
+            $getInstituciones       = collect($getInstituciones);
+            // $item->instituciones    = $getInstituciones;
+            // Usar pluck para obtener solo los institucion_id
+            $getInstitucionesId     = $getInstituciones->pluck('institucion_id');
+            // $item->institucionesId  = $getInstitucionesId;
+            //====libros====
+            //prolipa
+            $datosRequest = (Object)[
+                "periodo"               => $periodo_id,
+                "empresa"               => 1,
+                "variasInstituciones"   => 1,
+                "getInstitucionesId"    => $getInstitucionesId
+            ];
+            $getLibrosProlipa           = $this->tr_metodoFacturacion($datosRequest);
+            //calmed
+            $datosRequest = (Object)[
+                "periodo"               => $periodo_id,
+                "empresa"               => 3,
+                "variasInstituciones"   => 1,
+                "getInstitucionesId"    => $getInstitucionesId
+            ];
+            $getLibrosCalmed            = $this->tr_metodoFacturacion($datosRequest);
+            $item->librosProlipa        = $getLibrosProlipa;
+            $item->librosCalmed         = $getLibrosCalmed;
+            //sumar cantidad de prolipa y calmed
+            $item->totalLibrosProlipa    = collect($item->librosProlipa)->sum('cantidad');
+            $item->totalLibrosCalmed     = collect($item->librosCalmed)->sum('cantidad');
+            //sumar precio_total
+            $item->totalPrecioProlipa    = collect($item->librosProlipa)->sum('precio_total');
+            $item->totalPrecioCalmed     = collect($item->librosCalmed)->sum('precio_total');
+        }
+        return $query;
+        
+    }
+    //API:GET/pedidos2/pedidos?geAllLibrosxAsesorEscuelas=1&asesor_id=4179&periodo_id=24
+    public function geAllLibrosxAsesorEscuelas($asesor_id,$periodo_id){
+        //traer las escuelas del asesor
+        $query = $this->tr_institucionesAsesorPedidos($periodo_id,$asesor_id);
+        //traer los libros por escuela
+        foreach($query as $key => $item){
+            //request
+            $request                 = (Object)[ "escuela_pedido"        => $item->id_institucion ];
+            $query[$key]->libros     = $this->tr_getLibrosAsesores($periodo_id,$item->id_asesor,$request);
+        }
+        return $query;
+    }
+    //geAllGuiasxAsesor
+    //API:GET/pedidos2/pedidos?geAllGuiasxAsesor=1&asesor_id=4179&periodo_id=24
+    public function geAllGuiasxAsesor($asesor_id,$periodo_id){
+        $request                 = (Object)[ "guiasAsesor"   => $asesor_id ];
+        $query                   = $this->tr_getLibrosAsesores($periodo_id,$asesor_id,$request);
+        //buscar en la tabla codigoslibros el campo libro_id con el libro_id del array buscar cuantos codigos tiene el asesor_id con asesor_id parametro
+        $libros = [];
+        $query2 = DB::SELECT("SELECT * FROM codigoslibros c
+        WHERE c.asesor_id = ?
+        AND c.bc_periodo = ?
+        AND c.prueba_diagnostica = '0'
+        ",[$asesor_id,$periodo_id]);
+        return $query2;
+        // foreach($query as $key => $item){
+
+        //     $query[$key]->cantidadBodega = count($query2);
+        //     // $libros[$key] = $item->libro_id;
+        // }
+        // return $query;
+    }
     //API:GET/pedidos2/pedidos?geAllLibrosxAsesor=yes&asesor_id=4179&periodo_id=22
     public function geAllLibrosxAsesor($asesor_id,$periodo_id,$tipo = null,$parametro1=null){
         $val_pedido = [];
@@ -231,8 +389,9 @@ class Pedidos2Controller extends Controller
             LEFT JOIN usuario u ON p.id_asesor = u.idusuario
             WHERE p.id_asesor = '$asesor_id'
             AND p.id_periodo  = '$periodo_id'
-            AND p.tipo        = '0'
+            AND p.tipo        = '1'
             AND p.estado      = '1'
+            And p.estado_entrega = '2'
             GROUP BY pv.id
             ");
         }

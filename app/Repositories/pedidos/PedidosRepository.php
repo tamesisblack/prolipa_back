@@ -10,6 +10,41 @@ class  PedidosRepository extends BaseRepository
     {
         parent::__construct($pedidoRepository);
     }
+    public function getPrecioXLibro($id_serie,$libro_idlibro,$area_idarea,$periodo,$year){
+        $precio = 0;
+        $query = [];
+        if($id_serie == 6){
+            $query = DB::SELECT("SELECT f.pvp AS precio
+            FROM pedidos_formato f
+            WHERE f.id_serie    = '6'
+            AND f.id_area       = '69'
+            AND f.id_libro      = '$libro_idlibro'
+            AND f.id_periodo    = '$periodo'");
+        }else{
+            $query = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,
+                (
+                    SELECT f.pvp AS precio
+                    FROM pedidos_formato f
+                    WHERE f.id_serie = ls.id_serie
+                    AND f.id_area = a.area_idarea
+                    AND f.id_periodo = '$periodo'
+                )as precio
+                FROM libros_series ls
+                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+                WHERE ls.id_serie = '$id_serie'
+                AND a.area_idarea  = '$area_idarea'
+                AND l.Estado_idEstado = '1'
+                AND a.estado = '1'
+                AND ls.year = '$year'
+                LIMIT 1
+            ");
+        }
+        if(count($query) > 0){
+            $precio = $query[0]->precio;
+        }
+        return $precio;
+    }
     public function getLibrosNormalesFormato($periodo){
         $series = DB::SELECT("SELECT * FROM series s WHERE s.id_serie != 6"); // omitir plan lector
         $datos  = [];

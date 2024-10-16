@@ -28,6 +28,7 @@ class Abono extends Model
         'abono_institucion',
         'abono_periodo',
         'abono_concepto',
+        'abono_estado',
         'abono_ruc_cliente',
         'created_at',
         'updated_at',
