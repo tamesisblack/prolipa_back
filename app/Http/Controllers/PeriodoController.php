@@ -238,7 +238,10 @@ class PeriodoController extends Controller
         $periodo->obsequios_gerencia    = $request->obsequios_gerencia;
         $periodo->obsequio_asesor       = $request->obsequio_asesor;
         //cambiar periodo
-        $periodo->cambiar_periodo       = $request->cambiar_periodo;
+        $periodo->cambiar_periodo               = $request->cambiar_periodo;
+        $periodo->porcentaje_descuento          = intval($request->porcentaje_descuento);
+        $periodo->maximo_porcentaje_autorizado  = intval($request->maximo_porcentaje_autorizado);
+        $periodo->porcentaje_obsequio           = 3;
         $periodo->save();
         return $periodo;
     }
