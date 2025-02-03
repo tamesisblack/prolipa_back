@@ -1988,6 +1988,7 @@ class AbonoController extends Controller
                 'f.ven_codigo',
                 'f.id_empresa',
                 'i.nombreInstitucion',
+                'i.punto_venta',
                 DB::raw('CONCAT(u.nombres, " ", u.apellidos) AS cliente')
             )
             ->where('f.est_ven_codigo', '<>', 3)
@@ -2142,6 +2143,7 @@ class AbonoController extends Controller
             $clienteId = $cliente->ven_cliente;
             $institucionId = $cliente->institucion_id;
             $rucCliente = $cliente->ruc_cliente;
+            $puntoVenta = $cliente->punto_venta;
             
             // Verificar si el cliente ya fue procesado
             $clienteKey = $clienteId . '-' . $institucionId;
@@ -2212,6 +2214,7 @@ class AbonoController extends Controller
                 'institucion_id' => $institucionId,
                 'ruc_cliente' => $rucCliente,
                 'cliente' => $cliente->cliente,
+                'punto_venta' => $puntoVenta,
                 'institucion' => $cliente->nombreInstitucion,
                 'total_prefacturas' => round($totalPrefacturas, 2),
                 'total_notas' => round($totalNotas, 2),
