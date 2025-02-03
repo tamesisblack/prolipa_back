@@ -48,10 +48,12 @@ class PedidosGerenciaController extends Controller
         $tipo       = $request->tipo;
         $query = DB::SELECT("SELECT pedidos_solicitudes_gerencia.*,
         pedidos.contrato_generado,institucion.nombreInstitucion,pedidos.id_pedido,
-        CONCAT(usuario.nombres,' ',usuario.apellidos) as asesor
+        CONCAT(usuario.nombres,' ',usuario.apellidos) as asesor,
+        CONCAT(edit.nombres,' ',edit.apellidos) as asesor_edit
         FROM pedidos_solicitudes_gerencia
         LEFT JOIN pedidos ON pedidos.id_pedido = pedidos_solicitudes_gerencia.id_pedido
         LEFT JOIN usuario ON usuario.idusuario = pedidos.id_asesor
+        LEFT JOIN usuario edit ON edit.idusuario = pedidos_solicitudes_gerencia.user_finaliza
         LEFT JOIN institucion ON institucion.idInstitucion = pedidos.id_institucion
         WHERE pedidos_solicitudes_gerencia.id_pedido = $id_pedido
         AND pedidos_solicitudes_gerencia.tipo = $tipo
@@ -97,11 +99,13 @@ class PedidosGerenciaController extends Controller
         else{
             $solicitud                      = PedidosSolicitudesGerencia::findOrFail($request->id);
         }
+        $getPedido                          = Pedidos::findOrFail($request->id_pedido);
+        $periodo_id                         = $getPedido->id_periodo;
         $solicitud->id_pedido               = $request->id_pedido;
         $solicitud->tipo                    = $request->tipo;
         $solicitud->cantidad_solicitada     = $request->cantidad_solicitada;
         $solicitud->estado                  = $request->estado;
-        $solicitud->periodo_id              = $request->periodo_id;
+        $solicitud->periodo_id              = $periodo_id;
         $solicitud->user_created            = $request->user_created;
         $solicitud->observacion             = $request->observacion;
         $solicitud->save();

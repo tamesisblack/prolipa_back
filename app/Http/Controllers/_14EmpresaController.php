@@ -17,6 +17,11 @@ class _14EmpresaController extends Controller
         $dato = _14Empresa::get();
         return $dato;
     }
+    public function empresa2()
+    {
+        $dato = _14Empresa::all('id','nombre','descripcion_corta');
+        return $dato;
+    }
 
     /**
      * Show the form for creating a new resource.

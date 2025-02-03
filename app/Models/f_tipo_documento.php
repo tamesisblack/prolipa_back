@@ -29,6 +29,19 @@ class f_tipo_documento extends Model
         return $query->where('tdo_nombre', $tdo_nombre)
                      ->where('tdo_estado', '1')->first();
     }
+    public static function getLetra(int $id): self
+    {
+        try {
+            $tdo = self::findOrFail($id); // Busca el registro o lanza una excepción
+            return $tdo;
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            // Si no se encuentra el registro, lanza una nueva excepción personalizada
+            throw new \Exception("El registro con ID {$id} no fue encontrado.");
+        } catch (\Exception $e) {
+            // Si ocurre cualquier otro error, relanzamos la excepción
+            throw new \Exception("Ocurrió un error al buscar el registro: " . $e->getMessage());
+        }
+    }
     public function scopeUpdateSecuencia($query, $tdo_nombre, $empresa, $secuencial)
     {
         $setEmpresa = '';

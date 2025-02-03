@@ -177,7 +177,10 @@ class CodigosLibrosController extends Controller
          join asignatura on asignatura.idasignatura = libro.asignatura_idasignatura
          WHERE codigoslibros.id_periodo = '$periodo'
          AND codigoslibros.idusuario = ?
-         AND codigoslibros.estado_liquidacion <> 3
+        AND (
+			codigoslibros.estado_liquidacion <> 3
+			OR codigoslibros.quitar_de_reporte = '1'
+			)
          AND codigoslibros.estado <> 2
          ",[$id]);
         if(!empty($codigos_libros)){
@@ -318,6 +321,7 @@ class CodigosLibrosController extends Controller
             $estadoCodigo       = $value->estado;
             $estado_liquidacion = $value->estado_liquidacion;
             $prueba_diagnostica = $value->prueba_diagnostica;
+            $quitar_de_reporte  = $value->quitar_de_reporte;
         }
         //para obtener los datos del estudiante para abrir el ticket
         $datosEstudiante = DB::SELECT("SELECT CONCAT(e.nombres,' ', e.apellidos)
@@ -366,7 +370,8 @@ class CodigosLibrosController extends Controller
             return $data;
         }
         //para mandar los codigos que esten devueltos
-        else if($estado_liquidacion == '3' || $estado_liquidacion == '4'){
+        else if(($estado_liquidacion == '3' || $estado_liquidacion == '4') && $quitar_de_reporte == '0'){
+            //si esta devuelto por yaneth  no mandar ticket
             $data = [
                 'status'            => '4',
                 'codigo'            => $request->codigo,

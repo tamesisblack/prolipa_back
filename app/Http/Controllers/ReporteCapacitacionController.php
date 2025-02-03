@@ -120,12 +120,14 @@ class ReporteCapacitacionController extends Controller
     public function getCapacitaciones($tipo,$estadoCapacitacion,$fecha_from,$fecha_to){
         $query = DB::table('seminarios as s')
         ->selectRaw("CONCAT(u.nombres, ' ', u.apellidos) AS asesor,
+            CONCAT(u_editor.nombres, ' ', u_editor.apellidos) AS editor_nombre,
             s.*,
             pe.descripcion AS cicloEscolar,
             IF(s.estado_institucion_temporal = '1', 'Temporal', 'Prolipa') AS tipoInstitucion,
             IF(s.estado_institucion_temporal = '1', s.nombre_institucion_temporal, i.nombreInstitucion) AS nombreInstitucion
         ")
         ->leftJoin('usuario as u', 's.id_usuario', '=', 'u.idusuario')
+        ->leftJoin('usuario as u_editor', 's.editor_id', '=', 'u_editor.idusuario') // Relación con el editor
         ->leftJoin('institucion as i', 's.id_institucion', '=', 'i.idInstitucion')
         ->leftJoin('periodoescolar as pe', 's.periodo_id', '=', 'pe.idperiodoescolar')
         ->where('estado_capacitacion','=',$estadoCapacitacion)

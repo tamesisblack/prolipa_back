@@ -53,7 +53,7 @@ class _14Producto extends Model
         return $producto;
     }
     //update stock producto con scope
-    public function scopeUpdateStock($query, $codigo, $empresa, $cantidadReserva ,$cantidadEmpresa)
+    public function scopeUpdateStock($query, $codigo, $empresa, $cantidadReserva ,$cantidadEmpresa,$tipo =0)
     {
         // Verifica si el código no está vacío
         if (empty($codigo)) {
@@ -70,14 +70,60 @@ class _14Producto extends Model
         }
         $setEmpresa = '';
         // Determina la columna a actualizar basada en la empresa
-        if ($empresa == 1) {
-            $setEmpresa = 'pro_stock';
-        } elseif ($empresa == 3) {
-            $setEmpresa = 'pro_stockCalmed';
+        if($tipo == 0){
+            if ($empresa == 1) {
+                $setEmpresa = 'pro_stock';
+            } elseif ($empresa == 3) {
+                $setEmpresa = 'pro_stockCalmed';
+            }
+        }
+        //actualizar notas
+        if($tipo == 1)
+        {
+            if ($empresa == 1) {
+                $setEmpresa = 'pro_deposito';
+            } elseif ($empresa == 3) {
+                $setEmpresa = 'pro_depositoCalmed';
+            }
         }
 
         // Aplica la actualización a la consulta
         return $query->where('pro_codigo', $codigo)
                      ->update([ 'pro_reservar' => $cantidadReserva , $setEmpresa => $cantidadEmpresa ]);
+    }
+    public function scopeUpdateStockNoReserva($query, $codigo, $empresa, $cantidadEmpresa,$tipo =0)
+    {
+        // Verifica si el código no está vacío
+        if (empty($codigo)) {
+            throw new \InvalidArgumentException('El código del producto no puede estar vacío.');
+        }
+
+        // Verifica si la cantidad reserva no es un número
+        if (!is_numeric($cantidadEmpresa)) {
+            throw new \InvalidArgumentException('La cantidad empresa debe ser un número.');
+        }
+       
+        $setEmpresa = '';
+        // Determina la columna a actualizar basada en la empresa
+        if($tipo == 0){
+            if ($empresa == 1) {
+                $setEmpresa = 'pro_stock';
+            } elseif ($empresa == 3) {
+                $setEmpresa = 'pro_stockCalmed';
+            }
+        }
+        //actualizar notas
+        if($tipo == 1)
+        {
+            if ($empresa == 1) {
+                $setEmpresa = 'pro_deposito';
+            } elseif ($empresa == 3) {
+                $setEmpresa = 'pro_depositoCalmed';
+            }
+        }
+
+        // Aplica la actualización a la consulta
+        return $query->where('pro_codigo', $codigo)
+                     ->update([ $setEmpresa => $cantidadEmpresa ]);
     }
 }

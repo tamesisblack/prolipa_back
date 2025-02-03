@@ -818,15 +818,15 @@ class ProformaController extends Controller
         return $query;
     }
     public function InfoClienteAgrupado($ca_codigo_agrupado, $id_periodo){
-        $query = DB::SELECT("SELECT DISTINCT usu.*, CONCAT(usu.nombres,' ', usu.apellidos) nombres  
-        FROM f_proforma f 
+        $query = DB::SELECT("SELECT DISTINCT usu.*, CONCAT(usu.nombres,' ', usu.apellidos) nombres
+        FROM f_proforma f
         INNER JOIN f_venta fv ON fv.ven_idproforma = f.prof_id
         LEFT JOIN usuario usu ON fv.ven_cliente  = usu.idusuario
         WHERE f.idPuntoventa = '$ca_codigo_agrupado'
-        AND fv.periodo_id = '$id_periodo'"); 
+        AND fv.periodo_id = '$id_periodo'");
 
         return $query;
-    }    
+    }
 }
 
 

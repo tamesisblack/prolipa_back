@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Models\_14Producto;
 use App\Models\CodigosLibros;
+use App\Models\CodigosLibrosDevolucionHeader;
+use App\Models\CodigosLibrosDevolucionSon;
 use App\Models\CuotasPorCobrar;
 use App\Models\EstudianteMatriculado;
 use App\Models\HistoricoCodigos;
@@ -29,6 +31,8 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Models\Usuario;
 use App\Models\Verificacion;
+use App\Repositories\Codigos\CodigosRepository;
+use App\Repositories\Facturacion\DevolucionRepository;
 use DB;
 use GraphQL\Server\RequestError;
 use Mail;
@@ -46,6 +50,14 @@ class AdminController extends Controller
     use TraitPedidosGeneral;
     use TraitCodigosGeneral;
     use TraitVerificacionGeneral;
+    protected $devolucionRepository;
+    private $codigosRepository;
+    public function __construct( DevolucionRepository  $devolucionRepository,CodigosRepository $codigosRepository)
+    {
+
+        $this->devolucionRepository  = $devolucionRepository;
+        $this->codigosRepository     = $codigosRepository;
+    }
     public function getFilesTest(){
       $query = DB::SELECT("SELECT pd.*,c.convenio_anios
       FROM pedidos_convenios_detalle pd
@@ -467,30 +479,20 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $periodo = $request->periodo;
-        $codigoBusqueda = $request->codigo;
+        $periodo = '22';
         $val_pedido2 = DB::SELECT("SELECT DISTINCT p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
         FROM pedidos_val_area pv
         LEFT JOIN area ar ON  pv.id_area = ar.idarea
         LEFT JOIN series se ON pv.id_serie = se.id_serie
         LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
         LEFT JOIN usuario u ON p.id_asesor = u.idusuario
-        where p.tipo        = '1'
+        where p.tipo        = '0'
         and p.id_periodo  = '$periodo'
         AND p.estado        = '1'
-        AND p.estado_entrega = '2'
-        and p.id_asesor = '4179'
         GROUP BY u.nombres ORDER BY u.nombres
         ");
-        foreach($val_pedido2 as $key11 => $itemAsesor){
-            $libros = $this->getLibrosAsesores($periodo,$itemAsesor->id_asesor);
-            return $libros;
-            //filtrar por el libro_id = 652 los libros
-            $resultado = collect($libros)->where('codigo',$codigoBusqueda)->values();
-            $itemAsesor->libros = $resultado;
-
+         foreach($val_pedido2 as $key11 => $itemAsesor){
             ////ESCUELAS
-
             $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$itemAsesor->id_asesor);
             foreach($pedidos as $key8 => $itempedido){
                 $val_pedido = DB::table('pedidos_val_area as pv')
@@ -535,7 +537,7 @@ class AdminController extends Controller
                             ];
                         }else{
                             //validate que el alcance este cerrado o aprobado
-                            $query = $this->getAlcanceAbiertoXId($alcance_id);
+                            $query = $this->codigosRepository->getAlcanceAbiertoXId($alcance_id);
                             if(count($query) > 0){
                                 $arreglo[$cont] = (object) [
                                     "valor"             => $tr->valor,
@@ -644,103 +646,23 @@ class AdminController extends Controller
                     foreach($result as $key => $item){
                         $result[$key]->subtotal = $item->valor * $item->precio;
                     }
-                    //filtrar por el codigo
-                    $resultadoLibros = collect($result)->where('codigo',$codigoBusqueda)->values();
-                    $itempedido->librosEscuela = $resultadoLibros;
+
                 }
 
             }
+
             $val_pedido2[$key11]->pedidos = $pedidos;
+            // $val_pedido2[$key11]->pedidos = $pedidos;
+            //contar en los pedidos cuantos librosEscuela mayor a 0 hay
+            $contador = 0;
+            foreach($pedidos as $key => $item20){
+                if(count($item20->librosEscuela) > 0){
+                    $contador++;
+                }
+            }
+            $val_pedido2[$key11]->totalLibrosConPedido = $contador;
         }
         return $val_pedido2;
-
-
-
-
-        // try{
-        //     //transaccion
-        //     DB::beginTransaction();
-        //     $query = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-        //     WHERE p.pro_nombre LIKE '%guia%'
-        //     AND p.temporal is null
-        //     limit 500
-        //     ");
-        //     $contador = 0;
-        //     foreach($query as $key => $item){
-        //         $stockReservaAnterior           = $item->pro_reservar;
-        //         $stockAnteriorProlipa           = $item->pro_stock;
-        //         $stockAnteriorCalmed            = $item->pro_stockCalmed;
-        //         $codigoFact                     = $item->pro_codigo;
-        //         $nuevoStockReserva              = 0;
-        //         $nuevoStockCalmed               = 0;
-        //         $nuevoStockProlipa              = 0;
-        //         $stockCalmed                    = 0;
-        //         $stockProlipa                   = 0;
-        //         //============================CALMED================================================
-
-        //         //get stock calmed
-        //         $getStockCalmed                 = DB::SELECT("SELECT * FROM cal_producto WHERE pro_codigo = '$codigoFact'");
-        //         if(empty($getStockCalmed))     { $stockCalmed = 0; }
-        //         else                           { $stockCalmed = $getStockCalmed[0]->pro_stock; }
-        //         //si stock de calmed es 5000 coloco el stockCalmed
-        //         if($stockAnteriorCalmed == 5000){ $nuevoStockCalmed = $stockCalmed; }
-        //         else                            {
-        //             $stockAnteriorCalmed        = 5000 - $stockAnteriorCalmed;
-        //             //si stock de calmed es menor a 5000 voy a restar el stock de calmed con el stock de calmed
-        //             $nuevoStockCalmed           = $stockCalmed - $stockAnteriorCalmed;
-        //         }
-
-        //         //==========================PROLIPA======================================================
-        //         //get stock prolipa
-        //         $getStockProlipa                 = DB::SELECT("SELECT * FROM pro_producto WHERE pro_codigo = '$codigoFact'");
-        //         if(empty($getStockProlipa))      { $stockProlipa = 0; }
-        //         else                             { $stockProlipa = $getStockProlipa[0]->pro_stock; }
-        //             //si stock de prolipa es 5000 coloco el stockProlipa
-        //         if($stockAnteriorProlipa == 5000){ $nuevoStockProlipa = $stockProlipa; }
-        //         else                             {
-        //             $stockAnteriorProlipa        = 5000 - $stockAnteriorProlipa;
-        //             //si stock de prolipa es menor a 5000 voy a restar el stock de prolipa con el stock de prolipa
-        //             $nuevoStockProlipa           = $stockProlipa - $stockAnteriorProlipa;
-        //         }
-        //         //==========================PROCESO======================================================
-        //         $nuevoStockReserva          = $nuevoStockCalmed + $nuevoStockProlipa;
-        //         DB::table('1_4_cal_producto')
-        //         ->where('pro_codigo', $codigoFact)
-        //         ->update([
-        //             'pro_reservar'      => $nuevoStockReserva ,
-        //             "pro_stockCalmed"   => $nuevoStockCalmed,
-        //             "pro_stock"         => $nuevoStockProlipa,
-        //             "temporal"          => 1
-        //         ]);
-        //         $contador++;
-        //     }
-        //     DB::commit();
-        //     return "se actualizo correctamente ".$contador;
-        // }
-        // catch (\Exception $e) {
-        //     DB::rollBack();
-        //     return response()->json([
-        //         'error' => $e->getMessage()
-        //     ], 500);
-        // }
-
-
-
-
-        // $password                           = sha1(md5($request->cedula));
-        // $user                               = new User();
-        // $user->cedula                       = $request->cedula;
-        // $user->nombres                      = $request->nombres;
-        // $user->apellidos                    = $request->apellidos;
-        // $user->name_usuario                 = $request->email;
-        // $user->password                     = $password;
-        // $user->email                        = $request->email;
-        // $user->id_group                     = $request->id_grupo;
-        // $user->institucion_idInstitucion    = $request->institucion;
-        // $user->estado_idEstado              = 1;
-        // $user->idcreadorusuario             = $request->user_created;
-        // $user->telefono                     = $request->telefono;
-        // $user->save();
         return;
         // $clientIP = \Request::getClientIp(true);
         // // $clientIP =  $request->ip();
@@ -911,165 +833,7 @@ class AdminController extends Controller
     }
 
     public function guardarData(Request $request){
-        $periodo = 24;
-        $idasesor = 26087;
-        $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$idasesor);
-        foreach($pedidos as $key8 => $itempedido){
-            $val_pedido = DB::table('pedidos_val_area as pv')
-            ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
-                        p.id_periodo,
-                        CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
-                        se.nombre_serie')
-            ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
-            ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
-            ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
-            ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
-            // ->whereIn('p.id_pedido', $ids)
-            ->where('p.id_pedido',$itempedido->id_pedido)
-            ->where('p.tipo', '0')
-            ->where('p.estado', '1')
-            ->where('p.id_periodo',$periodo)
-            ->groupBy('pv.id')
-            ->get();
-            if(empty($val_pedido)){
-                return $val_pedido;
-            }
-            $arreglo = [];
-            $cont    = 0;
-            //obtener solo los alcances activos
-            foreach($val_pedido as $k => $tr){
-                //Cuando es el pedido original
-                $alcance_id = 0;
-                $alcance_id = $tr->alcance;
-                if($alcance_id == 0){
-                    $arreglo[$cont] =   (object)[
-                        "valor"             => $tr->valor,
-                        "id_area"           => $tr->id_area,
-                        "tipo_val"          => $tr->tipo_val,
-                        "id_serie"          => $tr->id_serie,
-                        "year"              => $tr->year,
-                        "plan_lector"       => $tr->plan_lector,
-                        "id_periodo"        => $tr->id_periodo,
-                        "serieArea"         => $tr->serieArea,
-                        "nombre_serie"      => $tr->nombre_serie,
-                        "alcance"           => $tr->alcance,
-                        "alcance"           => $alcance_id
-                    ];
-                }else{
-                    //validate que el alcance este cerrado o aprobado
-                    $query = $this->getAlcanceAbiertoXId($alcance_id);
-                    if(count($query) > 0){
-                        $arreglo[$cont] = (object) [
-                            "valor"             => $tr->valor,
-                            "id_area"           => $tr->id_area,
-                            "tipo_val"          => $tr->tipo_val,
-                            "id_serie"          => $tr->id_serie,
-                            "year"              => $tr->year,
-                            "plan_lector"       => $tr->plan_lector,
-                            "id_periodo"        => $tr->id_periodo,
-                            "serieArea"         => $tr->serieArea,
-                            "nombre_serie"      => $tr->nombre_serie,
-                            "alcance"           => $tr->alcance,
-                            "alcance"           => $alcance_id
-                        ];
-                    }
-                }
-                $cont++;
-            }
-            //mostrar el arreglo bien
-            $renderSet = [];
-            $renderSet = array_values($arreglo);
-            if(count($renderSet) == 0){
-                return $renderSet;
-            }
-            $datos = [];
-            $contador = 0;
-            //return $renderSet;
-            foreach($renderSet as $key => $item){
-                $valores = [];
-                //plan lector
-                if($item->plan_lector > 0 ){
-                    $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                    (
-                        SELECT f.pvp AS precio
-                        FROM pedidos_formato f
-                        WHERE f.id_serie = '6'
-                        AND f.id_area = '69'
-                        AND f.id_libro = '$item->plan_lector'
-                        AND f.id_periodo = '$item->id_periodo'
-                    )as precio, ls.codigo_liquidacion,ls.version,ls.year
-                    FROM libro l
-                    left join libros_series ls  on ls.idLibro = l.idlibro
-                    inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                    WHERE l.idlibro = '$item->plan_lector'
-                    ");
-                    $valores = $getPlanlector;
-                }else{
-                    $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                    (
-                        SELECT f.pvp AS precio
-                        FROM pedidos_formato f
-                        WHERE f.id_serie = ls.id_serie
-                        AND f.id_area = a.area_idarea
-                        AND f.id_periodo = '$item->id_periodo'
-                    )as precio
-                    FROM libros_series ls
-                    LEFT JOIN libro l ON ls.idLibro = l.idlibro
-                    inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                    LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-                    WHERE ls.id_serie = '$item->id_serie'
-                    AND a.area_idarea  = '$item->id_area'
-                    AND l.Estado_idEstado = '1'
-                    AND a.estado = '1'
-                    AND ls.year = '$item->year'
-                    LIMIT 1
-                    ");
-                    $valores = $getLibros;
-                }
-                $datos[$contador] = (Object)[
-                    "id_area"           => $item->id_area,
-                    "valor"             => $item->valor,
-                    // "tipo_val"          => $item->tipo_val,
-                    "id_serie"          => $item->id_serie,
-                    // "year"              => $item->year,
-                    // "anio"              => $valores[0]->year,
-                    // "version"           => $valores[0]->version,
-                    // "plan_lector"       => $item->plan_lector,
-                    "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
-                    "libro_id"          => $valores[0]->idlibro,
-                    "nombrelibro"       => $valores[0]->nombrelibro,
-                    "nombre_serie"      => $item->nombre_serie,
-                    "precio"            => $valores[0]->precio,
-                    "codigo"            => $valores[0]->codigo_liquidacion,
-                    "stock"             => $valores[0]->pro_reservar,
-                    "descripcion"       => $valores[0]->descripcionlibro,
-                ];
-                $contador++;
-            }
-               //si el codigo de liquidacion se repite sumar en el valor
-            // Crear un array asociativo para agrupar por codigo_liquidacion
-            $grouped = [];
 
-            foreach ($datos as $item) {
-                $codigo = $item->codigo;
-
-                if (!isset($grouped[$codigo])) {
-                    $grouped[$codigo] = $item;
-                } else {
-                    $grouped[$codigo]->valor += $item->valor;
-                }
-            }
-
-            // Convertir el array asociativo de nuevo a un array indexado
-            $result = array_values($grouped);
-            //subtotal
-            foreach($result as $key => $item){
-                $result[$key]->subtotal = $item->valor * $item->precio;
-            }
-            $itempedido->libros = $result;
-        }
-
-        return $pedidos;
         // set_time_limit(6000);
         // ini_set('max_execution_time', 600000);
 
@@ -1112,27 +876,28 @@ class AdminController extends Controller
             $contadorProlipa = 0;
             $contadorCalmed  = 0;
 
-            $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.pro_nombre  LIKE '%sina%';
-            ");
-            //PROLIPA
             // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // WHERE p.id_perseo_prolipa_produccion IS NULL
-            // LIMIT 90
+            // WHERE p.pro_codigo  = 'IKAD';
             // ");
-            foreach($queryProlipa as $key => $item){
-                $formData = [
-                    "productocodigo"=> $item->pro_codigo,
-                ];
-                $url                = "productos_consulta";
-                $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
-                $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
-                //contadorProlipa + getContador
-                $contadorProlipa    = $contadorProlipa + $getContador;
-            }
+            // //PROLIPA
+            // // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+            // // WHERE p.id_perseo_prolipa_produccion IS NULL
+            // // LIMIT 90
+            // // ");
+            // foreach($queryProlipa as $key => $item){
+            //     $formData = [
+            //         "productocodigo"=> $item->pro_codigo,
+            //     ];
+            //     $url                = "productos_consulta";
+            //     $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
+            //     return $processProlipa;
+            //     $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
+            //     //contadorProlipa + getContador
+            //     $contadorProlipa    = $contadorProlipa + $getContador;
+            // }
             //CALMED
             $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.pro_nombre  LIKE '%sina%';
+            WHERE p.pro_codigo  = 'SMLL2';
             ");
             // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
             // WHERE p.id_perseo_calmed_produccion IS NULL
@@ -1143,7 +908,8 @@ class AdminController extends Controller
                     "productocodigo"=> $item->pro_codigo,
                 ];
                 $url                = "productos_consulta";
-                $processCalmed      = $this->tr_PerseoPost($url, $formData,3);
+                $processCalmed      = $this->tr_PerseoPost($url, $formData,1);
+                return $processCalmed;
                 $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
                 //contadorCalmed + getContador
                 $contadorCalmed     = $contadorCalmed + $getContador;
@@ -1537,4 +1303,73 @@ class AdminController extends Controller
         $resultado =_14Producto::where('pro_codigo',$producto)->get();
         return $resultado;
     }
+
+    // METODOS JEYSON INICIO
+    public function Post_ActualizarPorcentaje_Venta(Request $request)
+    {
+        // Iniciar una transacción para garantizar la integridad de los datos
+        DB::beginTransaction();
+
+        try {
+            // Buscar el registro de venta basado en id_empresa y ven_codigo
+            $venta = DB::table('f_venta')
+                    ->where('id_empresa', $request->id_empresa)
+                    ->where('ven_codigo', $request->ven_codigo)
+                    ->first();
+
+            if (!$venta) {
+                // Si no se encuentra el registro, devolver un error
+                return response()->json(["status" => "0", 'message' => 'Venta no encontrada'], 404);
+            }
+
+            // Buscar la proforma asociada a la venta
+            $proforma = DB::table('f_proforma')
+            ->where('emp_id', $venta->id_empresa)
+            ->where('prof_id', $venta->ven_idproforma)
+            ->first();
+
+            if (!$proforma) {
+                // Si no se encuentra la proforma, devolver un error
+                return response()->json(["status" => "0", 'message' => 'Proforma no encontrada'], 404);
+            }
+
+            // Actualizar el campo pro_des_por en la tabla f_proforma
+            DB::table('f_proforma')
+                ->where('emp_id', $venta->id_empresa)
+                ->where('prof_id', $venta->ven_idproforma)
+                ->update(['pro_des_por' => $request->ven_desc_por]);
+
+            // Actualizar el campo ven_desc_por en la tabla f_venta
+            DB::table('f_venta')
+                ->where('id_empresa', $request->id_empresa)
+                ->where('ven_codigo', $request->ven_codigo)
+                ->update(['ven_desc_por' => $request->ven_desc_por]);
+
+            // Llamar a ActualizarPorcentajeRepository si es necesario
+            // DB::rollback();
+            $this->ActualizarPorcentajeRepository($request);
+
+            // Confirmar la transacción
+            DB::commit();
+
+            return response()->json(["status" => "1", 'message' => 'Registro actualizado correctamente']);
+        } catch (\Exception $e) {
+            // En caso de error, revertir la transacción
+            DB::rollback();
+            return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
+        }
+    }
+    public function ActualizarPorcentajeRepository(Request $request)
+    {
+        // Obtener los valores de la solicitud
+        $codigo_proforma = $request->ven_codigo;
+        $codigo_empresa = $request->id_empresa;
+
+        // Llamar al repositorio para actualizar los valores
+        $this->devolucionRepository->updateValoresDocumentoF_venta($codigo_proforma, $codigo_empresa);
+        $this->devolucionRepository->updateValoresDocumentoF_proforma($codigo_proforma, $codigo_empresa);
+
+        return "se actualizó";
+    }
+    // METODOS JEYSON FIN
 }

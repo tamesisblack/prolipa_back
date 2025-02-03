@@ -436,6 +436,8 @@ class PedidosPagosController extends Controller
         if($EstadoPago == 2) { return ["status" => "0", "message" => "El pago ha sido desactivado anteriormente"]; }
         //MARCAR LA SOLICITUD DE PAGO COMO PAGADO
         $info->estado = 1;
+        $info->fecha_cierre = date('Y-m-d H:i:s');
+        $info->user_cierre  = $request->user_created;
         $info->save();
         if($info){
             //GUARDAR EN HISTORICO EL PAGO

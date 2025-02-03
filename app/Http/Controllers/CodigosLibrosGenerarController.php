@@ -735,6 +735,8 @@ class CodigosLibrosGenerarController extends Controller
 
     public function hist_codigos($id)
     {
+        set_time_limit(6000000);
+        ini_set('max_execution_time', 6000000);
         $registro = CodigosLibros::select('codigoslibros.serie','codigoslibros.libro','codigoslibros.fecha_create','codigoslibros.updated_at as actualizado','codigoslibros.idusuario', 'usuario.nombres','usuario.apellidos', 'periodoescolar.periodoescolar', 'periodoescolar.descripcion as periododescripcion', 'institucion.nombreInstitucion', 'ciudad.nombre as nombre_ciudad' )
         ->leftjoin('usuario','codigoslibros.idusuario','=','usuario.idusuario')
         ->leftjoin('libro','codigoslibros.libro_idlibro', '=', 'libro.idlibro')
@@ -762,7 +764,7 @@ class CodigosLibrosGenerarController extends Controller
             AND d.estado = '1'
             ORDER BY d.id DESC
             LIMIT 1
-        ) as devolucionInstitucion
+        ) as devolucionInstitucion, h.tipo_tabla
         FROM hist_codlibros h
         LEFT JOIN institucion i ON h.usuario_editor = i.idInstitucion
         LEFT JOIN usuario u ON h.idInstitucion = u.idusuario

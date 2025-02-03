@@ -6,15 +6,16 @@ use App\Models\f_movimientos_detalle_producto;
 use App\Models\f_movimientos_producto;
 use App\Models\f_tipo_documento;
 use App\Models\_14Producto;
-use DB;
-use App\Http\Controllers\Controller; 
+use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
 class f_MovimientosProductoController extends Controller
 {
     public function Get_Movimientos_NO_ProductoContador(Request $request){
         $valormasuno = $request->conteo+1;
-        $query = DB::SELECT("SELECT fmp_id FROM f_movimientos_producto where fmp_id like 'MINO%' LIMIT $valormasuno");
+        // $query = DB::SELECT("SELECT fmp_id FROM f_movimientos_producto where fmp_id like 'MINO%' ORDER BY created_at DESC LIMIT $valormasuno");
+        $query = DB::SELECT("SELECT fmp_id FROM f_movimientos_producto where (fmp_id LIKE 'MINO%' OR fmp_id LIKE 'MENO%')  ORDER BY created_at DESC LIMIT $valormasuno");
         $conteogeneral = count($query);
         if($conteogeneral<$valormasuno){
             return response()->json(['mensaje' => 'data_menor', 'conteo' => $conteogeneral]);
@@ -22,23 +23,24 @@ class f_MovimientosProductoController extends Controller
             return response()->json(['mensaje' => 'data_igual', 'conteo' => $conteogeneral]);
         }
     }
-    
+
     public function Get_Movimientos_NO_Producto(){
         $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
-        t.created_at as dcreatedmov,t.fmp_id as codigoanterior, p.* 
-        FROM f_movimientos_producto t 
+        t.created_at as dcreatedmov,t.fmp_id as codigoanterior, p.*
+        FROM f_movimientos_producto t
         INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
         INNER JOIN usuario u ON t.user_created = u.idusuario
         LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
-        WHERE t.fmp_id like 'MINO%'
+        -- WHERE t.fmp_id like 'MINO%'
+        WHERE (t.fmp_id LIKE 'MINO%' OR t.fmp_id LIKE 'MENO%')
         ORDER BY t.created_at ASC");
         return $query;
     }
 
     public function Get_Movimientos_NO_ProductoreporteEgreso(Request $request){
         $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
-        t.created_at as dcreatedmov,t.fmp_id as codigoanterior, p.* 
-        FROM f_movimientos_producto t 
+        t.created_at as dcreatedmov,t.fmp_id as codigoanterior, p.*
+        FROM f_movimientos_producto t
         INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
         INNER JOIN usuario u ON t.user_created = u.idusuario
         LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
@@ -49,9 +51,9 @@ class f_MovimientosProductoController extends Controller
 
     public function GetMovimientos_NO_Producto_xfiltro(Request $request){
         if ($request->busqueda == 'undefined' || $request->busqueda == 'codigomovimiento' || $request->busqueda == '' || $request->busqueda == null) {
-            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov, 
-            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.* 
-            FROM f_movimientos_producto t 
+            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+            FROM f_movimientos_producto t
             INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
             INNER JOIN usuario u ON t.user_created = u.idusuario
             LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
@@ -61,9 +63,9 @@ class f_MovimientosProductoController extends Controller
             return $query;
         }
         if ($request->busqueda == 'periodomovimiento') {
-            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov, 
-            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*  
-            FROM f_movimientos_producto t 
+            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+            FROM f_movimientos_producto t
             INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
             INNER JOIN usuario u ON t.user_created = u.idusuario
             LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
@@ -72,9 +74,9 @@ class f_MovimientosProductoController extends Controller
             ");
             return $query;
         }if ($request->busqueda == 'EstadoMovimiento') {
-            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov, 
-            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*  
-            FROM f_movimientos_producto t 
+            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+            FROM f_movimientos_producto t
             INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
             INNER JOIN usuario u ON t.user_created = u.idusuario
             LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
@@ -88,13 +90,15 @@ class f_MovimientosProductoController extends Controller
     public function Post_Registrar_modificar_movimiento_producto(Request $request)
     {
         // Buscar el movimientoproducto por su fmp_id o crear uno nuevo
-        $idtipoocumento = 6;
+        $idtipoocumento = $request->tipo_ingreso;
         $movimientoproducto = f_movimientos_producto::firstOrNew(['fmp_id' => $request->fmp_id]);
         // Asignar los demás datos del movimientoproducto
         $movimientoproducto->id_periodo = $request->id_periodo;
         $movimientoproducto->fmp_estado = $request->fmp_estado;
+        $movimientoproducto->prov_codigo = $request->prov_codigo;
+        $movimientoproducto->observacion = $request->observacion;
 
-        
+
         // Verificar si es un nuevo registro o una actualización
         if ($movimientoproducto->exists) {
             // Si ya existe, omitir el campo user_created para evitar que se establezca en null
@@ -110,10 +114,10 @@ class f_MovimientosProductoController extends Controller
             $tipo_doc->tdo_secuencial_calmed = $request->secuencialconteo;
             $tipo_doc->save();
         }
-    
+
         // Verificar si el producto se guardó correctamente
         if ($movimientoproducto->wasRecentlyCreated || $movimientoproducto->wasChanged()) {
-            return "Se guardó correctamente";
+            return $movimientoproducto;
         } else {
             return "No se pudo guardar/actualizar";
         }
@@ -133,7 +137,7 @@ class f_MovimientosProductoController extends Controller
         $movimientoegreso->fmp_cantidad_total = $request->fmp_cantidad_total;
         $movimientoegreso->prov_codigo = $request->prov_codigo;
 
-        
+
         // Verificar si es un nuevo registro o una actualización
         if ($movimientoegreso->exists) {
             // Si ya existe, omitir el campo user_created para evitar que se establezca en null
@@ -154,7 +158,7 @@ class f_MovimientosProductoController extends Controller
         $movimientoingreso = f_movimientos_producto::findOrFail($movimientoegreso->fmp_id_referencia);
         $movimientoingreso->fmp_estado = $fmp_estado2;
         $movimientoingreso->save();
-    
+
         // Verificar si el producto se guardó correctamente
         if ($movimientoegreso->wasRecentlyCreated || $movimientoegreso->wasChanged()) {
             return "Se guardó correctamente";

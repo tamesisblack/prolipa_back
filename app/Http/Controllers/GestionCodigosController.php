@@ -141,11 +141,14 @@ class GestionCodigosController extends Controller
             if($request->chkBc_Venta_estado             == '1') $codigo->venta_estado               = $request->venta_estado;
             if($request->chkBc_codigo_union             == '1') $codigo->codigo_union               = $request->codigo_union;
             if($request->chkBc_liquidado_regalado       == '1') $codigo->liquidado_regalado         = $request->liquidado_regalado;
+            if($request->chkBc_codigo_proforma          == '1') $codigo->codigo_proforma            = $request->codigo_proforma ;
+            if($request->chkBc_proforma_empresa         == '1') $codigo->proforma_empresa           = $request->proforma_empresa;
             $codigo->save();
             if($codigo){
                 $contador++;
+                // $new_values = $codigo->getAttributes(); // Obtén los nuevos valores
                 //Guardar en el historico
-                $this->GuardarEnHistorico($request->user_created,$request->institucion_id,$request->periodo_id,$item->codigo,$request->user_created,$comentario,$old_values,$codigo);
+                $this->GuardarEnHistorico($request->user_created,$request->institucion_id,$request->periodo_id,$item->codigo,$request->user_created,$comentario,$old_values,$codigo,json_encode($codigo->getAttributes()));
             }
         }
         return [

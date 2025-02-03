@@ -17,7 +17,12 @@ class DetalleVentas extends Model
         'pro_codigo',
         'det_ven_cantidad',
         'det_ven_valor_u',
-        'det_ven_cantidad_real',
+        'det_ven_cantidad_despacho',
+        'idProforma',
+        'det_ven_dev',
+        'det_cant_intercambio',
+        'doc_intercambio',
+        'detalle_notaCreditInterna',
     ];
 	public $timestamps = false;
    /**

@@ -58,7 +58,7 @@ trait TraitCodigosGeneral{
         IF(c.prueba_diagnostica ='1', 'Prueba de diagnóstico','Código normal') as tipoCodigo,
         c.porcentaje_descuento,  c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,
         c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma, ls.codigo_liquidacion,
-        CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo
+        CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo, c.codigo_combo, c.documento_devolucion, c.plus
         FROM codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN usuario ucr ON c.idusuario_creador_codigo = ucr.idusuario
@@ -122,7 +122,7 @@ trait TraitCodigosGeneral{
         p.periodoescolar as periodo,
         pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
         c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma,
-        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo'
+        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus'
         ))
         ->leftJoin('usuario as  u',         'c.idusuario',                  'u.idusuario')
         ->leftJoin('usuario as  ase',       'c.asesor_id',                  'ase.idusuario')
@@ -142,6 +142,10 @@ trait TraitCodigosGeneral{
         if($busqueda == 3) {  $resultado->where('c.codigo_paquete', '=', $codigo)->where('prueba_diagnostica','0'); }
         //todos los codigos de un paquete
         if($busqueda == 4) {  $resultado->where('c.codigo_paquete', '=', $codigo); }
+        //por combo solo codigos de activacion
+        if($busqueda == 5) {  $resultado->where('c.codigo_combo', '=', $codigo)->where('prueba_diagnostica','0'); }
+        //todos los codigos de un combo
+        if($busqueda == 6) {  $resultado->where('c.codigo_combo', '=', $codigo); }
         $consulta = $resultado->get();
         if(empty($consulta)){
             return $consulta;
@@ -207,9 +211,12 @@ trait TraitCodigosGeneral{
                 "codigo_proforma"               => $item->codigo_proforma,
                 "proforma_empresa"              => $item->proforma_empresa,
                 "codigo_liquidacion"            => $item->codigo_liquidacion,
-                'devuelto_proforma'             => $item->devuelto_proforma,
                 "asesor"                        => $item->asesor,
-                'combo'                         => $item->combo
+                'combo'                         => $item->combo,
+                'codigo_combo'                  => $item->codigo_combo,
+                'documento_devolucion'          => $item->documento_devolucion,
+                'devuelto_proforma'             => $item->devuelto_proforma,
+                'plus'                          => $item->plus
             ];
         }
         return $datos;
@@ -350,23 +357,52 @@ trait TraitCodigosGeneral{
         $historico->save();
         return "Guardado en historico";
     }
-    public function tr_GuardarDevolucionHijos($id_devolucion,$codigo,$id_cliente,$combo,$factura,$documento,$id_empresa,$tipo_venta,$id_periodo,$prueba_diagnostico,$codigo_union,$id_libro,$codigo_paquete){
-        $devolucionH                                = new CodigosLibrosDevolucionSon();
-        $devolucionH->codigoslibros_devolucion_id   = $id_devolucion;
-        $devolucionH->codigo                        = $codigo;
-        $devolucionH->id_cliente                    = $id_cliente;
-        $devolucionH->combo                         = $combo;
-        $devolucionH->factura                       = $factura;
-        $devolucionH->documento                     = $documento;
-        $devolucionH->id_empresa                    = $id_empresa;
-        $devolucionH->tipo_venta                    = $tipo_venta;
-        $devolucionH->id_periodo                    = $id_periodo;
-        $devolucionH->prueba_diagnostico            = $prueba_diagnostico;
-        $devolucionH->codigo_union                  = $codigo_union;
-        $devolucionH->codigo_paquete                = $codigo_paquete;
-        $devolucionH->id_libro                      = $id_libro;
-        $devolucionH->save();
-        return "Guardado en devolucion hijo";
+    public function GuardarEnHistoricoTablaSon ($id_usuario,$institucion_id,$periodo_id,$codigo,$usuario_editor,$comentario,$old_values,$new_values,$devueltos_liquidados=null,$verificacion_liquidada=null){
+        $historico = new HistoricoCodigos();
+        $historico->id_usuario              =  $id_usuario;
+        $historico->usuario_editor          =  $institucion_id;
+        $historico->id_periodo              =  $periodo_id;
+        $historico->codigo_libro            =  $codigo;
+        $historico->idInstitucion           =  $usuario_editor;
+        $historico->observacion             =  $comentario;
+        $historico->old_values              =  $old_values;
+        $historico->new_values              =  $new_values;
+        $historico->devueltos_liquidados    = $devueltos_liquidados;
+        $historico->verificacion_liquidada  = $verificacion_liquidada;
+        $historico->tipo_tabla              = 1;
+        $historico->save();
+        return "Guardado en historico";
+    }
+    public function tr_GuardarDevolucionHijos($id_devolucion,$codigo,$pro_codigo,$id_cliente,$combo,$factura,$documento,$id_empresa,$tipo_venta,$id_periodo,$prueba_diagnostico,$codigo_union,$id_libro,$codigo_paquete,$estado_liquidacion,$regalado_liquidado,$precio,$tipo_importacion,$estado_codigo,$codigo_combo){
+        //validar que si el codigo ya existe no guardar
+        $validate = CodigosLibrosDevolucionSon::where('codigo',$codigo)->where('id_cliente',$id_cliente)->where('codigoslibros_devolucion_id',$id_devolucion)->first();
+        if($validate){
+            return "Codigo ya existe";
+        }else{
+            $devolucionH                                = new CodigosLibrosDevolucionSon();
+            $devolucionH->codigoslibros_devolucion_id   = $id_devolucion;
+            $devolucionH->codigo                        = $codigo;
+            $devolucionH->pro_codigo                    = $pro_codigo;
+            $devolucionH->id_cliente                    = $id_cliente;
+            $devolucionH->combo                         = $combo;
+            $devolucionH->factura                       = $factura;
+            $devolucionH->documento                     = $documento;
+            $devolucionH->id_empresa                    = $id_empresa;
+            $devolucionH->tipo_venta                    = $tipo_venta;
+            $devolucionH->id_periodo                    = $id_periodo;
+            $devolucionH->prueba_diagnostico            = $prueba_diagnostico;
+            $devolucionH->codigo_union                  = $codigo_union;
+            $devolucionH->codigo_paquete                = $codigo_paquete;
+            $devolucionH->id_libro                      = $id_libro;
+            $devolucionH->documento_estado_liquidacion  = $estado_liquidacion;
+            $devolucionH->documento_regalado_liquidado  = $regalado_liquidado;
+            $devolucionH->precio                        = $precio;
+            $devolucionH->tipo_importacion              = $tipo_importacion;
+            $devolucionH->estado_codigo                 = $estado_codigo;
+            $devolucionH->codigo_combo                  = $codigo_combo;
+            $devolucionH->save();
+            return "Guardado en devolucion hijo";
+        }
     }
     public function tr_updateDevolucionHijos($codigo,$estado,$id_devolucion){
         $getCodigo = CodigosLibrosDevolucionSon::where('codigo',$codigo)

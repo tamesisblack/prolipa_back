@@ -22,6 +22,7 @@ class VerificacionDescuentoController extends Controller
     {
         if($request->getListadoDescuentos)      { return $this->getListadoDescuentos($request->contrato,$request->num_verificacion); }
         if($request->getDescuentosVerificacion) { return $this->getDescuentosVerificacion($request); }
+        if($request->getDescuentosVerificacion_new) { return $this->getDescuentosVerificacion_new($request); }
         if($request->updateValorVerificacion)   { return $this->updateValorVerificacion($request); }
         if($request->limpiarDescuentos)         { return $this->limpiarDescuentos(); }
     }
@@ -365,4 +366,64 @@ class VerificacionDescuentoController extends Controller
         $descuento->total_descuento = $total_descuento;
         $descuento->save();
     }
+
+    //INICIO METODOS JEYSON
+    public function getDescuentosVerificacion_new($request){
+        
+        $verificaciones_descuentos_id   = $request->verificaciones_descuentos_id;
+        $contrato                       = $request->contrato;
+        $periodo                        = $request->periodo_id;
+        $contador                       = 0;
+        $detalles = DB::SELECT("SELECT vl.* ,ls.idLibro AS libro_id,
+            ls.id_serie,t.id_periodo,a.area_idarea,vd.tipo,ls.year
+            FROM verificaciones_descuentos_detalle vl
+            LEFT JOIN libros_series ls ON vl.codigo = ls.codigo_liquidacion
+            LEFT JOIN libro l ON ls.idLibro = l.idlibro
+            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+            LEFT JOIN temporadas t ON vl.contrato = t.contrato
+            LEFT JOIN verificaciones_descuentos vd ON vd.id = vl.verificaciones_descuentos_id
+            WHERE vl.verificaciones_descuentos_id = ?
+            AND vl.contrato                       = ?
+        ",[$verificaciones_descuentos_id,$contrato]);
+        // return $detalles;
+         $datos = [];
+        foreach($detalles as $key => $item){
+            $pfn_pvp_result = (float) DB::table('pedidos_formato_new')
+            ->where('idperiodoescolar', $periodo)
+            ->where('idlibro', $item->libro_id)
+            ->value('pfn_pvp');
+            //libro
+            if($item->tipo == 1){
+                $precio = $item->precio;
+            }
+            //regalado
+            else{
+                $precio = $pfn_pvp_result;
+            }
+
+            $datos[$contador] = [
+                "detalle_id"            => $item->id,
+                "verificacion_id"       => $item->num_verificacion,
+                "contrato"              => $contrato,
+                "codigo"                => $item->codigo,
+                "codigo_libro"          => $item->codigo_libro,
+                "cantidad"              => $item->cantidad,
+                "nombre_libro"          => $item->nombre_libro,
+                "libro_id"              => $item->libro_id,
+                "id_serie"              => $item->id_serie,
+                "id_periodo"            => $periodo,
+                "precio"                => $precio,
+                "valor"                 => $item->cantidad * $precio,
+                "descripcion"           => $item->descripcion,
+                "cantidad_descontar"    => $item->cantidad_descontar,
+                "porcentaje_descuento"  => $item->porcentaje_descuento,
+                "total_descontar"       => $item->total_descontar,
+                "tipo_calculo"          => $item->tipo_calculo,
+                "verificaciones_descuentos_id" => $item->verificaciones_descuentos_id
+            ];
+            $contador++;
+        }
+        return $datos;
+    }
+    //FIN METODOS JEYSON
 }

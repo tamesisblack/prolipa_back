@@ -194,7 +194,8 @@ class InstitucionController extends Controller
         $cambio->estado_idEstado                = $request->estado;
         $cambio->aplica_matricula               = $request->aplica_matricula;
         $cambio->punto_venta                    = $request->punto_venta;
-        $cambio->zona_id                        = $request->zona_id;
+        // Validación para enviar NULL si está vacío o es "null"
+        $cambio->zona_id = $request->zona_id === '' || $request->zona_id === 'null' ? null : $request->zona_id;
         $cambio->asesor_id                      = $request->asesor_id;
         $cambio->maximo_porcentaje_autorizado   = $request->maximo_porcentaje_autorizado;
         $cambio->evaluacion_personalizada       = $request->evaluacion_personalizada;
@@ -499,7 +500,7 @@ class InstitucionController extends Controller
             u.apellidos AS apellido_asesor, i.fecha_registro, r.nombreregion, i.codigo_institucion_milton,
             ic.estado as EstadoConfiguracion, ic.periodo_configurado,i.codigo_mitlon_coincidencias,
             pec.periodoescolar as periodoNombreConfigurado,i.vendedorInstitucion,u.iniciales,i.cantidad_cambio_ventana_evaluacion,
-            i.punto_venta
+            i.punto_venta,i.maximo_porcentaje_autorizado, i.ruc, i.ifcodigoEvaluacion
             FROM institucion i
             LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
             LEFT JOIN region r ON i.region_idregion = r.idregion
@@ -517,7 +518,7 @@ class InstitucionController extends Controller
             u.apellidos AS apellido_asesor, i.fecha_registro, r.nombreregion, i.codigo_institucion_milton,
             ic.estado as EstadoConfiguracion, ic.periodo_configurado,i.codigo_mitlon_coincidencias,
             pec.periodoescolar as periodoNombreConfigurado,i.vendedorInstitucion,u.iniciales,i.cantidad_cambio_ventana_evaluacion,
-            i.punto_venta
+            i.punto_venta,i.maximo_porcentaje_autorizado, i.ruc, i.ifcodigoEvaluacion
             FROM institucion i
             LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
             LEFT JOIN region r ON i.region_idregion = r.idregion
@@ -573,7 +574,10 @@ class InstitucionController extends Controller
                         "iniciales"             => $item->iniciales,
                         "region"                => $item->region_idregion,
                         "cantidad_cambio_ventana_evaluacion" => $item->cantidad_cambio_ventana_evaluacion,
-                        "punto_venta" => $item->punto_venta
+                        "punto_venta" => $item->punto_venta,
+                        "maximo_porcentaje_autorizado" => $item->maximo_porcentaje_autorizado,
+                        "ruc" => $item->ruc,
+                        "ifcodigoEvaluacion" => $item->ifcodigoEvaluacion
                     ];
                 }else{
                     $datos[$key]=[
@@ -600,7 +604,10 @@ class InstitucionController extends Controller
                         "iniciales"             => $item->iniciales,
                         "region"                => $item->region_idregion,
                         "cantidad_cambio_ventana_evaluacion" => $item->cantidad_cambio_ventana_evaluacion,
-                        "punto_venta" => $item->punto_venta
+                        "punto_venta" => $item->punto_venta,
+                        "maximo_porcentaje_autorizado" => $item->maximo_porcentaje_autorizado,
+                        "ruc" => $item->ruc,
+                        "ifcodigoEvaluacion" => $item->ifcodigoEvaluacion
                     ];
                 }
             }
@@ -660,6 +667,7 @@ class InstitucionController extends Controller
            AND c.estado <> '2'
            ORDER BY c.id DESC
             ");
+            return $todoAgenda;
             if(count($todoAgenda) == 0){
                return [];
             }else{
@@ -668,12 +676,21 @@ class InstitucionController extends Controller
                     if($item->estado_institucion_temporal == '1'){
                         $item->userAsesor = $item->asesor;
                     }else{
-                        $getInstitucion = Institucion::Where('idInstitucion',$item->institucion_id)->with('asesor')->get();
+                        $getInstitucion = DB::SELECT("SELECT u.nombres,u.apellidos  FROM institucion i
+                        LEFT JOIN usuario u ON i.asesor_id = u.idusuario
+                        WHERE i.idInstitucion = '$item->institucion_id'
+                        ");
                         if(count($getInstitucion) > 0){
-                            $item->userAsesor = $getInstitucion[0]->asesor->nombres." ".$getInstitucion[0]->asesor->apellidos;
+                            $item->userAsesor = $getInstitucion[0]->nombres." ".$getInstitucion[0]->apellidos;
                         }else{
-                            $item->userAsesor = "";
+                            $item->userAsesor = "No se encontro asesor";
                         }
+                        // $getInstitucion = Institucion::Where('idInstitucion',$item->institucion_id)->with('asesor')->get();
+                        // if(count($getInstitucion) > 0){
+                        //     $item->userAsesor = $getInstitucion[0]->asesor->nombres." ".$getInstitucion[0]->asesor->apellidos;
+                        // }else{
+                        //     $item->userAsesor = "";
+                        // }
                     }
                 })->chunk(10)->flatten();
                 return $data;
@@ -812,6 +829,155 @@ class InstitucionController extends Controller
 
         return $lista;
     }
+
+    public function getinstitucion_libros(Request $request)
+    {
+        $lista = DB::SELECT("SELECT l.*, ls.nombre FROM librosinstituciones_detalle l
+        INNER JOIN librosinstituciones li ON li.li_id = l.li_id
+        LEFT JOIN libros_series ls ON l.lid_idLibro= ls.idLibro
+        WHERE li.li_idInstitucion = '$request->institucion'
+        AND li.li_periodo = '$request->periodo' ");
+        return $lista;
+    }
+
+    public function getInfoinstitucion_libros(Request $request)
+    {
+        $lista = DB::SELECT("SELECT li.* FROM librosinstituciones li
+        WHERE li.li_idInstitucion = '$request->institucion'
+        AND li.li_periodo = '$request->periodo' ");
+        return $lista;
+    }
+
+    public function guardarLibrosInstitucion(Request $request)
+    {
+        // Validación de los datos recibidos
+        $request->validate([
+            'codigo_institucion' => 'required|integer',
+            'periodo_id' => 'required|integer',
+            'libros' => 'required|array',
+            'libros.*.idlibro' => 'required|integer',
+            'libros.*.codigo' => 'required|string',
+            'libros.*.nombrelibro' => 'required|string',
+        ]);
+
+        // Iniciar la transacción
+        DB::beginTransaction();
+
+        try {
+            // Verificar si ya existe un registro en librosinstituciones con los mismos valores
+            $existingRecord = DB::table('librosinstituciones')
+                ->where('li_idInstitucion', $request->codigo_institucion)
+                ->where('li_periodo', $request->periodo_id)
+                ->first();
+
+            if ($existingRecord) {
+                // Si ya existe, obtenemos el ID de la institución
+                $librosInstitucionId = $existingRecord->li_id;
+
+                  // Actualizamos los campos 'li_codigo' y 'expires_at' en caso de que ya exista el registro
+                DB::table('librosinstituciones')
+                ->where('li_id', $librosInstitucionId)
+                ->update([
+                    'li_codigo' => $request->codigo,
+                    'li_url' => $request->url,
+                    'expires_at' => $request->expires,
+                ]);
+
+                // Verificar los libros que ya están asociados a esta institución
+                $existingBooks = DB::table('librosinstituciones_detalle')
+                    ->where('li_id', $librosInstitucionId)
+                    ->pluck('lid_producto'); // Traemos solo los códigos de productos existentes
+
+                // Primero, eliminar los libros que ya no están en el registro
+                $booksToDelete = $existingBooks->diff(collect(array_column($request->libros, 'codigo')));
+
+                if ($booksToDelete->isNotEmpty()) {
+                    DB::table('librosinstituciones_detalle')
+                        ->where('li_id', $librosInstitucionId)
+                        ->whereIn('lid_producto', $booksToDelete->toArray())
+                        ->delete();
+                }
+
+                // Insertar los nuevos libros que no están asociados
+                foreach ($request->libros as $libro) {
+                    // Verificar si este libro ya existe en los detalles
+                    if (!in_array($libro['codigo'], $existingBooks->toArray())) {
+                        // Insertamos solo los nuevos detalles
+                        DB::table('librosinstituciones_detalle')->insert([
+                            'li_id' => $librosInstitucionId, // Usar el ID de la institución existente
+                            'lid_idLibro' => $libro['idlibro'],
+                            'lid_producto' => $libro['codigo'],
+                        ]);
+                    }
+                }
+
+                // Confirmar transacción si todo es correcto
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Detalles actualizados correctamente.',
+                ]);
+
+            } else {
+                // Si no existe, insertamos el registro en la tabla librosinstituciones
+                $librosInstitucionId = DB::table('librosinstituciones')->insertGetId([
+                    'li_idInstitucion' => $request->codigo_institucion,
+                    'li_periodo' => $request->periodo_id,
+                    'li_codigo' => $request->codigo,
+                    'li_url' => $request->url,
+                    'expires_at' => $request->expires,
+                ]);
+
+                if ($librosInstitucionId <= 0) {
+                    DB::rollBack();
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'No se pudo generar un ID para la institución.',
+                    ], 500);
+                }
+
+                // Insertar los detalles para los nuevos registros
+                foreach ($request->libros as $libro) {
+                    DB::table('librosinstituciones_detalle')->insert([
+                        'li_id' => $librosInstitucionId,
+                        'lid_idLibro' => $libro['idlibro'],
+                        'lid_producto' => $libro['codigo'],
+                    ]);
+                }
+
+                // Confirmar la transacción
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Información guardada con éxito.',
+                ]);
+            }
+
+        } catch (Exception $e) {
+            // Si ocurre un error, revertir la transacción
+            DB::rollBack();
+
+            // Devolver una respuesta de error
+            return response()->json([
+                'success' => false,
+                'message' => 'Hubo un problema al guardar la información.',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function InstitucionLibrosInformacion($institucion)
+    {
+        $lista = DB::SELECT("SELECT li.idInstitucion, li.region_idregion,li.nombreInstitucion FROM institucion li
+        WHERE li.idInstitucion = '$institucion'");
+        return $lista;
+    }
+
+
+
+
     //se debe habilitar cuando la zona sea obligatoria
     // public function institucion_zona(Request $request)
     // {
@@ -828,4 +994,30 @@ class InstitucionController extends Controller
     //        return "No se pudo guardar/actualizar";
     //    }
     // }
+
+    //METODOS JEYSON INICIO
+    public function MoverInstitucionxAsesor(Request $request)
+    {
+        // return $request;
+        DB::beginTransaction();
+        $Id_Asesor_Seleccionado = $request->input('Id_Asesor_Seleccionado');
+        $Cedula_Asesor_Seleccionado = $request->input('Cedula_Asesor_Seleccionado');
+        $InstitucionesAMover = $request->input('InstitucionesAMover', []);
+        try {
+            // Si hay instituciones, moverlas
+            foreach ($InstitucionesAMover as $institucionmover) {
+                //Producto
+                $actualizarasesorde_institucion = Institucion::find($institucionmover['id_institucion']);
+                $actualizarasesorde_institucion->asesor_id = $Id_Asesor_Seleccionado;
+                $actualizarasesorde_institucion->vendedorInstitucion = $Cedula_Asesor_Seleccionado;
+                $actualizarasesorde_institucion->save();
+            }
+            DB::commit();
+            return response()->json(["status" => "1", 'message' => 'Compra Finalizada correctamente'], 200);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json(["status" => "0", 'message' => 'Error al finalizar la compra: ' . $e->getMessage()], 500);
+        }
+    }
+    //METODOS JEYSON FIN
 }

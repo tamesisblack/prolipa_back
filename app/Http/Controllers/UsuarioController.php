@@ -15,7 +15,7 @@ use App\Models\HistoricoVisitas;
 use Illuminate\Http\Request;
 use App\Quotation;
 use App\Traits\Codigos\TraitCodigosGeneral;
-use DB;
+use Illuminate\Support\Facades\DB;
 use Mail;
 use Cookie;
 use Dirape\Token\Token;
@@ -228,7 +228,7 @@ class UsuarioController extends Controller
     {
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
-       
+
         // $idInstitucion = $request->idInstitucion;
         // $fromDate = $request->fromDate;
         // $toDate = $request->toDate;
@@ -253,8 +253,8 @@ class UsuarioController extends Controller
         $periodoId = $request->periodo_id;
 
         $result = AsignaturaDocente::select(
-            'asignaturausuario.usuario_idusuario', 
-            'asignaturausuario.periodo_id', 
+            'asignaturausuario.usuario_idusuario',
+            'asignaturausuario.periodo_id',
             'usuario.nombres',
             'usuario.name_usuario',
             'usuario.apellidos',
@@ -1670,5 +1670,39 @@ class UsuarioController extends Controller
     public function GetUsuarios_PerfilLibrerias(){
         $query = DB::SELECT("SELECT u.*, CONCAT(u.nombres, ' ',u.apellidos,' - ', u.cedula) datosbusqueda FROM usuario u WHERE id_group = 33");
         return $query;
+    }
+    public function docentes_x_institucion(Request $request){
+        $docentes = DB::table('usuario as u')
+        ->join('asignaturausuario as au', 'u.idusuario', '=', 'au.usuario_idusuario')
+        ->join('asignatura as a', 'au.asignatura_idasignatura', '=', 'a.idasignatura')
+        ->select(
+            'u.idusuario',
+            'u.cedula',
+            DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS docente"),
+            'a.nombreasignatura',
+            'au.updated_at'
+        )
+        ->where('u.institucion_idInstitucion', $request->idInstitucion)
+        ->where('u.estado_idEstado', 1)
+        ->where('au.periodo_id', $request->periodo_id)
+        ->orderBy('u.nombres')
+        ->get();
+
+    // Agrupar los docentes por ID y asociar sus asignaturas
+    $docentesAgrupados = $docentes->groupBy('idusuario')->map(function ($grupo) {
+        return [
+            'idusuario' => $grupo->first()->idusuario,
+            'cedula' => $grupo->first()->cedula,
+            'docente' => $grupo->first()->docente,
+            'asignaturas' => $grupo->map(function ($asignatura) {
+                return [
+                    'nombre' => $asignatura->nombreasignatura,
+                    'updated_at' => $asignatura->updated_at
+                ];
+            })->toArray()
+        ];
+    })->values(); // Convertimos la colección en un array indexado
+
+    return response()->json($docentesAgrupados);
     }
 }

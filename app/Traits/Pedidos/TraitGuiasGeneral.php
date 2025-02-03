@@ -48,4 +48,23 @@ trait TraitGuiasGeneral
         ");
         return $query;
     }
+    public function tr_cantidadDevuelta($asesor_id, $pro_codigo, $periodo_id) {
+        return DB::table('pedidos_guias_devolucion_detalle as gd')
+            ->leftJoin('pedidos_guias_devolucion as d', 'd.id', '=', 'gd.pedidos_guias_devolucion_id')
+            ->where('gd.asesor_id', $asesor_id)
+            ->where('gd.pro_codigo', $pro_codigo)
+            ->where('gd.periodo_id', $periodo_id)
+            ->where('d.estado', '1')
+            ->sum('gd.cantidad_devuelta') ?? 0;
+    }
+    
+    public function tr_cantidadDevueltaPendiente($asesor_id, $pro_codigo, $periodo_id) {
+        return DB::table('pedidos_guias_devolucion_detalle as gd')
+            ->leftJoin('pedidos_guias_devolucion as d', 'd.id', '=', 'gd.pedidos_guias_devolucion_id')
+            ->where('gd.asesor_id', $asesor_id)
+            ->where('gd.pro_codigo', $pro_codigo)
+            ->where('gd.periodo_id', $periodo_id)
+            ->where('d.estado', '0')
+            ->sum('gd.cantidad_devuelta') ?? 0;
+    }
 }

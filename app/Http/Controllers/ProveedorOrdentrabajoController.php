@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProveedorOrdentrabajo;
-use DB;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
@@ -30,7 +30,6 @@ class ProveedorOrdentrabajoController extends Controller
 
              return $query;
     }
-
     public function PostProver_Registrar_modificar(Request $request)
     {
     if($request->prov_codigo){

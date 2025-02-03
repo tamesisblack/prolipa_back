@@ -21,5 +21,6 @@ class CuentaBancaria extends Model
         'created_at',
         'updated_at',
         'user_created',
+        'cue_pag_tipo_cuenta',
     ];
 }

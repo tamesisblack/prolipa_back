@@ -141,4 +141,34 @@ class UnidadController extends Controller
         $dato->delete();
         return $dato;
     }
+    public function transferenciaUnidades(Request $request) {
+        // Validar los datos recibidos
+        $request->validate([
+            'libro_a_transferir' => 'required|integer',
+            'libro_recibir_transferencia' => 'required|integer',
+        ]);
+    
+        // Eliminar unidades existentes asociadas al libro receptor
+        unidad::where('id_libro', $request->libro_recibir_transferencia)->delete();
+    
+        // Buscar las unidades asociadas al libro que se va a transferir
+        $unidades = unidad::where('id_libro', $request->libro_a_transferir)->get();
+    
+        // Recorrer las unidades y replicar la información en el libro receptor
+        foreach ($unidades as $unidad) {
+            $nuevaUnidad = new unidad();
+            $nuevaUnidad->id_libro = $request->libro_recibir_transferencia;
+            $nuevaUnidad->unidad = $unidad->unidad;
+            $nuevaUnidad->nombre_unidad = $unidad->nombre_unidad;
+            $nuevaUnidad->txt_nombre_unidad = $unidad->txt_nombre_unidad;
+            $nuevaUnidad->pag_inicio = $unidad->pag_inicio;
+            $nuevaUnidad->pag_fin = $unidad->pag_fin;
+            $nuevaUnidad->estado = $unidad->estado;
+            $nuevaUnidad->created_at = now(); // Establecer la fecha de creación
+            $nuevaUnidad->updated_at = now(); // Establecer la fecha de actualización
+            $nuevaUnidad->save(); // Guardar la nueva unidad
+        }
+    
+        return response()->json(['message' => 'Transferencia de unidades completada exitosamente.'], 200);
+    }
 }

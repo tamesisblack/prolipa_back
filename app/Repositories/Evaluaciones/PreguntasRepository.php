@@ -717,7 +717,7 @@ class  PreguntasRepository extends BaseRepository
         ->where('p.estado', 1)
         ->where('u.id_group', 1)
         ->where('te.id_asignatura', $request->id_asignatura)
-        ->orderByDesc('p.descripcion')
+        ->orderBy('te.unidad', 'asc')
         ->get();
     // Ahora $asignaciones contiene los resultados de la consulta.
 

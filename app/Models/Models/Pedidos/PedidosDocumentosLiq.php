@@ -5,6 +5,7 @@ namespace App\Models\Models\Pedidos;
 use App\Models\Models\Pagos\FormasPagos;
 use App\Models\Models\Pagos\PedidosPagosHijo;
 use App\Models\Models\Pagos\TipoPagos;
+use App\Models\Usuario;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -41,6 +42,12 @@ class PedidosDocumentosLiq extends Model
     {
         return $this->hasMany(PedidosPagosHijo::class, 'documentos_liq_id', 'doc_codigo');
     }
+    //user_cierre relacion con usuario
+    public function userCierre()
+    {
+        return $this->belongsTo(Usuario::class, 'user_cierre', 'idusuario');
+    }
+
     //===SCOPES==
     public function scopeActualizarDocumentoLiq($query, $doc_codigo, $datos)
     {

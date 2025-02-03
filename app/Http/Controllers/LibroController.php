@@ -711,4 +711,41 @@ class LibroController extends Controller
         }
         return $libro;
     }
+    public function LibrosInstitucionBusqueda($institucion, $periodo)
+    {
+        // Consulta para obtener los libros de la institución y el periodo
+        $lista = DB::select("
+            SELECT l.*, ls.nombre 
+            FROM librosinstituciones_detalle l
+            INNER JOIN librosinstituciones li ON li.li_id = l.li_id
+            LEFT JOIN libros_series ls ON l.lid_idLibro = ls.idLibro
+            WHERE li.li_idInstitucion = ? AND li.li_periodo = ?
+        ", [$institucion, $periodo]);
+
+        $libros = [];
+
+        // Procesar cada libro y agregarle los detalles adicionales
+        foreach ($lista as $libro) {
+            // Obtener detalles adicionales del libro
+            $query = DB::table('libro as l')
+                ->select('l.*', 'a.nombreasignatura as asignatura',
+                        'ls.iniciales', 'ls.codigo_liquidacion', 'ls.year', 'ls.version',
+                        's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos')
+                ->leftJoin('asignatura as a', 'a.idasignatura', '=', 'l.asignatura_idasignatura')
+                ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'l.idlibro')
+                ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
+                ->leftJoin('1_4_cal_producto as p', 'ls.codigo_liquidacion', '=', 'p.pro_codigo')
+                ->where('l.nombrelibro', 'LIKE', '%' . $libro->nombre . '%')
+                ->first();  // Usamos `first` para obtener un solo resultado, o puedes usar `get()` si esperas más de uno.
+
+            // Si el libro tiene detalles, agrégalo al arreglo de libros
+            if ($query) {
+                // Agregar detalles al libro
+                $libros[] = $query;
+            }
+        }
+
+        // Retornar la colección de libros con los detalles
+        return $libros;
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Models\FormatoPedidoNew;
 use Illuminate\Support\Facades\DB;
 
 class FormatoController extends Controller
@@ -90,4 +91,66 @@ class FormatoController extends Controller
             ], 500);
         }
     }
+
+    //METODOS JEYSON
+    public function Post_GuardarActualizar_formatopedidonew(Request $request)
+    {
+        DB::beginTransaction();
+        // return $request;
+        // Obtener los datos del request
+        $data_libros = $request->input('data_libros', []);
+        $periodo = $request->input('periodo');
+        $user_editor = $request->input('user_editor');
+        // $conteo = $this->conteodetallexfmp_id($id_movimientoproducto);
+        // return $conteo;
+
+        try {
+            // Si hay libros, procesar los detalles del pedido
+            foreach ($data_libros as $libro) {
+                $detalleFormatoPedido = FormatoPedidoNew::where('idlibro', $libro['idlibro'])
+                    ->where('idperiodoescolar', $periodo)
+                    ->first();
+                if ($detalleFormatoPedido) {
+                    $detalleFormatoPedido->pfn_pvp = $libro['pfn_pvp'];
+                    $detalleFormatoPedido->user_editor = $user_editor;
+                    $detalleFormatoPedido->save();
+                } else {
+                    $detalleFormatoPedido = new FormatoPedidoNew([
+                        'idlibro'           => $libro['idlibro'],
+                        'pfn_pvp'           => $libro['pfn_pvp'],
+                        'idperiodoescolar'  => $periodo,
+                        'user_editor'       => $user_editor,
+                    ]);
+                    // $detalleFormatoPedido->updated_at = now();
+                    $detalleFormatoPedido->save();
+                }
+            }
+            DB::commit();
+            return response()->json(["status" => "1", 'message' => 'Datos actualizados correctamente'], 200);
+        } catch (\Exception $e) {
+            DB::rollback();
+            return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function ActivarDesactivar_formatopedidonew(Request $request)
+    {
+        // return $request;
+        if ($request->pfn_id) {
+            $estado_FormatoPedido = FormatoPedidoNew::find($request->pfn_id);
+
+            if (!$estado_FormatoPedido) {
+                return "El pfn_id no existe en la base de datos";
+            }
+
+            $estado_FormatoPedido->pfn_estado = $request->pfn_estado;
+            $estado_FormatoPedido->save();
+
+            return $estado_FormatoPedido;
+        } else {
+            return "No está ingresando ningún pfn_id";
+        }
+    }
+
+    //FIN METODOS JEYSON
 }

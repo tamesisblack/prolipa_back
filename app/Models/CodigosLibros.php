@@ -29,6 +29,17 @@ class CodigosLibros extends Model implements Auditable
         'bc_periodo',
         'bc_institucion'
     ];
+    const CODIGO_LIQUIDADO          = 'El código se encuentra liquidado';
+    const CODIGO_REGALADO           = 'El código se encuentra regalado';
+    const CODIGO_GUIA               = 'El código se encuentra como GUIA';
+    const CODIGO_DEVUELTO           = 'El código se encuentra como DEVUELTO';
+    const CODIGO_LIQUIDADO_REGALADO = 'El código se encuentra liquidado y regalado';
+
+    const CODIGO_ACTIVACION         = 'Problema con el código de activación';
+    const CODIGO_DIAGNOSTICA        = 'Problema con el código de diagnóstico';
+    const CODIGO_AMBOS              = 'Problema con el código de ambos';
+
+    CONST CODIGO_CON_INSTITUCION    = 'El código se encuentra con la institución';
     public function libroSeries()
     {
         return $this->hasMany(LibroSerie::class, 'idLibro', 'libro_idlibro');

@@ -18,6 +18,7 @@ class f_movimientos_producto extends Model
         'fmp_estado',
         'user_created',
         'created_at',
-        'updated_at',        
+        'updated_at',
+        'observacion',
     ];
 }

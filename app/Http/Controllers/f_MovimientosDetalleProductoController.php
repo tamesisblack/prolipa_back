@@ -6,7 +6,7 @@ use App\Models\f_movimientos_detalle_producto;
 use App\Models\f_movimientos_producto;
 use App\Models\f_tipo_documento;
 use App\Models\_14Producto;
-use DB;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
@@ -191,7 +191,7 @@ class f_MovimientosDetalleProductoController extends Controller
         $movimientoegreso->fmp_cantidad_total = $request->fmp_cantidad_total;
         $movimientoegreso->prov_codigo = $request->prov_codigo;
 
-        
+
         // Verificar si es un nuevo registro o una actualización
         if ($movimientoegreso->exists) {
             return "No puede editar un egreso";
@@ -252,7 +252,7 @@ class f_MovimientosDetalleProductoController extends Controller
             return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
         }
     }
-    
+
     public function eliminarDetalleMovimientoProducto(Request $request) {
         // Valida y filtra los datos de entrada
         // return $request;

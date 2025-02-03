@@ -58,20 +58,79 @@ class EmpaqueController extends Controller
     }
     public function pendientes()
     {
-        $query = DB::SELECT("SELECT re.*, e.*, fpr.prof_observacion, fv.ven_observacion, i.nombreInstitucion, fv.est_ven_codigo, em.descripcion_corta,
-            (select sum(det_ven_cantidad_despacho) FROM f_detalle_venta dv WHERE dv.ven_codigo=fv.ven_codigo) as libros,
-           i.ruc, (select count(det_empa_codigo) FROM rempaque_detallecopy dr WHERE dr.empa_codigo=e.empa_codigo and dr.idempresa=e.idempresa) as cantidad,
-            CONCAT(u.nombres,' ',u.apellidos) AS cliente  FROM remision_copy re
-        inner join rempacado e on e.remi_codigo=re.remi_codigo
-        inner join f_venta fv on fv.ven_codigo=re.remi_num_factura
-        inner join institucion i on fv.institucion_id = i.idInstitucion
-        LEFT join usuario u on fv.ven_cliente = u.idusuario
-        inner join empresas em on em.id=re.remi_idempresa
-        LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
-        where re.remi_estado=1 and e.empa_estado=1 and e.idempresa=re.remi_idempresa
-        group by re.remi_codigo, re.remi_idempresa, e.empa_codigo 
-        order by  e.empa_fecha");
-        return $query;
+        // $query = DB::SELECT("SELECT re.*, e.*, fpr.prof_observacion, fv.ven_observacion, i.nombreInstitucion, fv.est_ven_codigo, em.descripcion_corta,
+        //     (select sum(det_ven_cantidad_despacho) FROM f_detalle_venta dv WHERE dv.ven_codigo=fv.ven_codigo) as libros,
+        //    i.ruc, (select count(det_empa_codigo) FROM rempaque_detallecopy dr WHERE dr.empa_codigo=e.empa_codigo) as cantidad,
+        //     CONCAT(u.nombres,' ',u.apellidos) AS cliente 
+        // FROM remision_copy re
+        // inner join rempacado e on e.remi_codigo=re.remi_codigo
+        // inner join f_venta fv on fv.ven_codigo=re.remi_num_factura
+        // inner join institucion i on fv.institucion_id = i.idInstitucion
+        // LEFT join usuario u on fv.ven_cliente = u.idusuario
+        // inner join empresas em on em.id=re.remi_idempresa
+        // LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
+        // where re.remi_estado=1 and e.empa_estado=1 and e.idempresa=re.remi_idempresa
+        // group by re.remi_codigo, re.remi_idempresa, e.empa_codigo 
+        // order by  e.empa_fecha");
+        // return $query;
+
+        //traer el padre  
+        $queryPadre = DB::select("SELECT r.*, 
+                e.descripcion_corta, 
+                rem.empa_codigo, 
+                rem.empa_fecha, 
+                rem.empa_facturas,
+                rem.empa_estado,
+                rem.empa_libros,
+                rem.empa_cartones,
+                rem.idempresa
+            FROM remision_copy r
+            LEFT JOIN empresas e ON e.id = r.remi_idempresa
+            LEFT JOIN rempacado rem ON rem.remi_codigo = r.remi_codigo AND rem.idempresa = r.remi_idempresa
+            WHERE r.remi_estado = '1'
+            AND rem.empa_estado = '1'
+        ");
+        
+        foreach ($queryPadre as $key => $value) {
+            //detalle empaque
+            $detalleEmpaque = DB::table('rempaque_detallecopy')
+                ->where('empa_codigo', $value->empa_codigo)
+                ->where('idempresa', $value->remi_idempresa)
+                ->get();
+            $value->cantidad = count($detalleEmpaque);
+            //detalle de unidades libros de pre factura
+            $detalleLibros = DB::table('f_detalle_venta')
+                ->where('ven_codigo', $value->empa_facturas)
+                ->where('id_empresa', $value->remi_idempresa)
+                ->select(DB::raw('sum(det_ven_cantidad_despacho) as libros'))
+                ->get();
+            $value->libros = $detalleLibros[0]->libros;
+            //encabeza de la pre factura
+            $prefactura = DB::table('f_venta')
+                ->leftJoin('institucion', 'institucion.idInstitucion', '=', 'f_venta.institucion_id')
+                ->leftJoin('usuario', 'usuario.idusuario', '=', 'f_venta.ven_cliente')
+                ->where('ven_codigo', $value->empa_facturas)
+                ->where('id_empresa', $value->remi_idempresa)
+                ->select(
+                    'institucion.ruc', 
+                    'institucion.email', 
+                    'institucion.nombreInstitucion',
+                    DB::raw("COALESCE(CONCAT_WS(' ', usuario.nombres, usuario.apellidos), 'Sin Cliente') AS cliente")
+                )
+                ->first();
+        
+            // Asignamos los valores a $value
+            if ($prefactura) {
+                $value->nombreInstitucion = $prefactura->nombreInstitucion;
+                $value->cliente = $prefactura->cliente;
+            } else {
+                $value->nombreInstitucion = null;
+                $value->cliente = 'Sin Cliente';
+            }
+        }
+        
+        return $queryPadre;
+        
     }
 
     public function getchofer()

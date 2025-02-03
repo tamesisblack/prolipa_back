@@ -203,8 +203,8 @@ class CalificacionEvalController extends Controller
             $nuevaCalificacion->id_evaluacion   = $request->evaluacion;
             $nuevaCalificacion->grupo           = $request->grupo;
             $nuevaCalificacion->calificacion    = $puntajeFinal; // usar $puntajeFinal aquí
-            // $nuevaCalificacion->ip              = $request->ip();
-            $nuevaCalificacion->ip              = 123456;
+            $nuevaCalificacion->ip              = $request->ip();
+            // $nuevaCalificacion->ip              = 123456;
             $nuevaCalificacion->estado          = 1;
             $nuevaCalificacion->save();
             $evaluacion = Evaluaciones::findOrFail($request->evaluacion);

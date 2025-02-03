@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\HistoricoCodigos;
 use App\Models\HistoricoVisitas;
 use App\Models\Rol;
 use Illuminate\Http\Request;
@@ -16,16 +17,58 @@ class HistoricoController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+    //api:get/historico
     public function index(Request $request)
     {
         if($request->traerRecursos){
             $recursos = $this->traerRecursos();
             return $recursos;
         }
+        if($request->traerHistoricoCodigos){
+            $historico = $this->traerHistoricoCodigos($request);
+            return $historico;
+        }
     }
+    //api:get/historico?recursos=1
     public function traerRecursos(){
         $recursos = DB::SELECT("SELECT * FROM historico_recursos ORDER BY id DESC");
         return $recursos;
+    }
+    //api:get/historico?traerHistoricoCodigos=1&nombreInstitucion='prueba'&fechaInicio=2022-01-01&fechaFin=2022-12-31
+    public function traerHistoricoCodigos(Request $request) {
+        set_time_limit(6000000);
+        ini_set('max_execution_time', 6000000);
+        $request->validate([
+            'nombreInstitucion' => 'required|string|max:255',
+            'fechaInicio' => 'required|date',
+            'fechaFin' => 'required|date|after_or_equal:fechaInicio',
+        ]);
+    
+        $nombreInstitucion  = $request->nombreInstitucion;
+        $fechaInicio        = $request->fechaInicio;
+        $fechaFin           = $request->fechaFin;
+    
+        $historico = HistoricoCodigos::query()
+        ->where(function($query) use ($nombreInstitucion){
+            $query->where('hist_codlibros.observacion', 'LIKE', '%' . $nombreInstitucion . '%')
+                  ->orWhere('hist_codlibros.usuario_editor','=',request('idInstitucion'));
+        })
+        ->where('hist_codlibros.observacion', 'LIKE', '%' . $nombreInstitucion . '%')
+        ->leftJoin('periodoescolar', 'periodoescolar.idperiodoescolar', '=', 'hist_codlibros.id_periodo')
+        ->leftJoin('usuario', 'usuario.idusuario', '=', 'hist_codlibros.idInstitucion')
+        ->leftJoin('institucion', 'institucion.idInstitucion', '=', 'hist_codlibros.idInstitucion')
+        ->whereBetween('hist_codlibros.created_at', [$fechaInicio, $fechaFin])
+        ->orderBy('hist_codlibros.id_codlibros', 'desc')
+        ->select(
+            'hist_codlibros.*',
+            'periodoescolar.periodoescolar',
+            'institucion.nombreInstitucion',
+            DB::raw("CONCAT(usuario.nombres, ' ', usuario.apellidos) AS editor")
+        )
+        ->get();
+    
+        return $historico;
+    
     }
     public function HistoricoRecursos(Request $request){
         //eliminar

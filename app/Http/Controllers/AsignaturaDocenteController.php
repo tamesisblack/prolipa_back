@@ -135,7 +135,7 @@ class AsignaturaDocenteController extends Controller
         ->where('ausu.usuario_idusuario','=',$request->idusuario)
         ->leftjoin('asignatura as asig','ausu.asignatura_idasignatura','=','asig.idasignatura')
         ->leftjoin('periodoescolar as pe','pe.idperiodoescolar','=','ausu.periodo_id')
-        ->select('asig.nombreasignatura','asig.idasignatura','asig.area_idarea', 'ausu.usuario_idusuario as user','ausu.asignatura_idasignatura','ausu.idasiguser as idasignado','pe.periodoescolar','ausu.periodo_id')
+        ->select('asig.nombreasignatura','asig.idasignatura','asig.area_idarea', 'ausu.usuario_idusuario as user','ausu.asignatura_idasignatura','ausu.idasiguser as idasignado','pe.periodoescolar','ausu.periodo_id','ausu.updated_at')
         ->get();
         return $dato;
     }

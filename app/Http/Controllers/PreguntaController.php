@@ -273,7 +273,7 @@ class PreguntaController extends Controller
         $institucion_id                 = $request->institucion_id;
         $evaluacion_personalizada       = 0;
         //si es profesor
-        if($id_group == 6){
+        if($id_group == 6 || $id_group == 10){
             $getInstitucion = Institucion::findOrfail($institucion_id);
             $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
         }
@@ -364,12 +364,12 @@ class PreguntaController extends Controller
     public function preguntastipo(Request $request)
     {
         //docente
-        if($request->id_group == 6){
+        if($request->id_group == 6 || $request->id_group == 10){
             $id_group                       = $request->id_group;
             $institucion_id                 = $request->institucion_id;
             $evaluacion_personalizada       = 0;
-            //si es profesor
-            if($id_group == 6){
+            //si es profesor o director
+            if($id_group == 6 || $id_group == 10){
                 $getInstitucion = Institucion::findOrfail($institucion_id);
                 $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
             }
@@ -442,7 +442,7 @@ class PreguntaController extends Controller
         $institucion_id                 = $request->institucion_id;
         $evaluacion_personalizada       = 0;
         //si es profesor
-        if($id_group == 6){
+        if($id_group == 6 || $id_group == 10){
             $getInstitucion = Institucion::findOrfail($institucion_id);
             $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
         }
@@ -616,7 +616,7 @@ class PreguntaController extends Controller
         $institucion_id                 = $institucion;
         $evaluacion_personalizada       = 0;
         //si es profesor
-        if($id_group == 6){
+        if($id_group == 6 || $id_group == 10){
             $getInstitucion = Institucion::findOrfail($institucion_id);
             $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
         }
@@ -793,7 +793,7 @@ class PreguntaController extends Controller
         $institucion_id                 = $request->institucion_id;
         $evaluacion_personalizada       = 0;
         //si es profesor
-        if($id_group == 6){
+        if($id_group == 6 || $id_group == 10){
             $getInstitucion = Institucion::findOrfail($institucion_id);
             $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
         }

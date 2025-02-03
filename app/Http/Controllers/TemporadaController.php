@@ -594,7 +594,7 @@ class TemporadaController extends Controller
        $query =  $this->ObtenerRegalados($institucion,$periodo,$num_verificacion,$idverificacion);
        return $query;
     }
-    public function showRegalados($institucion,$periodo,$libro_idlibro,$num_verificacion,$idverificacion){
+    public function showRegalados($institucion,$periodo,$libro_idlibro,$num_verificacion,$idverificacion,$plus){
         $getnumVerificacion = "verif".$num_verificacion;
         $query = DB::SELECT("SELECT c.codigo
         FROM codigoslibros c
@@ -603,6 +603,7 @@ class TemporadaController extends Controller
         AND (c.bc_institucion       = '$institucion' OR c.venta_lista_institucion = '$institucion')
         AND c.prueba_diagnostica    = '0'
         AND c.libro_idlibro         = ?
+        AND c.plus                  = '$plus'
         AND `$getnumVerificacion`   = ?
         ",[$periodo,$libro_idlibro,$idverificacion]);
         return $query;
