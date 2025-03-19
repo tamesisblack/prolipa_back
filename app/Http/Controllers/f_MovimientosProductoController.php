@@ -32,7 +32,7 @@ class f_MovimientosProductoController extends Controller
         INNER JOIN usuario u ON t.user_created = u.idusuario
         LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
         -- WHERE t.fmp_id like 'MINO%'
-        WHERE (t.fmp_id LIKE 'MINO%' OR t.fmp_id LIKE 'MENO%')
+        WHERE (t.fmp_id LIKE 'MINO%' OR t.fmp_id LIKE 'MENO%' OR t.fmp_id LIKE 'MCNO%')
         ORDER BY t.created_at ASC");
         return $query;
     }
@@ -57,33 +57,45 @@ class f_MovimientosProductoController extends Controller
             INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
             INNER JOIN usuario u ON t.user_created = u.idusuario
             LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
-            WHERE t.fmp_id LIKE '%$request->razonbusqueda%' and t.fmp_id like 'MINO%'
+            WHERE t.fmp_id LIKE '%$request->razonbusqueda%'
             ORDER BY t.created_at ASC
             ");
             return $query;
-        }
-        if ($request->busqueda == 'periodomovimiento') {
-            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
-            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
-            FROM f_movimientos_producto t
-            INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
-            INNER JOIN usuario u ON t.user_created = u.idusuario
-            LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
-            WHERE t.id_periodo = '$request->razonbusqueda' and t.fmp_id like 'MINO%'
-            ORDER BY t.created_at ASC
-            ");
-            return $query;
-        }if ($request->busqueda == 'EstadoMovimiento') {
-            $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
-            t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
-            FROM f_movimientos_producto t
-            INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
-            INNER JOIN usuario u ON t.user_created = u.idusuario
-            LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
-            WHERE t.fmp_estado = '$request->razonbusqueda' and t.fmp_id like 'MINO%'
-            ORDER BY t.created_at ASC
-            ");
-            return $query;
+        }else if ($request->busqueda == 'TipoMovimiento') {
+            if ($request->razonbusqueda == 0) {
+                $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+                t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+                FROM f_movimientos_producto t
+                INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
+                INNER JOIN usuario u ON t.user_created = u.idusuario
+                LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
+                WHERE t.fmp_id like 'MINO%'
+                ORDER BY t.created_at ASC
+                ");
+                return $query;   
+            }else if ($request->razonbusqueda == 1) {
+                $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+                t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+                FROM f_movimientos_producto t
+                INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
+                INNER JOIN usuario u ON t.user_created = u.idusuario
+                LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
+                WHERE t.fmp_id like 'MENO%'
+                ORDER BY t.created_at ASC
+                ");
+                return $query;   
+            }else if ($request->razonbusqueda == 2) {
+                $query = DB::SELECT("SELECT pe.periodoescolar, CONCAT(u.nombres,' ',u.apellidos ) AS nombreusuario, t.*, t.updated_at as dupdatedmov,
+                t.created_at as dcreatedmov, t.fmp_id as codigoanterior, p.*
+                FROM f_movimientos_producto t
+                INNER JOIN periodoescolar pe ON t.id_periodo = pe.idperiodoescolar
+                INNER JOIN usuario u ON t.user_created = u.idusuario
+                LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
+                WHERE t.fmp_id like 'MCNO%'
+                ORDER BY t.created_at ASC
+                ");
+                return $query;   
+            }
         }
     }
 
@@ -94,7 +106,15 @@ class f_MovimientosProductoController extends Controller
         $movimientoproducto = f_movimientos_producto::firstOrNew(['fmp_id' => $request->fmp_id]);
         // Asignar los demás datos del movimientoproducto
         $movimientoproducto->id_periodo = $request->id_periodo;
-        $movimientoproducto->fmp_estado = $request->fmp_estado;
+        
+        if ($request->tipo_ingreso == 6) {
+            $movimientoproducto->fmp_estado = 0;
+        } elseif ($request->tipo_ingreso == 7) {
+            $movimientoproducto->fmp_estado = 2;
+        } else {
+            return "El tipo de movimiento no es ingreso ni egreso. No controlado.";
+        }
+
         $movimientoproducto->prov_codigo = $request->prov_codigo;
         $movimientoproducto->observacion = $request->observacion;
 
@@ -194,7 +214,7 @@ class f_MovimientosProductoController extends Controller
         // return $request;
         DB::beginTransaction();
         try {
-            if($request->fmp_estado == 0){
+            if($request->fmp_estado == 0 || $request->fmp_estado == 2){
                 f_movimientos_detalle_producto:: where('fmp_id', $request->fmp_id) -> delete ();
                 // Buscar el movimiento por su ID
                 $movimientoproducto_prov = f_movimientos_producto:: find($request->fmp_id);
@@ -208,69 +228,56 @@ class f_MovimientosProductoController extends Controller
                 DB::commit();
                 // Retornar una respuesta exitosa
                 return response() -> json(['message' => 'Producto eliminado correctamente'], 200);
-            }else if($request->fmp_estado == 1){
-                $librosConCantidad = $request->input('librosConCantidad', []);
-                // Si hay libros, procesar los detalles del pedido
-                foreach ($librosConCantidad as $libro) {
-                    if($libro['emp_id'] == 1 && $libro['fmdp_tipo_bodega'] == 1){
-                        //Producto
-                        // Actualizar los datos del producto
-                        $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
-                        $actualizacionproducto->pro_deposito = $actualizacionproducto->pro_deposito - $libro['cantidad'];
-                        $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
-                        $actualizacionproducto->save();
-                    }else if($libro['emp_id'] == 1 && $libro['fmdp_tipo_bodega'] == 2){
-                        //Producto
-                        // Actualizar los datos del producto
-                        $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
-                        $actualizacionproducto->pro_stock = $actualizacionproducto->pro_stock - $libro['cantidad'];
-                        $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
-                        $actualizacionproducto->save();
-                    }else if($libro['emp_id'] == 3 && $libro['fmdp_tipo_bodega'] == 1){
-                        //Producto
-                        // Actualizar los datos del producto
-                        $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
-                        $actualizacionproducto->pro_depositoCalmed = $actualizacionproducto->pro_depositoCalmed - $libro['cantidad'];
-                        $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
-                        $actualizacionproducto->save();
-                    }else if($libro['emp_id'] == 3 && $libro['fmdp_tipo_bodega'] == 2){
-                        //Producto
-                        // Actualizar los datos del producto
-                        $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
-                        $actualizacionproducto->pro_stockCalmed = $actualizacionproducto->pro_stockCalmed - $libro['cantidad'];
-                        $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
-                        $actualizacionproducto->save();
-                    }
-                }
-                f_movimientos_detalle_producto:: where('fmp_id', $request->fmp_id) -> delete ();
-                // Buscar el movimiento por su ID
-                $movimientoproducto_prov = f_movimientos_producto:: find($request->fmp_id);
-                // Verificar si el movimiento existe
-                if (!$movimientoproducto_prov) {
-                    // Manejar el caso en el que el movimiento no existe
-                    return response() -> json(['message' => 'Movimiento no encontrado'], 404);
-                }
-                // Eliminar el movimiento
-                $movimientoproducto_prov -> delete ();
-                DB::commit();
-                // Retornar una respuesta exitosa
-                return response() -> json(['message' => 'Movimiento eliminado correctamente'], 200);
-            }else if($request->fmp_estado == 2){
-                f_movimientos_detalle_producto:: where('fmp_id', $request->fmp_id) -> delete ();
-                f_movimientos_producto:: where('fmp_id_referencia', $request->fmp_id) -> delete ();
-                // Buscar el movimiento por su ID
-                $movimientoproducto_prov = f_movimientos_producto:: find($request->fmp_id);
-                // Verificar si el movimiento existe
-                if (!$movimientoproducto_prov) {
-                    // Manejar el caso en el que el movimiento no existe
-                    return response() -> json(['message' => 'Producto no encontrado'], 404);
-                }
-                // Eliminar el movimiento
-                $movimientoproducto_prov -> delete ();
-                DB::commit();
-                // Retornar una respuesta exitosa
-                return response() -> json(['message' => 'Producto eliminado correctamente'], 200);
-            }else{
+            }
+            // else if($request->fmp_estado == 1 || $request->fmp_estado == 3){
+            //     $librosConCantidad = $request->input('librosConCantidad', []);
+            //     // Si hay libros, procesar los detalles del pedido
+            //     foreach ($librosConCantidad as $libro) {
+            //         if($libro['emp_id'] == 1 && $libro['fmdp_tipo_bodega'] == 1){
+            //             //Producto
+            //             // Actualizar los datos del producto
+            //             $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
+            //             $actualizacionproducto->pro_deposito = $actualizacionproducto->pro_deposito - $libro['cantidad'];
+            //             $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
+            //             $actualizacionproducto->save();
+            //         }else if($libro['emp_id'] == 1 && $libro['fmdp_tipo_bodega'] == 2){
+            //             //Producto
+            //             // Actualizar los datos del producto
+            //             $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
+            //             $actualizacionproducto->pro_stock = $actualizacionproducto->pro_stock - $libro['cantidad'];
+            //             $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
+            //             $actualizacionproducto->save();
+            //         }else if($libro['emp_id'] == 3 && $libro['fmdp_tipo_bodega'] == 1){
+            //             //Producto
+            //             // Actualizar los datos del producto
+            //             $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
+            //             $actualizacionproducto->pro_depositoCalmed = $actualizacionproducto->pro_depositoCalmed - $libro['cantidad'];
+            //             $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
+            //             $actualizacionproducto->save();
+            //         }else if($libro['emp_id'] == 3 && $libro['fmdp_tipo_bodega'] == 2){
+            //             //Producto
+            //             // Actualizar los datos del producto
+            //             $actualizacionproducto = _14Producto::findOrFail($libro['pro_codigo']);
+            //             $actualizacionproducto->pro_stockCalmed = $actualizacionproducto->pro_stockCalmed - $libro['cantidad'];
+            //             $actualizacionproducto->pro_reservar = $actualizacionproducto->pro_reservar - $libro['cantidad'];
+            //             $actualizacionproducto->save();
+            //         }
+            //     }
+            //     f_movimientos_detalle_producto:: where('fmp_id', $request->fmp_id) -> delete ();
+            //     // Buscar el movimiento por su ID
+            //     $movimientoproducto_prov = f_movimientos_producto:: find($request->fmp_id);
+            //     // Verificar si el movimiento existe
+            //     if (!$movimientoproducto_prov) {
+            //         // Manejar el caso en el que el movimiento no existe
+            //         return response() -> json(['message' => 'Movimiento no encontrado'], 404);
+            //     }
+            //     // Eliminar el movimiento
+            //     $movimientoproducto_prov -> delete ();
+            //     DB::commit();
+            //     // Retornar una respuesta exitosa
+            //     return response() -> json(['message' => 'Movimiento eliminado correctamente'], 200);
+            // }
+            else{
                 DB::rollback();
                 // Retornar una respuesta
                 return response() -> json(['message' => 'Estado de Eliminación no controlado'], 200);
@@ -278,6 +285,28 @@ class f_MovimientosProductoController extends Controller
         } catch (\Exception $e) {
             DB::rollback();
             return response()->json(["status" => "0", 'message' => 'Error al actualizar los datos: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function ModificarObservacion_MovientoProducto(Request $request)
+    {
+        // Buscar el movimiento por su fmp_id
+        $movimientoproducto_prov = f_movimientos_producto::where('fmp_id', $request->fmp_id)->first();
+        // Verificar si el movimiento existe
+        if (!$movimientoproducto_prov) {
+            return response()->json(['message' => 'No existe el movimiento en el que desea agregar la observación'], 404);
+        }
+        // Construir la observación según el estado
+        if ($request->fmp_estado == 4) {
+            $movimientoproducto_prov->observacion = $request->observacion . ' Documento generado a partir de la edición de stock masiva de combos.';
+        } else {
+            $movimientoproducto_prov->observacion = $request->observacion;
+        }
+        // Guardar cambios en la base de datos
+        if ($movimientoproducto_prov->save()) {
+            return response()->json(['message' => 'Se guardó correctamente']);
+        } else {
+            return response()->json(['message' => 'No se pudo guardar/actualizar'], 500);
         }
     }
 }

@@ -184,7 +184,8 @@ class InstitucionController extends Controller
         $cambio->nombreInstitucion              = $request->nombreInstitucion;
         $cambio->direccionInstitucion           = $request->direccionInstitucion;
         $cambio->telefonoInstitucion            = $request->telefonoInstitucion;
-        $cambio->email                          = $request->email == null || $request->email == "null" ? null : $request->email == null;
+        $cambio->email                          = $request->email == null || $request->email == "null" ? null : $request->email;
+        $cambio->representante_legal            = $request->representante_legal == null || $request->representante_legal == "null" ? null : $request->representante_legal;
         $cambio->solicitudInstitucion           = $request->solicitudInstitucion;
         $cambio->codigo_institucion_milton      = $request->codigo_institucion_milton;
         $cambio->vendedorInstitucion            = $request->vendedorInstitucion;
@@ -201,6 +202,8 @@ class InstitucionController extends Controller
         $cambio->evaluacion_personalizada       = $request->evaluacion_personalizada;
         $cambio->cantidad_cambio_ventana_evaluacion     = $request->cantidad_cambio_ventana_evaluacion;
         $cambio->ifcodigoEvaluacion             = $request->ifcodigoEvaluacion;
+        $cambio->tipo_evaluacion                = $request->tipo_evaluacion;
+        $cambio->mensaje_tipo_evaluacion       = $request->mensaje_tipo_evaluacion;
         $cambio->ruc                            = $request->ruc;
         $cambio->save();
         return $cambio;
@@ -490,137 +493,119 @@ class InstitucionController extends Controller
         // return $configuracion;
         return $configuracion;
     }
+  
+
     public function listaInsitucion(Request $request)
     {
-        if($request->asesor){
-            $cedula = $request->cedula;
-            $lista = DB::SELECT("SELECT i.idInstitucion,i.region_idregion, i.nombreInstitucion,i.aplica_matricula,
-            IF(i.estado_idEstado = '1','activado','desactivado') AS estado,i.estado_idEstado as estadoInstitucion,
-            c.nombre AS ciudad, u.idusuario AS asesor_id,u.nombres AS nombre_asesor,
-            u.apellidos AS apellido_asesor, i.fecha_registro, r.nombreregion, i.codigo_institucion_milton,
-            ic.estado as EstadoConfiguracion, ic.periodo_configurado,i.codigo_mitlon_coincidencias,
-            pec.periodoescolar as periodoNombreConfigurado,i.vendedorInstitucion,u.iniciales,i.cantidad_cambio_ventana_evaluacion,
-            i.punto_venta,i.maximo_porcentaje_autorizado, i.ruc, i.ifcodigoEvaluacion
-            FROM institucion i
-            LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
-            LEFT JOIN region r ON i.region_idregion = r.idregion
-            LEFT JOIN usuario u ON i.vendedorInstitucion = u.cedula
-            LEFT JOIN institucion_configuracion_periodo ic ON i.region_idregion = ic.region
-            LEFT JOIN periodoescolar pec ON ic.periodo_configurado = pec.idperiodoescolar
-            WHERE i.nombreInstitucion LIKE '%$request->busqueda%'
-            AND  i.vendedorInstitucion = '$cedula'
-            ORDER BY i.fecha_registro DESC
-            ");
-        }else{
-            $lista = DB::SELECT("SELECT DISTINCT i.idInstitucion,i.region_idregion, i.nombreInstitucion,i.aplica_matricula,
-            IF(i.estado_idEstado = '1','activado','desactivado') AS estado,i.estado_idEstado as estadoInstitucion,
-            c.nombre AS ciudad, u.idusuario AS asesor_id,u.nombres AS nombre_asesor,
-            u.apellidos AS apellido_asesor, i.fecha_registro, r.nombreregion, i.codigo_institucion_milton,
-            ic.estado as EstadoConfiguracion, ic.periodo_configurado,i.codigo_mitlon_coincidencias,
-            pec.periodoescolar as periodoNombreConfigurado,i.vendedorInstitucion,u.iniciales,i.cantidad_cambio_ventana_evaluacion,
-            i.punto_venta,i.maximo_porcentaje_autorizado, i.ruc, i.ifcodigoEvaluacion
-            FROM institucion i
-            LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
-            LEFT JOIN region r ON i.region_idregion = r.idregion
-            LEFT JOIN usuario u ON i.vendedorInstitucion = u.cedula
-            LEFT JOIN institucion_configuracion_periodo ic ON i.region_idregion = ic.region
-            LEFT JOIN periodoescolar pec ON ic.periodo_configurado = pec.idperiodoescolar
-            WHERE i.nombreInstitucion LIKE '%$request->busqueda%'
-            ORDER BY i.idInstitucion, i.fecha_registro DESC
-            ");
-        }
-        $datos = [];
-        if(count($lista) ==0){
-            return ["status" => "0","message"=> "No se encontro instituciones con ese nombre"];
-        }else{
+        $todas = $request->query('todas');
+        $asesor = $request->query('asesor');
 
-            foreach($lista as $key => $item){
-                //buscar periodo
-                $periodoInstitucion = DB::SELECT("SELECT idperiodoescolar AS periodo_id , periodoescolar AS periodo,
-                IF(estado = '1' ,'Activo','Desactivado') as estadoPeriodo,estado
-                 FROM periodoescolar
-                  WHERE idperiodoescolar = (
-                    SELECT  pir.periodoescolar_idperiodoescolar as id_periodo
-                    from institucion i,  periodoescolar_has_institucion pir
-                    WHERE i.idInstitucion = pir.institucion_idInstitucion
-                    AND pir.id = (SELECT MAX(phi.id) AS periodo_maximo FROM periodoescolar_has_institucion phi
-                    WHERE phi.institucion_idInstitucion = i.idInstitucion
-                    AND i.idInstitucion = '$item->idInstitucion'))
-                ");
-                if(count($periodoInstitucion) > 0){
-                    $datos[$key]=[
-                        "idInstitucion" =>     $item->idInstitucion,
-                        "nombreInstitucion" => $item->nombreInstitucion,
-                        "aplica_matricula" =>  $item->aplica_matricula,
-                        "estado" =>            $item->estado,
-                        "estadoInstitucion" => $item->estadoInstitucion,
-                        "ciudad" =>            $item->ciudad,
-                        "asesor_id" =>         $item->asesor_id,
-                        "nombre_asesor" =>     $item->nombre_asesor,
-                        "apellido_asesor" =>   $item->apellido_asesor,
-                        "asesor"           =>  $item->nombre_asesor." ".$item->apellido_asesor,
-                        "fecha_registro" =>    $item->fecha_registro,
-                        "nombreregion" =>      $item->nombreregion,
-                        "periodo_id" =>        $periodoInstitucion[0]->periodo_id,
-                        "periodo" =>           $periodoInstitucion[0]->periodo,
-                        "estadoPeriodo" =>     $periodoInstitucion[0]->estadoPeriodo,
-                        "statusPeriodo" =>     $periodoInstitucion[0]->estado,
-                        "EstadoConfiguracion" =>  $item->EstadoConfiguracion,
-                        "periodo_configurado" => $item->periodo_configurado,
-                        "periodoNombreConfigurado" => $item->periodoNombreConfigurado,
-                        "codigo_institucion_milton" => $item->codigo_institucion_milton,
-                        "codigo_mitlon_coincidencias" => $item->codigo_mitlon_coincidencias,
-                        "vendedorInstitucion"   => $item->vendedorInstitucion,
-                        "iniciales"             => $item->iniciales,
-                        "region"                => $item->region_idregion,
-                        "cantidad_cambio_ventana_evaluacion" => $item->cantidad_cambio_ventana_evaluacion,
-                        "punto_venta" => $item->punto_venta,
-                        "maximo_porcentaje_autorizado" => $item->maximo_porcentaje_autorizado,
-                        "ruc" => $item->ruc,
-                        "ifcodigoEvaluacion" => $item->ifcodigoEvaluacion
-                    ];
-                }else{
-                    $datos[$key]=[
-                        "idInstitucion" =>     $item->idInstitucion,
-                        "nombreInstitucion" => $item->nombreInstitucion,
-                        "aplica_matricula" =>  $item->aplica_matricula,
-                        "estado" =>            $item->estado,
-                        "estadoInstitucion" => $item->estadoInstitucion,
-                        "ciudad" =>            $item->ciudad,
-                        "asesor_id" =>         $item->asesor_id,
-                        "nombre_asesor" =>     $item->nombre_asesor,
-                        "apellido_asesor" =>   $item->apellido_asesor,
-                        "fecha_registro" =>    $item->fecha_registro,
-                        "nombreregion" =>      $item->nombreregion,
-                        "periodo_id" =>        '0',
-                        "periodo" =>           'Sin periodo',
-                        "estadoPeriodo" =>     "",
-                        "EstadoConfiguracion" =>  $item->EstadoConfiguracion,
-                        "periodo_configurado" => $item->periodo_configurado,
-                        "periodoNombreConfigurado" => $item->periodoNombreConfigurado,
-                        "codigo_institucion_milton" => $item->codigo_institucion_milton,
-                        "codigo_mitlon_coincidencias" => $item->codigo_mitlon_coincidencias,
-                        "vendedorInstitucion"   => $item->vendedorInstitucion,
-                        "iniciales"             => $item->iniciales,
-                        "region"                => $item->region_idregion,
-                        "cantidad_cambio_ventana_evaluacion" => $item->cantidad_cambio_ventana_evaluacion,
-                        "punto_venta" => $item->punto_venta,
-                        "maximo_porcentaje_autorizado" => $item->maximo_porcentaje_autorizado,
-                        "ruc" => $item->ruc,
-                        "ifcodigoEvaluacion" => $item->ifcodigoEvaluacion
-                    ];
-                }
-            }
-            if($request->todas){
-                return $datos;
-            }
-            else{
-                $resultado = collect($datos)->where('estadoInstitucion','1')->values();
-                return $resultado;
-            }
+        $query = DB::table('institucion as i')
+            ->leftJoin('ciudad as c', 'i.ciudad_id', '=', 'c.idciudad')
+            ->leftJoin('region as r', 'i.region_idregion', '=', 'r.idregion')
+            ->leftJoin('usuario as u', 'i.vendedorInstitucion', '=', 'u.cedula')
+            
+            // Último periodo configurado por región
+            ->leftJoin('institucion_configuracion_periodo as ic', function ($join) {
+                $join->on('i.region_idregion', '=', 'ic.region')
+                    ->whereRaw('ic.id = (SELECT id FROM institucion_configuracion_periodo 
+                                    WHERE region = i.region_idregion 
+                                    AND estado = 1 
+                                    ORDER BY id DESC LIMIT 1)');
+            })
+            ->leftJoin('periodoescolar as pec', 'ic.periodo_configurado', '=', 'pec.idperiodoescolar')
+
+            // Último periodo escolar registrado para la institución
+            ->leftJoinSub(
+                DB::table('periodoescolar_has_institucion as phi')
+                    ->selectRaw('phi.institucion_idInstitucion, phi.periodoescolar_idperiodoescolar as periodo_id')
+                    ->whereRaw('phi.id = (SELECT MAX(id) FROM periodoescolar_has_institucion 
+                                        WHERE institucion_idInstitucion = phi.institucion_idInstitucion)')
+                , 'last_periodo', 'i.idInstitucion', '=', 'last_periodo.institucion_idInstitucion'
+            )
+            ->leftJoin('periodoescolar as pe', 'last_periodo.periodo_id', '=', 'pe.idperiodoescolar')
+
+            ->select(
+                'i.idInstitucion', 'i.region_idregion', 'i.nombreInstitucion', 'i.aplica_matricula',
+                DB::raw("IF(i.estado_idEstado = '1','activado','desactivado') AS estado"),
+                'i.estado_idEstado as estadoInstitucion', 'c.nombre AS ciudad', 'u.idusuario AS asesor_id',
+                'u.nombres AS nombre_asesor', 'u.apellidos AS apellido_asesor', 'i.fecha_registro',
+                'r.nombreregion', 'i.codigo_institucion_milton', 'i.vendedorInstitucion', 'u.iniciales',
+                'i.cantidad_cambio_ventana_evaluacion', 'i.punto_venta', 'i.maximo_porcentaje_autorizado',
+                'i.ruc', 'i.ifcodigoEvaluacion',
+
+                // Último periodo activo por región
+                'ic.periodo_configurado',
+                'pec.periodoescolar as periodoNombreConfigurado',
+
+                // EstadoConfiguracion: Si hay un periodo con estado = 1, será 1; si no, será 0
+                DB::raw("COALESCE(ic.estado, 0) AS EstadoConfiguracion"),
+
+                // Último periodo escolar por institución
+                DB::raw("COALESCE(last_periodo.periodo_id, 0) AS periodo_id"),
+                DB::raw("COALESCE(pe.periodoescolar, 'Sin periodo') AS periodo"),
+                DB::raw("IF(pe.estado = '1', 'Activo', 'Desactivado') AS estadoPeriodo"),
+                DB::raw("COALESCE(pe.estado, 0) AS statusPeriodo")
+            )
+            ->orderBy('i.idInstitucion') // Ordena por ID de institución
+            ->orderBy('i.fecha_registro', 'DESC'); // Luego ordena por fecha de registro DESC
+
+        if ($request->has('asesor')) {
+            $query->where('i.vendedorInstitucion', '=', $request->cedula);
         }
+
+        if ($request->has('busqueda')) {
+            $query->where('i.nombreInstitucion', 'like', '%' . $request->busqueda . '%');
+        }
+        $lista = $query->get();
+        if ($lista->isEmpty()) {
+            return ["status" => "0", "message" => "No se encontró instituciones con ese nombre"];
+        }
+
+        $datos = $lista->map(function ($item) use ($asesor, $todas) {
+            return [
+                "idInstitucion" => $item->idInstitucion,
+                "nombreInstitucion" => $item->nombreInstitucion,
+                "aplica_matricula" => $item->aplica_matricula,
+                "estado" => $item->estado,
+                "estadoInstitucion" => $item->estadoInstitucion,
+                "ciudad" => $item->ciudad,
+                "asesor_id" => $item->asesor_id,
+                "nombre_asesor" => $item->nombre_asesor,
+                "apellido_asesor" => $item->apellido_asesor,
+                "asesor" => $item->nombre_asesor . " " . $item->apellido_asesor,
+                "fecha_registro" => $item->fecha_registro,
+                "nombreregion" => $item->nombreregion,
+                "vendedorInstitucion" => $item->vendedorInstitucion,
+                "iniciales" => $item->iniciales,
+                "region" => $item->region_idregion,
+                "cantidad_cambio_ventana_evaluacion" => $item->cantidad_cambio_ventana_evaluacion,
+                "punto_venta" => $item->punto_venta,
+                "maximo_porcentaje_autorizado" => $item->maximo_porcentaje_autorizado,
+                "ruc" => $item->ruc,
+                "ifcodigoEvaluacion" => $item->ifcodigoEvaluacion,
+                // Último periodo escolar por institución
+                "periodo_id" => $item->periodo_id,
+                "periodo" => $item->periodo,
+                "estadoPeriodo" => $item->estadoPeriodo,
+                "statusPeriodo" => $item->statusPeriodo,
+
+                // Último periodo activo por región
+                "periodo_configurado" => $item->periodo_configurado,
+                "periodoNombreConfigurado" => $item->periodoNombreConfigurado,
+                "EstadoConfiguracion" => $item->EstadoConfiguracion,
+            ];
+        });
+        // Si el parámetro "todas" está presente, retornar todos los datos
+        if ($request->has('todas') && $request->todas == true) {
+            return $datos->values();
+        }
+        return $datos->where('estadoInstitucion', '1')->values();
     }
 
+    
+    
+    
     public function listaInsitucionAsesor(Request $request)
     {
         if($request->porCedula){
@@ -1020,4 +1005,42 @@ class InstitucionController extends Controller
         }
     }
     //METODOS JEYSON FIN
+    //novedades institucion
+    public function get_novedades_institucion($id){
+        $dato = DB::table('novedades_institucion as nit')
+        ->leftjoin('periodoescolar as per','per.idperiodoescolar','=','nit.id_periodo')
+        ->leftjoin('usuario as usu','nit.id_editor','=','usu.idusuario')
+        ->where('nit.idInstitucion','=',$id)
+        ->select([
+            'nit.*',
+            'per.descripcion','per.idperiodoescolar',
+            DB::raw("CONCAT(usu.nombres, ' ', usu.apellidos) as usuario")
+        ])
+        ->orderBy('nit.created_at', 'DESC') // Ordenar por el más reciente
+        ->get();
+        return $dato;
+    }
+
+    public function new_novedades_add(Request $request){
+        $dato = DB::table('novedades_institucion')->insertGetId([
+            'idInstitucion' => $request->idInstitucion,
+            'id_periodo'    => $request->id_periodo,
+            'id_editor'     => $request->id_editor,
+            'novedades'     => $request->novedades,
+            'estado'        => '0',
+        ]);
+        return response()->json([
+            'message' => 'Novedad creada exitosamente'
+        ], 201);
+    }
+    public function cod_evaluacion_institucion($id){ 
+        $dato = DB::table('institucion')
+        ->where('idInstitucion','=',$id)
+        ->select([
+            'ifcodigoEvaluacion',
+            'idInstitucion'
+        ])
+        ->get();
+        return $dato;
+    }
 }

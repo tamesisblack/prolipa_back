@@ -33,7 +33,8 @@ class  VerificacionRepository extends BaseRepository
              end) as plus,
             (case when (c.quitar_de_reporte = '1') then 'si'
                  when (c.plus = '0') then ''
-             end) as quitar_de_reporte
+             end) as quitar_de_reporte,
+            c.combo,  c.codigo_combo
             FROM codigoslibros c
             LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
             LEFT JOIN libro l ON ls.idLibro = l.idlibro

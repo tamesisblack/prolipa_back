@@ -139,71 +139,7 @@ trait TraitVerificacionGeneral
             ");
         return $regalados;
     }
-    public function obtenerVentaRealXVerificacionXTipoVenta($request){
-        $periodo        = $request->periodo_id;
-        $institucion    = $request->institucion_id;
-        $verif          = "verif".$request->verificacion_id;
-        $IdVerificacion = $request->IdVerificacion;
-        $contrato       = $request->contrato;
-        $tipoVenta      = $request->TipoVenta;
-        $detalles = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo,  COUNT(ls.codigo_liquidacion) AS cantidad, c.serie,
-            c.libro_idlibro,l.nombrelibro as nombrelibro,ls.id_serie,a.area_idarea
-            FROM codigoslibros c
-            LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
-            LEFT JOIN libro l ON ls.idLibro = l.idlibro
-            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-            WHERE  c.estado_liquidacion = '0'
-            AND c.bc_periodo            = ?
-            AND c.bc_institucion        = ?
-            AND c.prueba_diagnostica    = '0'
-            AND `$verif`                = '$IdVerificacion'
-            AND c.contrato              = '$contrato'
-            AND c.venta_estado          = '$tipoVenta'
-            GROUP BY ls.codigo_liquidacion,ls.nombre, c.serie,c.libro_idlibro
-            ",
-            [$periodo,$institucion]
-        );
-        $datos = [];
-        $contador = 0;
-        foreach($detalles as $key => $item){
-            //plan lector
-            $precio = 0;
-            $query = [];
-            if($item->id_serie == 6){
-                $query = DB::SELECT("SELECT f.pvp AS precio
-                FROM pedidos_formato f
-                WHERE f.id_serie    = '6'
-                AND f.id_area       = '69'
-                AND f.id_libro      = '$item->libro_idlibro'
-                AND f.id_periodo    = '$periodo'");
-            }else{
-                $query = DB::SELECT("SELECT f.pvp AS precio
-                FROM pedidos_formato f
-                WHERE f.id_serie    = '$item->id_serie'
-                AND f.id_area       = '$item->area_idarea'
-                AND f.id_periodo    = '$periodo'
-                ");
-            }
-            if(count($query) > 0){
-                $precio = $query[0]->precio;
-            }
-            $datos[$contador] = [
-                "IdVerificacion"        => $IdVerificacion,
-                "verificacion_id"       => $request->verificacion_id,
-                "contrato"              => $contrato,
-                "codigo"                => $item->codigo,
-                "cantidad"              => $item->cantidad,
-                "nombre_libro"          => $item->nombrelibro,
-                "libro_id"              => $item->libro_idlibro,
-                "id_serie"              => $item->id_serie,
-                "id_periodo"            => $periodo,
-                "precio"                => $precio,
-                "valor"                 => $item->cantidad * $precio
-            ];
-            $contador++;
-        }
-        return $datos;
-     }
+   
     public function FormatoLibrosLiquidados($num_verificacion_id,$contrato,$periodo){
         $contador            = 0;
         $datos               = [];
@@ -291,55 +227,4 @@ trait TraitVerificacionGeneral
         }
         return ["Pcliente"=>$totalClientes,"PProlipaAumentar"=>$totalProlipaAumentar,"PProlipaDisminuir" => $totalProlipaDisminuir];
     }
-
-    //INICIO METODOS JEYSON
-    public function obtenerVentaRealXVerificacionXTipoVenta_new($request){
-        $periodo        = $request->periodo_id;
-        $institucion    = $request->institucion_id;
-        $verif          = "verif".$request->verificacion_id;
-        $IdVerificacion = $request->IdVerificacion;
-        $contrato       = $request->contrato;
-        $tipoVenta      = $request->TipoVenta;
-        $detalles = DB::SELECT("SELECT ls.codigo_liquidacion AS codigo,  COUNT(ls.codigo_liquidacion) AS cantidad, c.serie,
-            c.libro_idlibro,l.nombrelibro as nombrelibro,ls.id_serie,a.area_idarea
-            FROM codigoslibros c
-            LEFT JOIN  libros_series ls ON ls.idLibro = c.libro_idlibro
-            LEFT JOIN libro l ON ls.idLibro = l.idlibro
-            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-            WHERE  c.estado_liquidacion = '0'
-            AND c.bc_periodo            = ?
-            AND c.bc_institucion        = ?
-            AND c.prueba_diagnostica    = '0'
-            AND `$verif`                = '$IdVerificacion'
-            AND c.contrato              = '$contrato'
-            AND c.venta_estado          = '$tipoVenta'
-            GROUP BY ls.codigo_liquidacion,ls.nombre, c.serie,c.libro_idlibro
-            ",
-            [$periodo,$institucion]
-        );
-        $datos = [];
-        $contador = 0;
-        foreach($detalles as $key => $item){
-            $pfn_pvp_result = (float) DB::table('pedidos_formato_new')
-            ->where('idperiodoescolar', $periodo)
-            ->where('idlibro', $item->libro_idlibro)
-            ->value('pfn_pvp');
-            $datos[$contador] = [
-                "IdVerificacion"        => $IdVerificacion,
-                "verificacion_id"       => $request->verificacion_id,
-                "contrato"              => $contrato,
-                "codigo"                => $item->codigo,
-                "cantidad"              => $item->cantidad,
-                "nombre_libro"          => $item->nombrelibro,
-                "libro_id"              => $item->libro_idlibro,
-                "id_serie"              => $item->id_serie,
-                "id_periodo"            => $periodo,
-                "precio"                => $pfn_pvp_result,
-                "valor"                 => $item->cantidad * $pfn_pvp_result
-            ];
-            $contador++;
-        }
-        return $datos;
-     }
-    //FIN METODOS JEYSON
 }

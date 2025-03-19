@@ -35,6 +35,11 @@ class CodigosLibrosDevolucionHeader extends Model
     {
         return $this->belongsTo(Usuario::class, 'user_created_finalizado');
     }
+    //relacion con usuario intercambio
+    public function usuarioIntercambio()
+    {
+        return $this->belongsTo(Usuario::class, 'user_intercambio_cliente');
+    }
     //relacion con periodo 
     public function periodo()
     {

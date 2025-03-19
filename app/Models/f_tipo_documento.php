@@ -24,6 +24,12 @@ class f_tipo_documento extends Model
         'updated_at',
         'user_created',
     ];
+    public function scopeObtenerSecuenciaXId($query, $id, $empresa)
+    {
+        $campo = $empresa == 1 ? 'tdo_secuencial_Prolipa' : 'tdo_secuencial_calmed';
+        return $query->where('tdo_id', $id)->select('tdo_id', $campo . ' as cod');
+    }
+
     public function scopeObtenerSecuencia($query, $tdo_nombre)
     {
         return $query->where('tdo_nombre', $tdo_nombre)

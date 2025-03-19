@@ -23,12 +23,14 @@ class ProformaController extends Controller
     use TraitPedidosGeneral;
     //consultas
     public function Get_MinStock(Request $request){
-        $query = DB::SELECT("SELECT minimo as min, maximo as max  from configuracion_general where nombre='$request->nombre'");
+        $query = DB::SELECT("SELECT minimo as min, maximo as max  from configuracion_general where id='$request->nombre'");
         if(!empty($query)){
-            if($request->nombre=='RESERVAR'){
+            //reservar
+            if($request->nombre=='1'){
                 $codi=(int)$query[0]->min;
                 return $codi;
-            }else if($request->nombre=='DESCUENTO'){
+                //descuento
+            }else if($request->nombre=='6'){
                 $codi=(int)$query[0]->min;
                 $cod=(int)$query[0]->max;
                 $array = array($codi,$cod);
@@ -124,17 +126,32 @@ class ProformaController extends Controller
 
     public function Get_DatosFactura(Request $request){
         $datos = [];
-        $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
-            ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stock  as facturas,
-             p.pro_deposito as bodega,p.pro_reservar, l.descripcionlibro, ls.id_serie
-              FROM f_detalle_proforma as dpr
-            INNER JOIN  f_proforma as fp on dpr.prof_id=fp.id
-            INNER JOIN libros_series as ls ON dpr.pro_codigo=ls.codigo_liquidacion
-            INNER JOIN 1_4_cal_producto as p on dpr.pro_codigo=p.pro_codigo
-            INNER JOIN series as s ON ls.id_serie=s.id_serie
-            INNER JOIN libro l ON ls.idLibro = l.idlibro
-            WHERe dpr.prof_id='$request->prof_id'
-        ");
+        if($request->empresa == 1){
+            $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
+                ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stock  as facturas,
+                p.pro_deposito as bodega,p.pro_reservar, l.descripcionlibro, ls.id_serie
+                FROM f_detalle_proforma as dpr
+                INNER JOIN  f_proforma as fp on dpr.prof_id=fp.id
+                INNER JOIN libros_series as ls ON dpr.pro_codigo=ls.codigo_liquidacion
+                INNER JOIN 1_4_cal_producto as p on dpr.pro_codigo=p.pro_codigo
+                INNER JOIN series as s ON ls.id_serie=s.id_serie
+                INNER JOIN libro l ON ls.idLibro = l.idlibro
+                WHERe dpr.prof_id='$request->prof_id'
+            ");
+        }else if($request->empresa == 3){
+            $array1 = DB::SELECT("SELECT fp.prof_id, fp.emp_id, dpr.det_prof_id, dpr.pro_codigo, dpr.det_prof_cantidad, dpr.det_prof_cantidad AS cantidad,dpr.det_prof_valor_u,
+                ls.nombre, s.nombre_serie, fp.pro_des_por, fp.prof_iva_por, p.pro_stockCalmed  as facturas,
+                p.pro_depositoCalmed as bodega,p.pro_reservar, l.descripcionlibro, ls.id_serie
+                FROM f_detalle_proforma as dpr
+                INNER JOIN  f_proforma as fp on dpr.prof_id=fp.id
+                INNER JOIN libros_series as ls ON dpr.pro_codigo=ls.codigo_liquidacion
+                INNER JOIN 1_4_cal_producto as p on dpr.pro_codigo=p.pro_codigo
+                INNER JOIN series as s ON ls.id_serie=s.id_serie
+                INNER JOIN libro l ON ls.idLibro = l.idlibro
+                WHERe dpr.prof_id='$request->prof_id'
+            ");
+        }
+       
         foreach($array1 as $key => $item){
             if($item->prof_id&&$item->emp_id){
                     $array2 = DB::SELECT(" SELECT dfv.pro_codigo, SUM(dfv.det_ven_cantidad) AS cant from f_detalle_venta AS dfv
@@ -827,6 +844,90 @@ class ProformaController extends Controller
 
         return $query;
     }
+    
+    public function CambiarEmpresaPedido(Request $request)
+    {
+        $this->validate($request, [
+            'id' => 'required',  // Validar que el pedido exista
+            'empresa' => 'required',  // Validar que la empresa exista
+        ]);
+    
+        $id_proforma = $request->id;
+        $id_empresa = $request->empresa;
+    
+        // Iniciar la transacción
+        DB::beginTransaction();
+    
+        try {
+            // Buscar el pedido
+            $pedido = DB::table('f_proforma')->where('id', $id_proforma)->first();
+    
+            if (!$pedido) {
+                // Si el pedido no existe, lanzar una excepción para que se haga rollback
+                return response()->json([
+                    'status' => 404,
+                    'message' => 'Pedido no encontrado',
+                ]);
+            }
+    
+            // Buscar la empresa
+            $empresa = DB::table('empresas')->where('id', $id_empresa)->first();
+    
+            if (!$empresa) {
+                // Si la empresa no existe, lanzar una excepción para que se haga rollback
+                return response()->json([
+                    'status' => 404,
+                    'message' => 'Empresa no encontrada',
+                ]);
+            }
+    
+            // Cambiar la empresa del pedido
+            $updatedRows = DB::table('f_proforma')
+                ->where('id', $id_proforma)
+                ->update(['emp_id' => $empresa->id]);
+    
+            // Verificar si la actualización se realizó con éxito
+            if ($updatedRows === 0) {
+                // Si no se actualizó ningún registro, lanzar una excepción
+                throw new \Exception('No se pudo actualizar el pedido. Hubo un error en la actualización.');
+            }
+
+            $pedidoActualizado = DB::SELECT("SELECT fpr.*,  em.nombre, em.img_base64,
+            us.nombres as username, us.apellidos as lastname, COUNT(dpr.pro_codigo) AS item, SUM(dpr.det_prof_cantidad) AS libros,
+            CONCAT(COALESCE(usa.nombres, ''), ' ', COALESCE(usa.apellidos, '')) AS cliente,
+            i.nombreInstitucion,i.ruc as rucPuntoVenta
+            FROM f_proforma fpr
+            LEFT JOIN usuario us ON fpr.user_editor = us.idusuario
+            LEFT JOIN empresas em ON fpr.emp_id =em.id
+            INNER JOIN f_detalle_proforma dpr ON dpr.prof_id=fpr.id
+            left join usuario usa on fpr.ven_cliente = usa.idusuario
+            LEFT JOIN institucion i ON fpr.id_ins_depacho = i.idInstitucion
+            WHERE fpr.id= '$id_proforma'
+            GROUP BY fpr.id, fpr.prof_id,fpr.prof_observacion,em.nombre, em.img_base64
+            order by fpr.created_at desc");
+
+            // Si todo es correcto, hacer commit de la transacción
+            DB::commit();
+    
+            return response()->json([
+                'status' => 200,
+                'message' => 'Pedido cambiado con éxito',
+                'data' => $pedidoActualizado
+            ]);
+    
+        } catch (\Exception $e) {
+            // Si ocurre algún error, hacer rollback
+            DB::rollback();
+    
+            return response()->json([
+                'status' => 500,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+    
+    
+    
 }
 
 

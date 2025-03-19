@@ -170,6 +170,10 @@ class  GuiaRepository extends BaseRepository
                     $nuevoStockEmpresa      = $stockEmpresa - $cantidadDescontar;
                 }
 
+                //si el nuevoStockReserva es menor a 0 no se actualiza el stock mostrar un mensaje de alerta
+                if($nuevoStockReserva < 0 || $nuevoStockEmpresa < 0){
+                    throw new \Exception("No hay stock suficiente para el producto {$item->codigoFact}");
+                }
                 // Actualizar stock
                 _14Producto::updateStock($item->codigoFact, $empresa_id, $nuevoStockReserva, $nuevoStockEmpresa);
 

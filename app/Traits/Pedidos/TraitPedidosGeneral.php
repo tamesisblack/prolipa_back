@@ -20,8 +20,8 @@ trait TraitPedidosGeneral
     public $api_KeyCOBACANGO            = "RfVaC9hIMhn49J4jSq2_I6jl_oMHwM8TrJbBo8ztdHA-";
     //=====END SOLINFA======
     public $ipProlipa                   = "http://186.4.218.168:9095/api/";
-    public $ipPerseo                    = "http://190.12.43.171:8181/api/";
-    public $gl_perseoProduccion         = 1;
+    public $ipPerseo                    = "http://45.184.225.106:8181/api/";
+    public $gl_perseoProduccion         = 0;
     // public $ipLocal        = "http://localhost:5000/api/";
     public function FacturacionGet($endpoint)
     {
@@ -339,7 +339,7 @@ trait TraitPedidosGeneral
         return $query;
     }
     public function tr_getPreproformas($ca_codigo_agrupado){
-        $query = DB::SELECT("SELECT DISTINCT fp.prof_id
+        $query = DB::SELECT("SELECT DISTINCT fp.prof_id, fp.emp_id, fp.prof_estado
         FROM  f_proforma fp
         WHERE fp.idPuntoventa = '$ca_codigo_agrupado'
         ORDER BY fp.created_at DESC
@@ -405,19 +405,35 @@ trait TraitPedidosGeneral
        return $query;
     }
     public function tr_getInstitucionesVentaXTipoVentaAsesor($id_periodo,$tipo_venta,$asesor){
-        $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,p.id_asesor,
-        CONCAT(u.nombres,' ',u.apellidos) as asesor, i.nombreInstitucion,c.nombre as ciudad
-        FROM pedidos p
-        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
-        LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
-        LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
-        WHERE p.tipo_venta = '$tipo_venta'
-        AND p.estado = '1'
-        AND p.id_periodo = '$id_periodo'
-        AND p.contrato_generado IS NOT NULL
-        AND p.id_asesor = '$asesor'
-        ORDER BY p.id_pedido DESC
-        ");
+        if($tipo_venta == 1 || $tipo_venta == 2){
+            $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,p.id_asesor,
+            CONCAT(u.nombres,' ',u.apellidos) as asesor, i.nombreInstitucion,c.nombre as ciudad
+            FROM pedidos p
+            LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+            LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
+            LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+            WHERE p.tipo_venta = '$tipo_venta'
+            AND p.estado = '1'
+            AND p.id_periodo = '$id_periodo'
+            AND p.contrato_generado IS NOT NULL
+            AND p.id_asesor = '$asesor'
+            ORDER BY p.id_pedido DESC
+            ");
+        }else{
+            $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,p.id_asesor,
+            CONCAT(u.nombres,' ',u.apellidos) as asesor, i.nombreInstitucion,c.nombre as ciudad
+            FROM pedidos p
+            LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+            LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
+            LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+            WHERE p.estado = '1'
+            AND p.id_periodo = '$id_periodo'
+            AND p.contrato_generado IS NOT NULL
+            AND p.id_asesor = '$asesor'
+            ORDER BY p.id_pedido DESC
+            ");
+        }
+       
        return $query;
     }
     public function tr_getInstitucionesPeriodo($id_periodo){
@@ -850,6 +866,32 @@ trait TraitPedidosGeneral
             $item->precio_total = number_format($precio * $item->cantidad, 2, '.', '');
         }
 
+        return $query;
+    }
+
+    public function tr_institucionesVentasPeriodo($id_periodo){
+        $query = DB::SELECT("SELECT DISTINCT i.idInstitucion AS id_institucion, i.nombreInstitucion
+            FROM  f_venta fv 
+            INNER JOIN institucion i ON i.idInstitucion = fv.institucion_id
+            WHERE fv.periodo_id = ?
+            AND fv.est_ven_codigo <> 3
+            AND fv.idtipodoc IN (1, 2, 3, 4)
+        ",[$id_periodo]);
+        return $query;
+    }
+    
+    //asesores que tiene Ventas
+    public function getAsesoresVentasPeriodo($id_periodo){
+        $query = DB::SELECT("SELECT DISTINCT u.idusuario AS id_asesor, 
+            CONCAT(u.nombres, ' ', u.apellidos) AS asesor
+            FROM f_venta fv
+            INNER JOIN institucion i ON i.idInstitucion = fv.institucion_id
+            INNER JOIN usuario u ON i.asesor_id = u.idusuario
+            WHERE fv.periodo_id = ?
+            AND fv.est_ven_codigo <> 3
+            AND fv.institucion_id IS NOT NULL 
+            AND fv.idtipodoc IN (1, 2, 3, 4);
+        ",[$id_periodo]);
         return $query;
     }
 

@@ -19,7 +19,7 @@ class _1_4_Empacado extends Model
         static::creating(function ($model) {
             // Extraer el último número de la cadena
             $lastNumber         = (int) substr($model->empa_codigo, 1);
-            return $lastNumber;
+
             // Incrementar el número
             $newNumber          = $lastNumber + 1;
 

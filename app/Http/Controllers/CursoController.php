@@ -64,29 +64,36 @@ class CursoController extends Controller
 
     public function cursos_evaluaciones_libro($id_usuario, $id_libro)
     {
-        $cursos = DB::SELECT("SELECT DISTINCT c. *,
-        a.nombreasignatura, a.area_idarea, a.idasignatura, a.nivel_idnivel,
-        a.tipo_asignatura,
-        (SELECT COUNT(e.id) AS estudiantes FROM estudiante e
-        LEFT JOIN usuario us ON e.usuario_idusuario = us.idusuario
-        WHERE e.codigo = c.codigo
-        AND us.estado_idEstado = '1'
-        AND e.estado = '1') as estudiantes, l.idlibro, l.nombrelibro
-        FROM curso c, asignatura a, usuario u, periodoescolar_has_institucion phi, periodoescolar p, libro l
-        WHERE c.idusuario = u.idusuario
-        AND c.idusuario = $id_usuario
-        AND c.estado = '1'
-        AND u.institucion_idInstitucion = phi.institucion_idInstitucion
-        AND phi.periodoescolar_idperiodoescolar = p.idperiodoescolar
-        AND p.estado = '1'
-        AND l.asignatura_idasignatura = c.id_asignatura
-        AND c.id_asignatura = a.idasignatura
-        AND l.idlibro = $id_libro
-        ORDER BY c.idcurso DESC;
-        ");
-
+        $cursos = DB::SELECT("
+            SELECT 
+                c.idcurso, c.codigo, c.nombre, c.estado, c.seccion,
+                a.idasignatura, a.nombreasignatura, a.area_idarea, a.nivel_idnivel, a.tipo_asignatura,
+                l.idlibro, l.nombrelibro,
+                p.idperiodoescolar, p.periodoescolar,
+                COUNT(e.id) AS estudiantes
+            FROM curso c
+            INNER JOIN asignatura a ON c.id_asignatura = a.idasignatura
+            INNER JOIN usuario u ON c.idusuario = u.idusuario
+            INNER JOIN periodoescolar_has_institucion phi ON u.institucion_idInstitucion = phi.institucion_idInstitucion
+            INNER JOIN periodoescolar p ON phi.periodoescolar_idperiodoescolar = p.idperiodoescolar
+            INNER JOIN libro l ON l.asignatura_idasignatura = c.id_asignatura
+            LEFT JOIN estudiante e ON e.codigo = c.codigo
+            LEFT JOIN usuario us ON e.usuario_idusuario = us.idusuario AND us.estado_idEstado = '1' AND e.estado = '1'
+            WHERE 
+                c.idusuario = ? 
+                AND c.estado = '1'
+                AND p.estado = '1'
+                AND l.idlibro = ?
+            GROUP BY c.idcurso, c.codigo, c.nombre, c.estado, 
+                     a.idasignatura, a.nombreasignatura, a.area_idarea, a.nivel_idnivel, a.tipo_asignatura,
+                     l.idlibro, l.nombrelibro,
+                     p.idperiodoescolar, p.periodoescolar
+            ORDER BY c.idcurso DESC
+        ", [$id_usuario, $id_libro]);
+    
         return $cursos;
     }
+    
 
     public function cursos_evaluaciones_asignatura_doc($id_usuario, $id_asignatura)
     {

@@ -262,6 +262,7 @@ class UsuarioController extends Controller
             'usuario.email',
             'usuario.idusuario',
             'usuario.created_at',
+            'usuario.updated_at',
             'institucion_cargos.cargo',
             'institucion_cargos.id as cargo_id'
         )
@@ -284,6 +285,7 @@ class UsuarioController extends Controller
                 "email"             => $documento->email,
                 "idusuario"         => $documento->idusuario,
                 'created_at'        => $documento->created_at->format('Y-m-d H:i:s'), // Formatea la fecha
+                'updated_at'        => $documento->updated_at->format('Y-m-d H:i:s'), // Formatea la fecha
                 "cargo"             => $documento->cargo,
                 "cargo_id"          => $documento->cargo_id,
             ];
@@ -1704,5 +1706,53 @@ class UsuarioController extends Controller
     })->values(); // Convertimos la colección en un array indexado
 
     return response()->json($docentesAgrupados);
+    }
+
+    //Inicio Metodos Jeyson
+    public function VerifcarMetodosGet_UsuarioController(Request $request)
+    {
+        $action = $request->query('action'); // Leer el parámetro `action` desde la URL
+
+        switch ($action) {
+            case 'Get_Busqueda_Representante_Institucion':
+                return $this->busquedaUsuarioxCedula_Nombre_Apellido($request);
+            case 'Get_Busqueda_Representante_InstitucionxID':
+                return $this->busquedaUsuarioxidusuario($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+    public function busquedaUsuarioxCedula_Nombre_Apellido($request)
+    {
+        $busquedarepresentante  = $request->filtrorepresentante;
+        $usuarios = DB::SELECT("SELECT us.*, sg.level 
+        FROM usuario us 
+        INNER JOIN sys_group_users sg on us.id_group = sg.id
+        WHERE us.nombres LIKE '%$busquedarepresentante%' OR us.cedula LIKE '%$busquedarepresentante%' OR us.apellidos LIKE '%$busquedarepresentante%' ");
+        return $usuarios;
+    }
+    public function busquedaUsuarioxidusuario($request)
+    {
+        $busquedaxid  = $request->idusuario;
+        $usuarios = DB::SELECT("SELECT us.*
+        FROM usuario us 
+        WHERE us.idusuario = '$busquedaxid'");
+        return $usuarios;
+    }
+    //Fin Metodos Jeyson
+
+    public function usuarioConVentas($cedula)
+    {
+        $usuarios = DB::SELECT("SELECT fv.ven_codigo,fv.id_empresa, fv.ruc_cliente, u.cedula 
+        FROM f_venta fv
+        INNER JOIN usuario u ON fv.ven_cliente = u.idusuario
+        WHERE fv.est_ven_codigo <> 3
+        AND fv.idtipodoc IN (1, 3, 4)
+        AND fv.ruc_cliente = '$cedula'");
+        if(count($usuarios) > 0){
+            return response()->json(['SinVentas' => false, 'ventas' => $usuarios]);
+        }else{
+            return response()->json(['SinVentas' => true]);
+        }
     }
 }

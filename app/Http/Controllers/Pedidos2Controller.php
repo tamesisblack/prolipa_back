@@ -44,11 +44,13 @@ class Pedidos2Controller extends Controller
         if($request->getLibrosXAreaXSerieUsados)    { return $this->getLibrosXAreaXSerieUsados($request->periodo_id,$request->area,$request->serie); }
         //api:get/pedidos2/pedidos?getAsesoresPedidos=1
         if($request->getAsesoresPedidos)            { return $this->getAsesoresPedidos(); }
+        if($request->getAsesoresVentasPeriodo)      { return $this->getAsesoresVentasPeriodo($request->id_periodo); }
         if($request->getInstitucionesDespacho)      { return $this->getInstitucionesDespacho($request); }
         if($request->getLibrosXDespacho)            { return $this->getLibrosXDespacho($request); }
         if($request->getLibrosXDespacho_new)        { return $this->getLibrosXDespacho_new($request); }
         if($request->getLibrosXInstituciones)       { return $this->getLibrosXInstituciones($request->id_periodo,$request->tipo_venta); }
         if($request->getLibrosXInstitucionesAsesor) { return $this->getLibrosXInstitucionesAsesor($request->id_periodo,$request->tipo_venta,$request->id_asesor); }
+        if($request->getLibrosXInstitucionesAsesor_new) { return $this->getLibrosXInstitucionesAsesor_new($request->id_periodo,$request->tipo_venta,$request->id_asesor); }
         if($request->getLibrosXPerido) { return $this->getLibrosXPerido($request->id_periodo); }
 
 
@@ -1058,6 +1060,7 @@ class Pedidos2Controller extends Controller
         if($request->getValoresLibrosContratosDespacho_new)             { return $this->getValoresLibrosContratosDespacho_new($request); }
         if($request->getValoresLibrosContratosInstituciones)            { return $this->getValoresLibrosContratosInstituciones($request); }
         if($request->getValoresLibrosContratosInstitucionesAsesor)      { return $this->getValoresLibrosContratosInstitucionesAsesor($request); }
+        if($request->getValoresLibrosContratosInstitucionesAsesor_new)  { return $this->getValoresLibrosContratosInstitucionesAsesor_new($request); }
         if($request->crearUsuario)                                      { return $this->crearUsuario($request); }
         if($request->updateClienteInstitucion)                          { return $this->updateClienteInstitucion($request); }
     }
@@ -1518,7 +1521,7 @@ class Pedidos2Controller extends Controller
                 "valor"             => $item->valor,
                 // "tipo_val"          => $item->tipo_val,
                 "id_serie"          => $item->id_serie,
-                // "year"              => $item->year,
+                "year"              => $item->year,
                 // "anio"              => $valores[0]->year,
                 // "version"           => $valores[0]->version,
                 // "plan_lector"       => $item->plan_lector,

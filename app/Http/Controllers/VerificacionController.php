@@ -952,20 +952,7 @@ class VerificacionController extends Controller
       
      }
 
-     //APIS
-     //api:Get>> liquidacion/codigosperdidos/{contrato}
-     public function codigosperdidos($contrato){
-        $buscarCodigosPerdidos = DB::select("SELECT h.* , u.cedula,u.nombres,u.apellidos
-         FROM hist_codlibros h, usuario u
-         WHERE h.contrato_actual = '$contrato'
-         and u.idusuario = h.id_usuario
-         ");
-        if(!empty($buscarCodigosPerdidos)){
-            return  ["status"=>"1","codigos" => $buscarCodigosPerdidos];
-        }else{
-            return  ["status"=>"0","message" => "No hay historial de codigos perdidos para ese contrato"];
-        }
-     }
+   
 
      //api:Get>> liquidacion/codigosmovidos/contrato
      public function codigosmovidos($contrato){

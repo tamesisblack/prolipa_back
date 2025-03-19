@@ -165,126 +165,78 @@ class RemisionController extends Controller
 
     }
 
-    // SOLO ES PARA REALIZAR EL REPORTE DE CALMED
-    public function GetRemisionCALMED_FECHA_TRANSPORTE(Request $request){
-        $query = DB::SELECT("SELECT r.*, t.trans_nombre, (select i.telefonoInstitucion from f_venta f 
-        inner join institucion i on i.idInstitucion=f.institucion_id where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono
-         FROM remision_copy r
-        LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-        WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro' and remi_ci_transportista = '$request->cedula'
-        ORDER BY remi_fecha_inicio ASC");
-        return $query;
-    }
-
-    // public function GetRemisionCALMED_FECHA(Request $request){
-    //     if($request->op==0){
-    //         $query = DB::SELECT("SELECT DISTINCT r.*, e.*, t.trans_nombre, (select concat(i.telefonoInstitucion,' ',u.telefono) from f_venta f 
-    //     inner join institucion i on i.idInstitucion=f.institucion_id
-    //     inner join usuario u on u.idusuario=f.ven_cliente
-    //      where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono,
-    //         (select c.nombre from f_venta f
-    //      inner join institucion i on i.idInstitucion=f.institucion_id 
-    //      inner join ciudad c on i.ciudad_id=c.idciudad 
-    //      where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as ciudad, i.ruc,CONCAT(u.nombres,' ',u.apellidos) AS cliente,
-    //      fpr.prof_observacion,fv.ven_observacion
-    //         FROM remision_copy r
-    //         LEFT JOIN rempacado e on e.remi_codigo=r.remi_codigo
-    //         LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-    //         LEFT JOIN f_venta fv on fv.ven_codigo= r.remi_num_factura
-    //         LEFT JOIN usuario u on fv.ven_cliente = u.idusuario
-    //         LEFT JOIN institucion i on fv.institucion_id = i.idInstitucion
-    //         LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
-    //         WHERE DATE(REMI_FECHA_INICIO) = '$request->fecha_filtro'
-    //         ORDER BY r.remi_fecha_inicio ASC");
-    //     }else if($request->op==1){
-    //         $query = DB::select("SELECT DISTINCT r.*, e.*, t.trans_nombre, (select concat(i.telefonoInstitucion,' ',u.telefono) from f_venta f 
-    //     inner join institucion i on i.idInstitucion=f.institucion_id
-    //     inner join usuario u on u.idusuario=f.ven_cliente
-    //      where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as telefono,
-    //      (select c.nombre from f_venta f
-    //      inner join institucion i on i.idInstitucion=f.institucion_id 
-    //      inner join ciudad c on i.ciudad_id=c.idciudad 
-    //      where f.ven_codigo=r.remi_num_factura and f.id_empresa=r.remi_idempresa) as ciudad, i.ruc,CONCAT(u.nombres,' ',u.apellidos) AS cliente,
-    //      fpr.prof_observacion,fv.ven_observacion
-    //         FROM remision_copy r
-    //         LEFT JOIN rempacado e on e.remi_codigo=r.remi_codigo
-    //         LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-    //         LEFT JOIN f_venta fv on fv.ven_codigo= r.remi_num_factura
-    //         LEFT JOIN usuario u on fv.ven_cliente = u.idusuario
-    //         LEFT JOIN institucion i on fv.institucion_id = i.idInstitucion
-    //         LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
-    //         WHERE DATE(r.REMI_FECHA_INICIO) = CURDATE()
-    //         ORDER BY r.remi_fecha_inicio  ASC");
-    //     }
-    //     return $query;
-    // }
     public function GetRemisionCALMED_FECHA(Request $request) {
         try {
-            if ($request->op == 0) {
-                $query = DB::select("
-                    SELECT DISTINCT r.*, e.*, t.trans_nombre, 
-                        (SELECT CONCAT(i.telefonoInstitucion, ' ', u.telefono) 
-                         FROM f_venta f 
-                         INNER JOIN institucion i ON i.idInstitucion = f.institucion_id
-                         INNER JOIN usuario u ON u.idusuario = f.ven_cliente
-                         WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS telefono,
-                        (SELECT c.nombre 
-                         FROM f_venta f
-                         INNER JOIN institucion i ON i.idInstitucion = f.institucion_id 
-                         INNER JOIN ciudad c ON i.ciudad_id = c.idciudad 
-                         WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS ciudad, 
-                        i.ruc,
-                        CONCAT(u.nombres, ' ', u.apellidos) AS cliente, 
-                        fpr.prof_observacion,
-                        fv.ven_observacion,
-                        emp.descripcion_corta,
-                        fv.ruc_cliente
-                    FROM remision_copy r
-                    LEFT JOIN rempacado e ON e.remi_codigo = r.remi_codigo AND e.idempresa = r.remi_idempresa
-                    LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-                    LEFT JOIN f_venta fv ON fv.ven_codigo = r.remi_num_factura AND r.remi_idempresa = fv.id_empresa
-                    LEFT JOIN usuario u ON fv.ven_cliente = u.idusuario
-                    LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion
-                    LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma AND fpr.emp_id = fv.id_empresa
-                    LEFT JOIN empresas emp ON emp.id = e.idempresa
-                    WHERE DATE(r.REMI_FECHA_INICIO) = ?
-                    ORDER BY r.remi_fecha_inicio ASC", [$request->fecha_filtro]);
+            $fechaFiltro = null;
+            $cedulaFiltro = null;
     
-            } else if ($request->op == 1) {
-                $query = DB::select("
-                    SELECT DISTINCT r.*, e.*, t.trans_nombre, 
-                        (SELECT CONCAT(i.telefonoInstitucion, ' ', u.telefono) 
-                         FROM f_venta f 
-                         INNER JOIN institucion i ON i.idInstitucion = f.institucion_id
-                         INNER JOIN usuario u ON u.idusuario = f.ven_cliente
-                         WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS telefono,
-                        (SELECT c.nombre 
-                         FROM f_venta f
-                         INNER JOIN institucion i ON i.idInstitucion = f.institucion_id 
-                         INNER JOIN ciudad c ON i.ciudad_id = c.idciudad 
-                         WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS ciudad, 
-                        i.ruc,
-                        CONCAT(u.nombres, ' ', u.apellidos) AS cliente, 
-                        fpr.prof_observacion,
-                        fv.ven_observacion,
-                        emp.descripcion_corta,
-                        fv.ruc_cliente
-                    FROM remision_copy r
-                    LEFT JOIN rempacado e ON e.remi_codigo = r.remi_codigo AND e.idempresa = r.remi_idempresa
-                    LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
-                    LEFT JOIN f_venta fv ON fv.ven_codigo = r.remi_num_factura AND r.remi_idempresa = fv.id_empresa
-                    LEFT JOIN usuario u ON fv.ven_cliente = u.idusuario
-                    LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion
-                    LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma AND fpr.emp_id = fv.id_empresa
-                    LEFT JOIN empresas emp ON emp.id = e.idempresa
-                    WHERE DATE(r.REMI_FECHA_INICIO) = CURDATE()
-                    ORDER BY r.remi_fecha_inicio ASC");
-    
+            switch ($request->op) {
+                case 0:
+                    $fechaFiltro = $request->fecha_filtro;
+                    break;
+                case 1:
+                    $fechaFiltro = now()->toDateString(); // Esto solo da la fecha en formato 'Y-m-d'
+                    break;
+                case 2:
+                    // Para el caso 2, también se necesita la cédula
+                    $fechaFiltro = $request->fecha_filtro;
+                    $cedulaFiltro = $request->cedula;
+                    break;
+                default:
+                    return ["status" => "0", "message" => "Operación no válida"];
             }
-            return response()->json($query);
     
+            // Construir la consulta base
+            $query = "SELECT DISTINCT r.*, e.*, t.trans_nombre, 
+                    (SELECT CONCAT(i.telefonoInstitucion, ' ', u.telefono) 
+                     FROM f_venta f 
+                     INNER JOIN institucion i ON i.idInstitucion = f.institucion_id
+                     INNER JOIN usuario u ON u.idusuario = f.ven_cliente
+                     WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS telefono,
+                    (SELECT c.nombre 
+                     FROM f_venta f
+                     INNER JOIN institucion i ON i.idInstitucion = f.institucion_id 
+                     INNER JOIN ciudad c ON i.ciudad_id = c.idciudad 
+                     WHERE f.ven_codigo = r.remi_num_factura AND f.id_empresa = r.remi_idempresa) AS ciudad, 
+                    i.ruc,
+                    CONCAT(u.nombres, ' ', u.apellidos) AS cliente, 
+                    fpr.prof_observacion,
+                    fv.ven_observacion,
+                    emp.descripcion_corta,
+                    fv.ruc_cliente,
+                    fv.est_ven_codigo
+                FROM empacado_remision r
+                LEFT JOIN empacado_rempacado e ON e.remision_id = r.id
+                LEFT JOIN 1_4_transporte t ON r.trans_codigo = t.trans_codigo
+                LEFT JOIN f_venta fv ON fv.ven_codigo = r.remi_num_factura AND r.remi_idempresa = fv.id_empresa
+                LEFT JOIN usuario u ON fv.ven_cliente = u.idusuario
+                LEFT JOIN institucion i ON fv.institucion_id = i.idInstitucion
+                LEFT JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma AND fpr.emp_id = fv.id_empresa
+                LEFT JOIN empresas emp ON emp.id = e.idempresa
+                WHERE r.remi_estado = '2'
+                AND ";
+    
+            // Condicionales basadas en el valor de 'op'
+            if ($request->op == 2) {
+                // En caso de 'op' == 2, agregar ambas condiciones (fecha y cédula)
+                $query .= "DATE(r.REMI_FECHA_INICIO) = ? AND r.remi_ci_transportista = ? ";
+                $queryParams = [$fechaFiltro, $cedulaFiltro];
+            } else {
+                // Para 'op' == 0 o 'op' == 1, solo agregar la condición de fecha
+                $query .= "DATE(r.REMI_FECHA_INICIO) = ? ";
+                $queryParams = [$fechaFiltro];
+            }
+    
+            // Ordenar por fecha
+            $query .= "ORDER BY r.remi_fecha_inicio ASC";
+    
+            // Ejecutar la consulta
+            $result = DB::select($query, $queryParams);
+    
+            return response()->json($result);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => $e->getMessage()], 200);
         }
     }
+    
 }

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Asignatura;
 use App\Models\EvaluacionInstitucionAsignada;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -68,24 +69,81 @@ class TemaController extends Controller
      */
     public function store(Request $request)
     {
+        if($request->porImportacion) { return $this->porImportacion($request); }
         if( $request->id ){
             $tema = Temas::find($request->id);
         }else{
             $tema = new Temas();
         }
 
-        $tema->nombre_tema = $request->nombre;
-        $tema->id_asignatura = $request->asignatura;
-        $tema->unidad = $request->unidad;
-        $tema->id_unidad = $request->id_unidad;
-        $tema->clasificacion = $request->clasificacion;
-        $tema->idusuario = $request->idusuario;
-        $tema->estado = $request->estado;
+        $tema->nombre_tema      = $request->nombre;
+        $tema->id_asignatura    = $request->asignatura;
+        $tema->unidad           = $request->unidad;
+        $tema->id_unidad        = $request->id_unidad;
+        $tema->clasificacion    = $request->clasificacion;
+        $tema->idusuario        = $request->idusuario;
+        $tema->estado           = $request->estado;
         $tema->save();
 
         return $tema;
     }
-
+    //api:post/tema?porImportacion=1
+    public function porImportacion(Request $request){
+        set_time_limit(6000000);
+        ini_set('max_execution_time', 6000000);
+        $datos_array = json_decode($request->datos_array);
+        $contador = 0;
+    
+        try {
+            // Inicia transacción
+            DB::beginTransaction();
+    
+            foreach($datos_array as $key => $item) {
+                $validarAsignatura = Asignatura::where('idasignatura', $item->id_asignatura)
+                ->leftjoin('libro as l', 'l.asignatura_idasignatura', '=', 'asignatura.idasignatura')
+                ->select('l.idlibro')
+                ->first();
+                if(!$validarAsignatura){
+                    return ["status" => "0", "message" => "No existe la asignatura con id ".$item->id_asignatura];
+                }
+                $idlibro = $validarAsignatura->idlibro;
+                // Creación del nuevo tema
+                //validacion unidad
+                $validateUnidad = DB::SELECT("SELECT * FROM unidades_libros u
+                WHERE u.id_libro = '$idlibro'
+                and u.unidad = '$item->unidad'
+                AND u.estado = '1';
+                ");
+                if(count($validateUnidad) == 0){
+                    return ["status" => "0", "message" => "No existe la unidad  ".$item->unidad .' con la id_asignatura '.$item->id_asignatura];
+                }
+                $id_unidad_libro        = $validateUnidad[0]->id_unidad_libro;
+                $tema = new Temas();
+                $tema->nombre_tema      = $item->nombre_tema;
+                $tema->id_asignatura    = $item->id_asignatura;
+                $tema->unidad           = $item->unidad;
+                // $tema->id_unidad        = $item->id_unidad;
+                $tema->id_unidad        = $id_unidad_libro;
+                $tema->clasificacion    = $item->destreza;
+                $tema->idusuario        = $request->idusuario;
+                $tema->estado           = 1;
+                $tema->save();
+                // Guardado del modelo
+                if ($tema) {
+                    $contador++; // Solo incrementa si la inserción fue exitosa
+                }
+            }
+            // Confirmar transacción si todo salió bien
+            DB::commit();
+    
+            return ["status" => "1", "message" => "Se importó correctamente", "contador" => $contador];
+        } catch (\Exception $e) {
+            // En caso de error, deshacer la transacción
+            DB::rollback();
+            return ["status" => "0", "message" => $e->getMessage()];
+        }
+    }
+    
     /**
      * Display the specified resource.
      *

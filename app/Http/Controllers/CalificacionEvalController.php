@@ -215,6 +215,7 @@ class CalificacionEvalController extends Controller
             $calificacionExistente->calificacion    = $puntajeFinal; // usar $puntajeFinal aquí
             $calificacionExistente->estado          = 1;
             $calificacionExistente->grupo           = $request->grupo;
+            $calificacionExistente->fecha_fin_evaluacion = now();
             $calificacionExistente->save();
         }
         $evaluacion = Evaluaciones::findOrFail($request->evaluacion);

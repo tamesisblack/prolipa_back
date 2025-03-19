@@ -34,6 +34,7 @@ class CodigosLibros extends Model implements Auditable
     const CODIGO_GUIA               = 'El código se encuentra como GUIA';
     const CODIGO_DEVUELTO           = 'El código se encuentra como DEVUELTO';
     const CODIGO_LIQUIDADO_REGALADO = 'El código se encuentra liquidado y regalado';
+    const CODIGO_BLOQUEADO          = 'El código se encuentra bloqueado';
 
     const CODIGO_ACTIVACION         = 'Problema con el código de activación';
     const CODIGO_DIAGNOSTICA        = 'Problema con el código de diagnóstico';

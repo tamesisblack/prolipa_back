@@ -503,6 +503,7 @@ class BancoController extends Controller
                 ->where('fv.est_ven_codigo', '<>', 3)
                 ->where('fv.institucion_id', $cliente->clientes)
                 ->where('fv.id_empresa', $request->empresa)
+                ->whereNotIn('fv.idtipodoc', [17, 16])
                 ->select('fdv.pro_codigo', 'l.nombre', 'fdv.det_ven_cantidad', 'fdv.det_ven_valor_u', 'fdv.det_ven_dev')
                 ->get();
 
@@ -608,6 +609,7 @@ class BancoController extends Controller
                 ->where('fv.est_ven_codigo', '<>', 3)
                 ->where('fv.institucion_id', $cliente->clientes)
                 ->where('fv.id_empresa', $request->empresa)
+                ->whereNotIn('fv.idtipodoc', [17, 16])
                 ->select('fdv.pro_codigo', 'l.nombre', 'fdv.det_ven_cantidad', 'fdv.det_ven_valor_u', 'fdv.det_ven_dev')
                 ->get();
 

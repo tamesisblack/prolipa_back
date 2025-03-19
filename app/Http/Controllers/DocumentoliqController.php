@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Documentoliq;
+use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use DB;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
@@ -12,6 +13,14 @@ class DocumentoliqController extends Controller
     //
     public function GetDocumentoliq(){
         $query = DB::SELECT("SELECT * FROM 1_4_documento_liq as doc LEFT JOIN institucion as ins ON doc.institucion_id= ins.idInstitucion ORDER BY doc_codigo DESC limit 50");
+        return $query;
+    }
+    //api:get/GetDocumentoliqXPedido?pedido=1405
+    public function GetDocumentoliqXPedido(Request $request){
+        $query = PedidosDocumentosLiq::where('id_pedido', $request->pedido)
+        ->with('tipoPagos','formaPagos')  // Cargar la relación tipoPagos, formaPagos
+        ->get();
+    
         return $query;
     }
     public function GetPago(){

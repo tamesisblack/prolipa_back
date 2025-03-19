@@ -97,7 +97,7 @@ class GuiasController extends Controller
                     $stockAnterior  = $getStock->pro_stockCalmed;
                 }
                 $valorNew           = $arregloCodigos[$contador]["valor"];
-                $nuevoStock         = $stockAnterior - $valorNew;
+                $nuevoStock         = ($stockAnterior < 0 ? 0 : $stockAnterior) - $valorNew;
                 $form_data_stock[$contador] = [
                 "id"                => $id,
                 "nombrelibro"       => $nombrelibro,
@@ -671,8 +671,9 @@ class GuiasController extends Controller
                 if($empresa == 3){
                     $stockAnterior  = $getStock->pro_stockCalmed;
                 }
+                
                 $valorNew           = $arregloCodigos[$contador]["valor"];
-                $nuevoStock         = $stockAnterior - $valorNew;
+                $nuevoStock         = ($stockAnterior < 0 ? 0 : $stockAnterior) - $valorNew;
                 $form_data_stock[$contador] = [
                 "id"                => $id,
                 "nombrelibro"       => $nombrelibro,

@@ -58,7 +58,8 @@ trait TraitCodigosGeneral{
         IF(c.prueba_diagnostica ='1', 'Prueba de diagnóstico','Código normal') as tipoCodigo,
         c.porcentaje_descuento,  c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,
         c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma, ls.codigo_liquidacion,
-        CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo, c.codigo_combo, c.documento_devolucion, c.plus
+        CONCAT(ase.nombres, ' ', ase.apellidos) as asesor, c.combo, c.codigo_combo, c.documento_devolucion, c.plus, 
+        c.quitar_de_reporte
         FROM codigoslibros c
         LEFT JOIN usuario u ON c.idusuario = u.idusuario
         LEFT JOIN usuario ucr ON c.idusuario_creador_codigo = ucr.idusuario
@@ -122,7 +123,7 @@ trait TraitCodigosGeneral{
         p.periodoescolar as periodo,
         pb.periodoescolar as periodo_barras,ivl.nombreInstitucion as InstitucionLista,
         c.codigo_paquete,c.fecha_registro_paquete,c.liquidado_regalado,c.codigo_proforma,c.proforma_empresa, c.devuelto_proforma,
-        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus'
+        ls.codigo_liquidacion, CONCAT(ase.nombres, " ", ase.apellidos) as asesor, c.combo,c.codigo_combo,c.documento_devolucion, c.plus, c.quitar_de_reporte'
         ))
         ->leftJoin('usuario as  u',         'c.idusuario',                  'u.idusuario')
         ->leftJoin('usuario as  ase',       'c.asesor_id',                  'ase.idusuario')
@@ -216,7 +217,8 @@ trait TraitCodigosGeneral{
                 'codigo_combo'                  => $item->codigo_combo,
                 'documento_devolucion'          => $item->documento_devolucion,
                 'devuelto_proforma'             => $item->devuelto_proforma,
-                'plus'                          => $item->plus
+                'plus'                          => $item->plus,
+                'quitar_de_reporte'             => $item->quitar_de_reporte,
             ];
         }
         return $datos;

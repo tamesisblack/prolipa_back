@@ -479,190 +479,120 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $periodo = '22';
-        $val_pedido2 = DB::SELECT("SELECT DISTINCT p.id_asesor, CONCAT(u.nombres,' ',u.apellidos) as asesor
-        FROM pedidos_val_area pv
-        LEFT JOIN area ar ON  pv.id_area = ar.idarea
-        LEFT JOIN series se ON pv.id_serie = se.id_serie
-        LEFT JOIN pedidos p ON pv.id_pedido = p.id_pedido
-        LEFT JOIN usuario u ON p.id_asesor = u.idusuario
-        where p.tipo        = '0'
-        and p.id_periodo  = '$periodo'
-        AND p.estado        = '1'
-        GROUP BY u.nombres ORDER BY u.nombres
-        ");
-         foreach($val_pedido2 as $key11 => $itemAsesor){
-            ////ESCUELAS
-            $pedidos = $this->tr_institucionesAsesorPedidos($periodo,$itemAsesor->id_asesor);
-            foreach($pedidos as $key8 => $itempedido){
-                $val_pedido = DB::table('pedidos_val_area as pv')
-                ->selectRaw('DISTINCT pv.valor, pv.id_area, pv.tipo_val, pv.id_serie, pv.year, pv.plan_lector, pv.alcance,
-                            p.id_periodo,
-                            CONCAT(se.nombre_serie, " ", ar.nombrearea) as serieArea,
-                            se.nombre_serie')
-                ->leftJoin('area as ar', 'pv.id_area', '=', 'ar.idarea')
-                ->leftJoin('series as se', 'pv.id_serie', '=', 'se.id_serie')
-                ->leftJoin('pedidos as p', 'pv.id_pedido', '=', 'p.id_pedido')
-                ->leftJoin('usuario as u', 'p.id_asesor', '=', 'u.idusuario')
-                // ->whereIn('p.id_pedido', $ids)
-                ->where('p.id_pedido',$itempedido->id_pedido)
-                ->where('p.tipo', '0')
-                ->where('p.estado', '1')
-                ->where('p.id_periodo',$periodo)
-                ->groupBy('pv.id')
-                ->get();
-                if(empty($val_pedido)){
-                    // return $val_pedido;
-                }else{
-                    $arreglo = [];
-                    $cont    = 0;
-                    //obtener solo los alcances activos
-                    foreach($val_pedido as $k => $tr){
-                        //Cuando es el pedido original
-                        $alcance_id = 0;
-                        $alcance_id = $tr->alcance;
-                        if($alcance_id == 0){
-                            $arreglo[$cont] =   (object)[
-                                "valor"             => $tr->valor,
-                                "id_area"           => $tr->id_area,
-                                "tipo_val"          => $tr->tipo_val,
-                                "id_serie"          => $tr->id_serie,
-                                "year"              => $tr->year,
-                                "plan_lector"       => $tr->plan_lector,
-                                "id_periodo"        => $tr->id_periodo,
-                                "serieArea"         => $tr->serieArea,
-                                "nombre_serie"      => $tr->nombre_serie,
-                                "alcance"           => $tr->alcance,
-                                "alcance"           => $alcance_id
-                            ];
-                        }else{
-                            //validate que el alcance este cerrado o aprobado
-                            $query = $this->codigosRepository->getAlcanceAbiertoXId($alcance_id);
-                            if(count($query) > 0){
-                                $arreglo[$cont] = (object) [
-                                    "valor"             => $tr->valor,
-                                    "id_area"           => $tr->id_area,
-                                    "tipo_val"          => $tr->tipo_val,
-                                    "id_serie"          => $tr->id_serie,
-                                    "year"              => $tr->year,
-                                    "plan_lector"       => $tr->plan_lector,
-                                    "id_periodo"        => $tr->id_periodo,
-                                    "serieArea"         => $tr->serieArea,
-                                    "nombre_serie"      => $tr->nombre_serie,
-                                    "alcance"           => $tr->alcance,
-                                    "alcance"           => $alcance_id
-                                ];
-                            }
-                        }
-                        $cont++;
-                    }
-                    //mostrar el arreglo bien
-                    $renderSet = [];
-                    $renderSet = array_values($arreglo);
-                    if(count($renderSet) == 0){
-                        return $renderSet;
-                    }
-                    $datos = [];
-                    $contador = 0;
-                    //return $renderSet;
-                    foreach($renderSet as $key => $item){
-                        $valores = [];
-                        //plan lector
-                        if($item->plan_lector > 0 ){
-                            $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                            (
-                                SELECT f.pvp AS precio
-                                FROM pedidos_formato f
-                                WHERE f.id_serie = '6'
-                                AND f.id_area = '69'
-                                AND f.id_libro = '$item->plan_lector'
-                                AND f.id_periodo = '$item->id_periodo'
-                            )as precio, ls.codigo_liquidacion,ls.version,ls.year
-                            FROM libro l
-                            left join libros_series ls  on ls.idLibro = l.idlibro
-                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                            WHERE l.idlibro = '$item->plan_lector'
-                            ");
-                            $valores = $getPlanlector;
-                        }else{
-                            $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,pro.pro_reservar, l.descripcionlibro,
-                            (
-                                SELECT f.pvp AS precio
-                                FROM pedidos_formato f
-                                WHERE f.id_serie = ls.id_serie
-                                AND f.id_area = a.area_idarea
-                                AND f.id_periodo = '$item->id_periodo'
-                            )as precio
-                            FROM libros_series ls
-                            LEFT JOIN libro l ON ls.idLibro = l.idlibro
-                            inner join 1_4_cal_producto pro on ls.codigo_liquidacion=pro.pro_codigo
-                            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
-                            WHERE ls.id_serie = '$item->id_serie'
-                            AND a.area_idarea  = '$item->id_area'
-                            AND l.Estado_idEstado = '1'
-                            AND a.estado = '1'
-                            AND ls.year = '$item->year'
-                            LIMIT 1
-                            ");
-                            $valores = $getLibros;
-                        }
-                        $datos[$contador] = (Object)[
-                            "id_area"           => $item->id_area,
-                            "valor"             => $item->valor,
-                            // "tipo_val"          => $item->tipo_val,
-                            "id_serie"          => $item->id_serie,
-                            // "year"              => $item->year,
-                            // "anio"              => $valores[0]->year,
-                            // "version"           => $valores[0]->version,
-                            // "plan_lector"       => $item->plan_lector,
-                            "serieArea"         => $item->id_serie == 6 ? $item->nombre_serie." ".$valores[0]->nombrelibro : $item->serieArea,
-                            "libro_id"          => $valores[0]->idlibro,
-                            "nombrelibro"       => $valores[0]->nombrelibro,
-                            "nombre_serie"      => $item->nombre_serie,
-                            "precio"            => $valores[0]->precio,
-                            "codigo"            => $valores[0]->codigo_liquidacion,
-                            "stock"             => $valores[0]->pro_reservar,
-                            "descripcion"       => $valores[0]->descripcionlibro,
-                        ];
-                        $contador++;
-                    }
-                       //si el codigo de liquidacion se repite sumar en el valor
-                    // Crear un array asociativo para agrupar por codigo_liquidacion
-                    $grouped = [];
+        
+        $codigos = [
+            ['codigo' => 'SEAE2-83KPE2WVMD'],
+            ['codigo' => 'PSEAE2-G2K7TREWTS'],
+            ['codigo' => 'SEAE2-5N9H4EDZY3'],
+            ['codigo' => 'PSEAE2-YUZTX7XRDK'],
+            ['codigo' => 'SEAE2-WYKAE955UM'],
+            ['codigo' => 'PSEAE2-YTE4MBSCRR'],
+            ['codigo' => 'CERP-TAAYYK7EPY'],
+            ['codigo' => 'PCERP-7WYCSHRDBX'],
+            ['codigo' => 'CERP-UY2WRUV4GR'],
+            ['codigo' => 'PCERP-VUVNN7RKGV'],
+            ['codigo' => 'CERP-SWHPNW4YRP'],
+            ['codigo' => 'PCERP-WEZCXTH6XF'],
+            ['codigo' => 'CAMM-HGYGHZ87ZH'],
+            ['codigo' => 'PCAMM-2FPKYBSAWY'],
+            ['codigo' => 'CAMM-YP23GR3P2Y'],
+            ['codigo' => 'PCAMM-ZNPGN3DVUS'],
+            ['codigo' => 'CAMM-4YZEAN965B'],
+            ['codigo' => 'PCAMM-Z9M8935ZPN'],
+            ['codigo' => 'CUNA-KF47ATDMCG'],
+            ['codigo' => 'PCUNA-KD859ETHA6'],
+            ['codigo' => 'CUNA-PY6YCMKTDU'],
+            ['codigo' => 'PCUNA-TZDKFZEH6U'],
+            ['codigo' => 'CUNA-XRPMFGB5H2'],
+            ['codigo' => 'PCUNA-3XHV4R76FN'],
+            ['codigo' => 'SEAE2-test'],
+            ['codigo' => 'PSEAE2-test'],
+        ];
 
-                    foreach ($datos as $item) {
-                        $codigo = $item->codigo;
+        // Los combos que quieres añadir, excluyendo el combo 'CMB-5YZAW6'
+        $combos = [
+            'CMB-RMTZYE',
+            'CMB-X39XC2',
+            'CMB-UGU9Y6',
+            'CMB-TEST'
+        ];
 
-                        if (!isset($grouped[$codigo])) {
-                            $grouped[$codigo] = $item;
-                        } else {
-                            $grouped[$codigo]->valor += $item->valor;
-                        }
-                    }
+        // Los prefijos (tipos de códigos) que quieres procesar
+        $prefixes = $request->input('prefixes', ['SEAE2', 'CERP', 'CAMM', 'CUNA']);
+        // Definir la cantidad de códigos por combo
+        $cantidadPorCombo = 8;
 
-                    // Convertir el array asociativo de nuevo a un array indexado
-                    $result = array_values($grouped);
-                    //subtotal
-                    foreach($result as $key => $item){
-                        $result[$key]->subtotal = $item->valor * $item->precio;
-                    }
 
-                }
+        // Inicializar los arrays para almacenar los resultados
+        $comboOrdenado = [];
+        $combosSinCodigos = [];
+        $codigosProblemas = [];
 
-            }
-
-            $val_pedido2[$key11]->pedidos = $pedidos;
-            // $val_pedido2[$key11]->pedidos = $pedidos;
-            //contar en los pedidos cuantos librosEscuela mayor a 0 hay
-            $contador = 0;
-            foreach($pedidos as $key => $item20){
-                if(count($item20->librosEscuela) > 0){
-                    $contador++;
-                }
-            }
-            $val_pedido2[$key11]->totalLibrosConPedido = $contador;
+        // Se crea un array de colecciones para cada prefijo
+        $filteredByPrefix = [];
+        foreach ($prefixes as $prefix) {
+            $filteredByPrefix[$prefix] = collect($codigos)->filter(function ($item) use ($prefix) {
+                return strpos($item['codigo'], $prefix) !== false;
+            });
         }
-        return $val_pedido2;
+
+        // Alternar entre combo y códigos
+        $comboIndex = 0;
+        while ($comboIndex < count($combos)) {
+            // Verificar si hay suficientes códigos disponibles antes de agregar el combo
+            $totalDisponibles = collect($filteredByPrefix)->sum(fn($collection) => $collection->count());
+
+            if ($totalDisponibles < $cantidadPorCombo) {
+                // Si no hay suficientes códigos, mover el combo a la lista de problemas y continuar
+                $combosSinCodigos[] = $combos[$comboIndex];
+
+                // Capturar los códigos que no se pudieron usar
+                foreach ($filteredByPrefix as $prefix => $collection) {
+                    if ($collection->isNotEmpty()) {
+                        $codigosProblemas = array_merge($codigosProblemas, $collection->all());
+                        $filteredByPrefix[$prefix] = collect(); // Vaciar la colección para evitar duplicados
+                    }
+                }
+
+                $comboIndex++;
+                continue;
+            }
+
+            // Añadir un combo primero
+            $comboOrdenado[] = ['codigo' => $combos[$comboIndex]];
+            $comboIndex++;
+
+            // Añadir códigos
+            $codesAdded = 0;
+            while ($codesAdded < $cantidadPorCombo) {
+                foreach ($prefixes as $prefix) {
+                    if ($filteredByPrefix[$prefix]->isNotEmpty()) {
+                        // Tomar un código de este prefijo
+                        $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
+                        $codesAdded++;
+
+                        if ($codesAdded < $cantidadPorCombo && $filteredByPrefix[$prefix]->isNotEmpty()) {
+                            $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
+                            $codesAdded++;
+                        }
+                    }
+
+                    if ($codesAdded >= $cantidadPorCombo) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Retornar el array con la propiedad 'codigo', los combos con problema y los códigos con problema
+        return response()->json([
+            'combo' => $comboOrdenado,
+            'combos_sin_codigos' => $combosSinCodigos,
+            'codigos_problemas' => $codigosProblemas
+        ]);
+        
+
+        // Retorna el array con la propiedad 'codigo'
         return;
         // $clientIP = \Request::getClientIp(true);
         // // $clientIP =  $request->ip();
@@ -872,54 +802,54 @@ class AdminController extends Controller
         // return ["contadorSolinfaGONZALEZ" => $contadorSolinfaGONZALEZ, "contadorSolinfaCOBACANGO" => $contadorSolinfaCOBACANGO];
 
 
-        try {
-            $contadorProlipa = 0;
-            $contadorCalmed  = 0;
+        // try {
+        //     $contadorProlipa = 0;
+        //     $contadorCalmed  = 0;
 
-            // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // WHERE p.pro_codigo  = 'IKAD';
-            // ");
-            // //PROLIPA
-            // // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // // WHERE p.id_perseo_prolipa_produccion IS NULL
-            // // LIMIT 90
-            // // ");
-            // foreach($queryProlipa as $key => $item){
-            //     $formData = [
-            //         "productocodigo"=> $item->pro_codigo,
-            //     ];
-            //     $url                = "productos_consulta";
-            //     $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
-            //     return $processProlipa;
-            //     $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
-            //     //contadorProlipa + getContador
-            //     $contadorProlipa    = $contadorProlipa + $getContador;
-            // }
-            //CALMED
-            $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            WHERE p.pro_codigo  = 'SMLL2';
-            ");
-            // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
-            // WHERE p.id_perseo_calmed_produccion IS NULL
-            // LIMIT 100
-            // ");
-            foreach($queryCalmed as $key => $item){
-                $formData = [
-                    "productocodigo"=> $item->pro_codigo,
-                ];
-                $url                = "productos_consulta";
-                $processCalmed      = $this->tr_PerseoPost($url, $formData,1);
-                return $processCalmed;
-                $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
-                //contadorCalmed + getContador
-                $contadorCalmed     = $contadorCalmed + $getContador;
-            }
-            return ["contadorProlipa" => $contadorProlipa,"contadorCalmed" => $contadorCalmed];
-        } catch (\Exception $e) {
-            return response()->json([
-                'error' => $e->getMessage()
-            ], 500);
-        }
+        //     // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        //     // WHERE p.pro_codigo  = 'IKAD';
+        //     // ");
+        //     // //PROLIPA
+        //     // // $queryProlipa = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        //     // // WHERE p.id_perseo_prolipa_produccion IS NULL
+        //     // // LIMIT 90
+        //     // // ");
+        //     // foreach($queryProlipa as $key => $item){
+        //     //     $formData = [
+        //     //         "productocodigo"=> $item->pro_codigo,
+        //     //     ];
+        //     //     $url                = "productos_consulta";
+        //     //     $processProlipa     = $this->tr_PerseoPost($url, $formData,1);
+        //     //     return $processProlipa;
+        //     //     $getContador        = $this->guardarIdProducto($processProlipa,$item->pro_codigo,"id_perseo_prolipa_produccion");
+        //     //     //contadorProlipa + getContador
+        //     //     $contadorProlipa    = $contadorProlipa + $getContador;
+        //     // }
+        //     //CALMED
+        //     $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        //     WHERE p.pro_codigo  = 'SMLL2';
+        //     ");
+        //     // $queryCalmed = DB::SELECT("SELECT * FROM 1_4_cal_producto p
+        //     // WHERE p.id_perseo_calmed_produccion IS NULL
+        //     // LIMIT 100
+        //     // ");
+        //     foreach($queryCalmed as $key => $item){
+        //         $formData = [
+        //             "productocodigo"=> $item->pro_codigo,
+        //         ];
+        //         $url                = "productos_consulta";
+        //         $processCalmed      = $this->tr_PerseoPost($url, $formData,1);
+        //         return $processCalmed;
+        //         $getContador        = $this->guardarIdProducto($processCalmed,$item->pro_codigo,"id_perseo_calmed_produccion");
+        //         //contadorCalmed + getContador
+        //         $contadorCalmed     = $contadorCalmed + $getContador;
+        //     }
+        //     return ["contadorProlipa" => $contadorProlipa,"contadorCalmed" => $contadorCalmed];
+        // } catch (\Exception $e) {
+        //     return response()->json([
+        //         'error' => $e->getMessage()
+        //     ], 500);
+        // }
     }
     public function guardarIdProducto($process,$pro_codigo,$campoPerseo){
         $contador = 0;

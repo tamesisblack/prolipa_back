@@ -364,7 +364,7 @@ class CodigosLibrosGenerarController extends Controller
          c.contrato,c.codigo, c.serie, l.nombrelibro as libro, c.anio, c.idusuario, c.idusuario_creador_codigo, c.libro_idlibro,
          c.contador,c.bc_estado,c.estado_liquidacion,c.venta_estado,
         c.estado, c.fecha_create, c.created_at, c.updated_at, s.id_serie, s.nombre_serie,
-        s.longitud_numeros, s.longitud_letras, u.nombres, u.apellidos, u.email, u.cedula, i.nombreInstitucion ,
+        u.nombres, u.apellidos, u.email, u.cedula, i.nombreInstitucion ,
         periodoescolar.descripcion as periodo, periodoescolar.idperiodoescolar
         FROM codigoslibros c
         INNER JOIN series s ON c.serie = s.nombre_serie

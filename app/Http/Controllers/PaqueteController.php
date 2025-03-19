@@ -936,10 +936,14 @@ class PaqueteController extends Controller
         set_time_limit(600000);
         ini_set('max_execution_time', 600000);
         $miArrayDeObjetos           = json_decode($request->data_codigos);
+        $tipoBodega                 = $request->tipoBodega;
         $arregloProblemaPaquetes    = [];
+        $arregloResumen             = [];
         $informacion                = [];
+        $arrayPaqueteComboSinHijos  = [];
         $contadorErrPaquetes        = 0;
         $contadorResumen            = 0;
+        $letraProceso               = $tipoBodega == 3 ? 'paquete' : 'combo';
         //====PROCESO===================================
         foreach($miArrayDeObjetos as $key => $item){
             $problemasconCodigo         = [];
@@ -948,10 +952,24 @@ class PaqueteController extends Controller
             $contadorD                  = 0;
             $noExisteA                  = 0;
             $noExisteD                  = 0;
-            $getExistsPaquete   = $this->getExistsPaquete($item->codigoPaquete);
+            $codigoPaquete              = strtoupper($item->codigoPaquete);
+            if($tipoBodega == 3){
+                $getExistsPaquete = $this->getExistsPaquete($codigoPaquete);
+            }else{
+                $getExistsPaquete = $this->getExistsCombo($codigoPaquete);
+            }
             if(!empty($getExistsPaquete)){
-                //codigos hijos del paquete
-                $codigosHijos =  $this->getCodigos($item->codigoPaquete,0,3);
+                //tipoBodega => 3 paquete; 4 = combo
+                if($tipoBodega == 3){
+                    $codigosHijos = $this->getCodigos($codigoPaquete, 0, 3);
+                    $arrayDiagnosticos = collect($this->getCodigos($codigoPaquete, 0, 4));
+                }else{
+                    $codigosHijos = $this->getCodigos($codigoPaquete, 0, 5);
+                    $arrayDiagnosticos = collect($this->getCodigos($codigoPaquete, 0, 6));
+                }
+                if(count($codigosHijos) == 0){
+                    $arrayPaqueteComboSinHijos[] = [ "codigo" => $codigoPaquete];
+                }
                 foreach($codigosHijos as $key2 => $tr){
                     $validarA               = [];
                     $validarD               = [];
@@ -998,8 +1016,8 @@ class PaqueteController extends Controller
                 $contadorResumen++;
             }else{
                 $arregloProblemaPaquetes [$contadorErrPaquetes] = [
-                    "paquete"   => $item->codigoPaquete,
-                    "problema" => 'Paquete no existe'
+                    "paquete"  => $item->codigoPaquete,
+                    "problema" => $letraProceso." no existe"
                 ];
                 $contadorErrPaquetes++;
             }
@@ -1008,6 +1026,7 @@ class PaqueteController extends Controller
             "arregloResumen"                   => $arregloResumen,
             "informacion"                      => $informacion,
             "arregloErroresPaquetes"           => $arregloProblemaPaquetes,
+            "arrayPaqueteComboSinHijos"        => $arrayPaqueteComboSinHijos,
         ];
     }
     //API:POST/paquetes/devolucion_paquete
@@ -1358,7 +1377,7 @@ class PaqueteController extends Controller
                                     $old_valuesA = json_encode($validarA);
                                     $old_valuesD = json_encode($validarD);
                                     // Transactional operation
-                                    $ingreso = $this->codigosRepository->updateActivacion($codigoActivacion, $codigoDiagnostico, $validarD, $ifOmitirA, 0);
+                                    $ingreso = $this->codigosRepository->updateActivacion($codigoActivacion, $codigoDiagnostico, $validarD, $ifOmitirA, 0,$request);
 
                                     if ($ingreso == 1) {
                                         $contadorA++;

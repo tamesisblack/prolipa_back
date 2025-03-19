@@ -6,6 +6,9 @@ use App\Models\_14Producto;
 use App\Models\Libro;
 use App\Models\LibroSerie;
 use App\Models\_14ProductoStockHistorico;
+use App\Models\f_movimientos_producto;
+use App\Models\f_movimientos_detalle_producto;
+use App\Models\f_tipo_documento;
 use App\Models\Institucion;
 use DB;
 use App\Http\Controllers\Controller;
@@ -874,69 +877,102 @@ class _14ProductoController extends Controller {
     }
 
     public function GetProductosSoloStocks() {
-        $query = DB:: SELECT("SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock, pro.pro_stockCalmed, pro.pro_deposito,
-        pro.pro_depositoCalmed
-        FROM 1_4_cal_producto pro
-        ORDER BY pro.pro_codigo ASC");
-        return $query;
+        // Consulta original
+        $productos = DB::select("
+            SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock, 
+                   pro.pro_stockCalmed, pro.pro_deposito, pro.pro_depositoCalmed, pro.gru_pro_codigo
+            FROM libros_series ls
+            INNER JOIN 1_4_cal_producto pro ON ls.codigo_liquidacion = pro.pro_codigo
+            WHERE pro.ifcombo != 1 
+            AND (pro.gru_pro_codigo = 1)
+            ORDER BY pro.pro_codigo ASC;
+        ");
+    
+        // Crear una nueva lista con los códigos modificados
+        $productosConG = [];
+        foreach ($productos as $producto) {
+            $nuevoCodigo = 'G' . $producto->pro_codigo;
+    
+            // Verificar si el producto con el nuevo código existe en la tabla
+            $productoConG = DB::selectOne("
+                SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock, 
+                       pro.pro_stockCalmed, pro.pro_deposito, pro.pro_depositoCalmed, pro.gru_pro_codigo
+                FROM 1_4_cal_producto pro
+                WHERE pro.pro_codigo = ?
+            ", [$nuevoCodigo]);
+    
+            if ($productoConG) {
+                $productosConG[] = $productoConG;
+            }
+        }
+    
+        // Combinar los productos originales con los productos encontrados con 'G'
+        $resultadoFinal = array_merge($productos, $productosConG);
+    
+        return response()->json($resultadoFinal);
     }
 
     public function GuardarDatosEdicionStockMasiva(Request $request) {
-        // return $request;
         // Verifica que el array `DatosAcumuladosStockMasivo` esté presente en el request
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
             if ($request->has('DatosAcumuladosStockMasivo') && is_array($request->DatosAcumuladosStockMasivo)) {
                 $cambios = []; // Array para almacenar los productos con cambios detectados
-
                 // Recorre cada elemento en `DatosAcumuladosStockMasivo`
                 foreach ($request->DatosAcumuladosStockMasivo as $item) {
                     // Busca el producto por `pro_codigo`
                     $producto = _14Producto::find($item['pro_codigo']);
-
                     // Verifica si el producto existe
                     if ($producto) {
+                        // Captura los valores originales antes de la actualización
+                        $old_values = [
+                            'pro_codigo' => $producto->pro_codigo,
+                            'pro_reservar' => $producto->pro_reservar,
+                            'pro_stock' => $producto->pro_stock,
+                            'pro_stockCalmed' => $producto->pro_stockCalmed,
+                            'pro_deposito' => $producto->pro_deposito,
+                            'pro_depositoCalmed' => $producto->pro_depositoCalmed
+                        ];
                         // Compara los valores actuales con los nuevos
                         $hayCambio = (
-                            $producto->pro_reservar != $item['pro_reservar'] ||
-                            $producto->pro_stock != $item['pro_stock'] ||
-                            $producto->pro_stockCalmed != $item['pro_stockCalmed'] ||
-                            $producto->pro_deposito != $item['pro_deposito'] ||
-                            $producto->pro_depositoCalmed != $item['pro_depositoCalmed']
+                            $item['pro_reservar'] != $item['pro_reservar_anterior'] ||
+                            $item['pro_stock'] != $item['pro_stock_anterior'] ||
+                            $item['pro_stockCalmed'] != $item['pro_stockCalmed_anterior'] ||
+                            $item['pro_deposito'] != $item['pro_deposito_anterior'] ||
+                            $item['pro_depositoCalmed'] != $item['pro_depositoCalmed_anterior']
                         );
-
                         // Si hay cambios, prepara los datos para el historial
                         if ($hayCambio) {
+                            // Calcula la diferencia para cada campo
+                            $diferencia_reservar = $item['pro_reservar'] - $item['pro_reservar_anterior'];
+                            $diferencia_stock = $item['pro_stock'] - $item['pro_stock_anterior'];
+                            $diferencia_stockCalmed = $item['pro_stockCalmed'] - $item['pro_stockCalmed_anterior'];
+                            $diferencia_deposito = $item['pro_deposito'] - $item['pro_deposito_anterior'];
+                            $diferencia_depositoCalmed = $item['pro_depositoCalmed'] - $item['pro_depositoCalmed_anterior'];
+
+                            // Actualiza los valores del producto con la diferencia calculada
+                            $producto->pro_reservar += $diferencia_reservar;
+                            $producto->pro_stock += $diferencia_stock;
+                            $producto->pro_stockCalmed += $diferencia_stockCalmed;
+                            $producto->pro_deposito += $diferencia_deposito;
+                            $producto->pro_depositoCalmed += $diferencia_depositoCalmed;
+                            //Almacena los cambios para historico
                             $cambios[] = [
-                                // 'pro_codigo' => $item['pro_codigo'],
-                                'psh_old_values' => json_encode([
-                                    'pro_codigo' => $producto->pro_codigo,
+                                'psh_old_values' => json_encode($old_values),
+                                'psh_new_values' => json_encode([
+                                    'pro_codigo' => $item['pro_codigo'],
                                     'pro_reservar' => $producto->pro_reservar,
                                     'pro_stock' => $producto->pro_stock,
                                     'pro_stockCalmed' => $producto->pro_stockCalmed,
                                     'pro_deposito' => $producto->pro_deposito,
                                     'pro_depositoCalmed' => $producto->pro_depositoCalmed
                                 ]),
-                                'psh_new_values' => json_encode([
-                                    'pro_codigo' => $item['pro_codigo'],
-                                    'pro_reservar' => $item['pro_reservar'],
-                                    'pro_stock' => $item['pro_stock'],
-                                    'pro_stockCalmed' => $item['pro_stockCalmed'],
-                                    'pro_deposito' => $item['pro_deposito'],
-                                    'pro_depositoCalmed' => $item['pro_depositoCalmed']
-                                ]),
                             ];
+                            // Almacena el código del producto con cambios
+                            $codigosConCambios[] = $item['pro_codigo'];
+                            // Guarda los cambios en la base de datos
+                            $producto->save();
                         }
-
-                        // Actualiza solo los campos específicos
-                        $producto->pro_reservar = $item['pro_reservar'];
-                        $producto->pro_stock = $item['pro_stock'];
-                        $producto->pro_stockCalmed = $item['pro_stockCalmed'];
-                        $producto->pro_deposito = $item['pro_deposito'];
-                        $producto->pro_depositoCalmed = $item['pro_depositoCalmed'];
-
-                        // Guarda los cambios en la base de datos
-                        $producto->save();
                     } else {
                         // Si algún `pro_codigo` no existe, se retorna un mensaje de error
                         return response()->json([
@@ -945,25 +981,70 @@ class _14ProductoController extends Controller {
                         ], 404);
                     }
                 }
-
-                // Si hay cambios, consolida todo en un único registro para el historial
-                if (!empty($cambios)) {
-                    $registroHistorial = [
-                        'psh_old_values' => json_encode(array_column($cambios, 'psh_old_values', 'pro_codigo')),
-                        'psh_new_values' => json_encode(array_column($cambios, 'psh_new_values', 'pro_codigo')),
-                        'user_created' => $request->user_created,
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ];
-
-                    _14ProductoStockHistorico::insert($registroHistorial);
+                // Si no hubo cambios, retorna un mensaje
+                if (empty($cambios) && empty($codigosConCambios)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status' => 0,
+                        'message' => 'No se realizó ninguna actualización porque no hubo cambios.'
+                    ], 200);
                 }
-                DB::commit();
-                // Retorna una respuesta de éxito
-                return response()->json([
-                    'status' => 1,
-                    'message' => 'Stock de productos actualizados exitosamente.'
-                ], 200);
+                // Verifica si la variable 'EdicionCombos' está presente en el request y es igual a 'yes'
+                if ($request->has('EdicionCombos') && $request->EdicionCombos == 'yes') {
+                    try {
+                        // DB::rollBack();
+                        // Llamar al submétodo y manejar su respuesta
+                        $submetodoResultados = $this->GuardarDatosEdicionStockMasiva_Combos($request, $codigosConCambios);
+                        // Agregar los cambios del submétodo
+                        $cambios = array_merge($cambios, $submetodoResultados['cambios']);
+                    } catch (\Exception $e) {
+                        DB::rollBack();
+                        return response()->json([
+                            'status' => 3,
+                            'message' => 'Error al editar combos',
+                            'errores' => json_decode($e->getMessage(), true) // Convertir el JSON de la excepción en un array PHP
+                        ], 200);
+                    }
+                }
+                // Guarda historico y retorna una respuesta de éxito
+                if ($request->has('EdicionCombos') && $request->EdicionCombos == 'yes') {
+                    // Si hay cambios, consolida todo en un único registro para el historial
+                    if (!empty($cambios)) {
+                        $registroHistorial = [
+                            'psh_old_values' => json_encode(array_column($cambios, 'psh_old_values', 'pro_codigo')),
+                            'psh_new_values' => json_encode(array_column($cambios, 'psh_new_values', 'pro_codigo')),
+                            'psh_tipo' => 1,
+                            'user_created' => $request->user_created,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                        _14ProductoStockHistorico::insert($registroHistorial);
+                    }
+                    DB::commit();
+                    return response()->json([
+                        'Diferencias_Entre_Stocks' => $submetodoResultados['Diferencias_Entre_Stocks'],
+                        'status' => 1,
+                        'message' => 'Stock de productos actualizados exitosamente.'
+                    ], 200);
+                }else{
+                    // Si hay cambios, consolida todo en un único registro para el historial
+                    if (!empty($cambios)) {
+                        $registroHistorial = [
+                            'psh_old_values' => json_encode(array_column($cambios, 'psh_old_values', 'pro_codigo')),
+                            'psh_new_values' => json_encode(array_column($cambios, 'psh_new_values', 'pro_codigo')),
+                            'psh_tipo' => 0,
+                            'user_created' => $request->user_created,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ];
+                        _14ProductoStockHistorico::insert($registroHistorial);
+                    }
+                    DB::commit();
+                    return response()->json([
+                        'status' => 1,
+                        'message' => 'Stock de productos actualizados exitosamente.'
+                    ], 200);
+                }
             } else {
                 DB::rollBack();
                 return response()->json([
@@ -976,6 +1057,232 @@ class _14ProductoController extends Controller {
             DB::rollBack();
             // Puedes registrar el error aquí
             return response()->json(['status' => '0', 'message' => 'Error al actualizar los registros: ' . $e->getMessage()], 200);
+        }
+    }
+    public function GuardarDatosEdicionStockMasiva_Combos($request, $codigosConCambios) {
+        // return $request;
+        // Inicia la transacción del submétodo
+        DB::beginTransaction();
+        try {
+            $codigosCombosConCambios = []; //Para guardar los codigos con cambios encontrados
+            $cambios = []; // Para guardar histórico
+            $Diferencias_Entre_Stocks = []; //Para realizar operaciones de aumentar o disminuir stock y registro en los movimientos de combos no operativos
+            //Proceso para crear movimiento combo no operativo
+            $nombre_movimiento_combo = '';
+            $id_tipo_documento = 18;
+            $Tipo_Documento = DB::SELECT("SELECT LPAD(CAST(ftd.tdo_secuencial_calmed + 1 AS UNSIGNED), 
+            (SELECT MAX(CHAR_LENGTH(tdo_secuencial_calmed)) FROM f_tipo_documento), '0') AS tdo_secuencial_calmed,ftd.tdo_letra 
+            FROM f_tipo_documento ftd WHERE ftd.tdo_id = $id_tipo_documento");
+            if (empty($Tipo_Documento)) {
+                throw new \Exception("Tipo de documento no encontrado.");
+            }
+            $Periodo_Usuario = DB::SELECT("SELECT pe.codigo_contrato FROM periodoescolar pe WHERE pe.idperiodoescolar = $request->periodo_id");
+            if (empty($Periodo_Usuario)) {
+                throw new \Exception("Contrato no encontrado para el periodo especificado.");
+            }
+            $nombre_movimiento_combo = $Tipo_Documento[0]->tdo_letra .'-'. $Periodo_Usuario[0]->codigo_contrato .'-'. $request->user_iniciales.'-'.$Tipo_Documento[0]->tdo_secuencial_calmed;
+            //Insertar registro en la tabla f_movimientos_producto
+            f_movimientos_producto::create([
+                'fmp_id'       => $nombre_movimiento_combo,
+                'observacion'  => 'Documento generado a partir de la edición de stock masiva de combos.',
+                'id_periodo'   => $request->periodo_id,
+                'fmp_estado'   => 4,
+                'user_created' => $request->user_created,
+                'updated_at'   => now()
+            ]);
+            $tipo_doc = f_tipo_documento::findOrFail($id_tipo_documento);
+            $tipo_doc->tdo_secuencial_calmed = $Tipo_Documento[0]->tdo_secuencial_calmed;
+            $tipo_doc->save();
+            //-----------------Proceso para actualizar los stocks de los codigos_asociados a cada combo.
+            // Array para acumular diferencias de stock por cada código asociado
+            $stocks_totales_agrupados = [];
+            // Primera pasada: Agrupar diferencias por código asociado
+            foreach ($request->DatosAcumuladosStockMasivo as $item) {
+                if (in_array($item['pro_codigo'], $codigosConCambios)) {
+                    // Buscar el producto combo
+                    $productoCombo = DB::table('1_4_cal_producto')
+                        ->where('pro_codigo', $item['pro_codigo'])
+                        ->first();
+                    if (!$productoCombo) {
+                        throw new \Exception("Producto combo con código {$item['pro_codigo']} no encontrado.");
+                    }
+                    // Obtener códigos asociados
+                    $codigosAsociados = $productoCombo->codigos_combos ? explode(',', $productoCombo->codigos_combos) : [];
+                    // Calcular diferencias de stock
+                    $diferencias = [
+                        'pro_reservar' => $item['pro_reservar'] - $item['pro_reservar_anterior'],
+                        'pro_stock' => $item['pro_stock'] - $item['pro_stock_anterior'],
+                        'pro_stockCalmed' => $item['pro_stockCalmed'] - $item['pro_stockCalmed_anterior'],
+                        'pro_deposito' => $item['pro_deposito'] - $item['pro_deposito_anterior'],
+                        'pro_depositoCalmed' => $item['pro_depositoCalmed'] - $item['pro_depositoCalmed_anterior']
+                    ];
+
+                    // Validacion para guardaar en stock de combos no operativos
+                    // Calcula las diferencias para el combo (usando los campos 'anterior')
+                    $pro_reservar_diferencia      = $item['pro_reservar'] - $item['pro_reservar_anterior'];
+                    $pro_stock_diferencia         = $item['pro_stock'] - $item['pro_stock_anterior'];
+                    $pro_stockCalmed_diferencia   = $item['pro_stockCalmed'] - $item['pro_stockCalmed_anterior'];
+                    $pro_deposito_diferencia      = $item['pro_deposito'] - $item['pro_deposito_anterior'];
+                    $pro_depositoCalmed_diferencia= $item['pro_depositoCalmed'] - $item['pro_depositoCalmed_anterior'];
+                    // Guarda las diferencias en el array Diferencias_Entre_Stocks
+                    $Diferencias_Entre_Stocks[] = [
+                        'pro_codigo' => $item['pro_codigo'],
+                        'codigos_asociados' => $codigosAsociados,
+                        'pro_reservar_diferencia' => $pro_reservar_diferencia,
+                        'pro_stock_diferencia' => $pro_stock_diferencia,
+                        'pro_stockCalmed_diferencia' => $pro_stockCalmed_diferencia,
+                        'pro_deposito_diferencia' => $pro_deposito_diferencia,
+                        'pro_depositoCalmed_diferencia' => $pro_depositoCalmed_diferencia,
+                    ];
+
+                    // Acumular diferencias por código asociado
+                    foreach ($codigosAsociados as $codigo) {
+                        if (!isset($stocks_totales_agrupados[$codigo])) {
+                            $stocks_totales_agrupados[$codigo] = [
+                                'pro_reservar' => 0,
+                                'pro_stock' => 0,
+                                'pro_stockCalmed' => 0,
+                                'pro_deposito' => 0,
+                                'pro_depositoCalmed' => 0
+                            ];
+                        }
+                        // Sumar diferencias al código asociado
+                        foreach ($diferencias as $key => $value) {
+                            $stocks_totales_agrupados[$codigo][$key] += $value;
+                        }
+                        // Almacenar item solo si no hay errores de stock
+                        $codigosCombosConCambios[] = $item;
+                    }
+                }
+            }
+            // Segunda pasada: Verificar disponibilidad de stock
+            $errores_stock = [];
+            foreach ($stocks_totales_agrupados as $codigo => $diferencias) {
+                $productoAsociado = DB::table('1_4_cal_producto')
+                    ->where('pro_codigo', $codigo)
+                    ->first();
+
+                if (!$productoAsociado) {
+                    throw new \Exception("Producto con código $codigo no encontrado.");
+                }
+                $errores_item = [];
+                // Verificar si hay suficiente stock
+                foreach ($diferencias as $key => $diff) {
+                    if ($diff > $productoAsociado->$key) {
+                        $errores_item[] = "$key insuficiente (Disponible: {$productoAsociado->$key}, Requerido: {$diff})";
+                    }
+                }
+                if (!empty($errores_item)) {
+                    $errores_stock[] = [
+                        'pro_codigo' => $codigo,
+                        'pro_nombre' => $productoAsociado->pro_nombre, // Agregamos el nombre del producto
+                        'errores' => $errores_item
+                    ];
+                }
+            }
+            // Si hay errores, detener el proceso
+            if (!empty($errores_stock)) {
+                // Estructura de errores en un array
+                $erroresFormatoArray = [];
+                foreach ($errores_stock as $error) {
+                    $erroresFormatoArray[] = [
+                        'pro_codigo' => $error['pro_codigo'],
+                        'pro_nombre' => $error['pro_nombre'],
+                        'errores' => $error['errores']
+                    ];
+                }
+                // Lanzar la excepción con el array de errores convertido en JSON
+                throw new \Exception(json_encode($erroresFormatoArray));
+            }
+            // Tercera pasada: Actualizar los stocks
+            foreach ($stocks_totales_agrupados as $codigo => $diferencias) {
+                $productoAsociado = DB::table('1_4_cal_producto')->where('pro_codigo', $codigo)->first();
+                $Actualizar_Stocks = [];
+                foreach ($diferencias as $key => $value) {
+                    if ($value != 0) {
+                        $Actualizar_Stocks[$key] = DB::raw("$key - ($value)");
+                    }
+                }
+                // Actualizar solo si hay cambios
+                if (!empty($Actualizar_Stocks)) {
+                    DB::table('1_4_cal_producto')
+                        ->where('pro_codigo', $codigo)
+                        ->update($Actualizar_Stocks);
+                    // Guardar el histórico después de actualizar el stock
+                    $cambios[] = [
+                        'psh_old_values' => json_encode([
+                            'pro_codigo' => $productoAsociado->pro_codigo,
+                            'pro_reservar' => $productoAsociado->pro_reservar,
+                            'pro_stock' => $productoAsociado->pro_stock,
+                            'pro_stockCalmed' => $productoAsociado->pro_stockCalmed,
+                            'pro_deposito' => $productoAsociado->pro_deposito,
+                            'pro_depositoCalmed' => $productoAsociado->pro_depositoCalmed
+                        ]),
+                        'psh_new_values' => json_encode([
+                            'pro_codigo' => $codigo,
+                            'pro_reservar' => $productoAsociado->pro_reservar - $diferencias['pro_reservar'],
+                            'pro_stock' => $productoAsociado->pro_stock - $diferencias['pro_stock'],
+                            'pro_stockCalmed' => $productoAsociado->pro_stockCalmed - $diferencias['pro_stockCalmed'],
+                            'pro_deposito' => $productoAsociado->pro_deposito - $diferencias['pro_deposito'],
+                            'pro_depositoCalmed' => $productoAsociado->pro_depositoCalmed - $diferencias['pro_depositoCalmed']
+                        ]),
+                    ];
+                }
+            }
+            // return $Diferencias_Entre_Stocks;
+            //Proceso para el registro de los detalles de los combos no operativos
+            foreach ($Diferencias_Entre_Stocks as $diferencia) {
+                $pro_codigo = $diferencia['pro_codigo'];
+                $codigos_asociados = $diferencia['codigos_asociados'];
+                $diferencias = [
+                    'pro_reservar_diferencia' => [null, 3],
+                    'pro_stock_diferencia' => [1, 2],
+                    'pro_stockCalmed_diferencia' => [3, 2],
+                    'pro_deposito_diferencia' => [1, 1],
+                    'pro_depositoCalmed_diferencia' => [3, 1],
+                ];
+                foreach ($diferencias as $campo => [$emp_id, $fmdp_tipo_bodega]) {
+                    // Verifica que el campo exista
+                    // if (isset($diferencia[$campo])) {
+                    // Verifica que el campo exista y si es diferente de cero
+                    if (isset($diferencia[$campo]) && $diferencia[$campo] != 0) { 
+                        // Registrar para pro_codigo
+                        f_movimientos_detalle_producto::create([
+                            'fmp_id'                 => $nombre_movimiento_combo,
+                            'pro_codigo'             => $pro_codigo,
+                            'emp_id'                 => $emp_id,
+                            'fmdp_tipo_bodega'       => $fmdp_tipo_bodega,
+                            'fmdp_cantidad'          => $diferencia[$campo],
+                            'fmdp_tipo_codigo_combo' => 'codigo_combo',
+                        ]);
+                        // Registrar para cada código asociado con cantidad invertida
+                        foreach ($codigos_asociados as $codigo_asociado) {
+                            f_movimientos_detalle_producto::create([
+                                'fmp_id'                 => $nombre_movimiento_combo,
+                                'pro_codigo'             => $codigo_asociado,
+                                'emp_id'                 => $emp_id,
+                                'fmdp_tipo_bodega'       => $fmdp_tipo_bodega,
+                                'fmdp_cantidad'          => -$diferencia[$campo],
+                                'fmdp_tipo_codigo_combo' => $pro_codigo,
+                            ]);
+                        }
+                    }
+                }
+            }
+            // Contar la cantidad de registros insertados en f_movimientos_detalle_producto con el fmp_id
+            $totalItems = f_movimientos_detalle_producto::where('fmp_id', $nombre_movimiento_combo)->count();
+            // Actualizar el campo fmp_items en f_movimientos_producto según el fmp_id
+            f_movimientos_producto::where('fmp_id', $nombre_movimiento_combo)->update(['fmp_items' => $totalItems]);
+            DB::commit(); // Si todo va bien, confirmamos los cambios
+            return [
+                'Diferencias_Entre_Stocks' => $Diferencias_Entre_Stocks,
+                'cambios' => $cambios,
+                'fmp_id' => $nombre_movimiento_combo
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack(); // Rollback en caso de error
+            // Re-lanzar la excepción para que el controlador principal lo maneje
+            throw $e; 
         }
     }
     //SEGUNDO A APLICAR

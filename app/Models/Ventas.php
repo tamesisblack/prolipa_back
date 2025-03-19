@@ -66,6 +66,7 @@ class Ventas extends Model
         'fecha_update_sri',
         'usuario_update_sri',
         'documento_ref_nci',
+        'observacionRegresarAPendiente',
     ];
 
 }

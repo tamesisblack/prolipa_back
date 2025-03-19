@@ -69,7 +69,7 @@ class _14ProductoCaracteristicaController extends Controller
         $productocaracteristica->pro_cub_recubrimiento = $request->pro_cub_recubrimiento;
         $productocaracteristica->pro_cub_tintas = $request->pro_cub_tintas;
         $productocaracteristica->pro_acabados = $request->pro_acabados;
-        $productocaracteristica->pro_guia = $request->pro_guia;
+        // $productocaracteristica->pro_guia = $request->pro_guia;
         // Guardar el productocaracteristica
         if ($productocaracteristica->exists) {
             // Si ya existe, omitir el campo user_created para evitar que se establezca en null
