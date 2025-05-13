@@ -1637,7 +1637,7 @@ class AbonoController extends Controller
         
                 'idInstitucion' => null,
                 'institucion_id' => null,
-                'punto_venta' => null,
+                'punto_venta' => $base->punto_venta,
         
                 'subtotal_total' => $grupo->sum('subtotal_total'),
                 'descuento_total' => $grupo->sum('descuento_total'),
