@@ -1205,6 +1205,8 @@ class DevolucionController extends Controller
                 $empresaNuevo               = 3;
                 // tipoDocumento = 0; => prefactura; tipoDocumento = 1 => notas
                 $tipoDocumento              = 1;
+                $stockEmpresa               = $getStock->pro_depositoCalmed;
+                //
                 $nuevoStockReserva          = $stockAnteriorReserva + $cantidadPendiente;
                 $nuevoStockEmpresa          = $stockEmpresa + $cantidadPendiente;
                 //actualizar stock en la tabla de productos
