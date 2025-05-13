@@ -1189,23 +1189,26 @@ class DevolucionController extends Controller
                 $getStock                = _14Producto::obtenerProducto($pro_codigo);
                 $stockAnteriorReserva    = $getStock->pro_reservar;
                 //prolipa
-                if($id_empresa == 1)  {
-                    //si es documento de prefactura
-                    if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stock; }
-                    //si es documento de notas
-                    if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_deposito; }
-                }
-                //calmed
-                if($id_empresa == 3)  {
-                    //si es documento de prefactura
-                    if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stockCalmed; }
-                    //si es documento de notas
-                    if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_depositoCalmed; }
-                }
+                // if($id_empresa == 1)  {
+                //     //si es documento de prefactura
+                //     if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stock; }
+                //     //si es documento de notas
+                //     if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_deposito; }
+                // }
+                // //calmed
+                // if($id_empresa == 3)  {
+                //     //si es documento de prefactura
+                //     if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stockCalmed; }
+                //     //si es documento de notas
+                //     if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_depositoCalmed; }
+                // }
+                $empresaNuevo               = 3;
+                // tipoDocumento = 0; => prefactura; tipoDocumento = 1 => notas
+                $tipoDocumento              = 1;
                 $nuevoStockReserva          = $stockAnteriorReserva + $cantidadPendiente;
                 $nuevoStockEmpresa          = $stockEmpresa + $cantidadPendiente;
                 //actualizar stock en la tabla de productos
-                _14Producto::updateStock($pro_codigo,$id_empresa,$nuevoStockReserva,$nuevoStockEmpresa,$documentoPrefactura);
+                _14Producto::updateStock($pro_codigo,$empresaNuevo,$nuevoStockReserva,$nuevoStockEmpresa,$tipoDocumento);
                 //actualizar la tabla codigoslibros devolucion son
                 $hijo = CodigosLibrosDevolucionSon::find($idSon);
                 if($hijo){
