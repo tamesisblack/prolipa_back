@@ -9,6 +9,7 @@ use App\Models\PedidoConvenioDetalle;
 use App\Models\PedidoConvenioHistorico;
 use App\Models\Pedidos;
 use App\Models\Temporada;
+use App\Models\User;
 use App\Repositories\pedidos\ConvenioRepository;
 use App\Repositories\PedidosPagosRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
@@ -274,11 +275,17 @@ class ConvenioController extends Controller
         $valor3 = $request->valor3;
         $valor4 = $request->valor4;
         $user_created   = $request->user_created;
+        $tipoAccion     = $request->tipoAccion;
+        $infoUsuario  = User::findOrFail($user_created);
+        $id_group     = $infoUsuario->id_group;
         if($request->unCampo)   { $datos = [ $campo1 => $valor1]; }
         if($request->dosCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2 ]; }
         if($request->tresCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ]; }
         if($request->cuatroCampos) { $datos = [ $campo1 => $valor1, $campo2 => $valor2, $campo3 => $valor3 ,$campo4 => $valor4 ]; }
         $old_values         = PedidoConvenio::findOrFail($request->id);
+        if ($id_group == 22 || $id_group == 23 || $id_group == 1 && $tipoAccion == 1) {
+            $datos['convenio_aprobado'] = 4; // ← Aquí estaba el problema
+        }
         DB::table('pedidos_convenios')
         ->where('id',$request->id)
         ->update($datos);

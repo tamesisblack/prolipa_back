@@ -124,7 +124,7 @@ class TemaController extends Controller
                 $tema->unidad           = $item->unidad;
                 // $tema->id_unidad        = $item->id_unidad;
                 $tema->id_unidad        = $id_unidad_libro;
-                $tema->clasificacion    = $item->destreza;
+                $tema->clasificacion    = $item->destreza == '0' ? null : $item->destreza;
                 $tema->idusuario        = $request->idusuario;
                 $tema->estado           = 1;
                 $tema->save();

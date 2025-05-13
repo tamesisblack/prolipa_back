@@ -150,7 +150,6 @@ class CapacitacionController extends Controller
     public function store(Request $request)
     {
         try {
-            Log::info($request->all());
             //para editar la capacitacion agenda
             if ($request->id != 0) {
                 $agenda = Seminarios::find($request->id);
@@ -205,10 +204,12 @@ class CapacitacionController extends Controller
             $agenda->estado_institucion_temporal = $request->estado_institucion_temporal;
             $agenda->cant_asistentes = $request->asistentes;
             $agenda->link_reunion   = $request->link_reunion ?? null;
+            $agenda->editor_id = $request->editor_id ?? null ;
             $agenda->save();
             return $agenda;
         } catch (\Throwable $th) {
-            Log::error($th);
+            return ["status" => "0", "message" => "Error inesperado: " . $th->getMessage()];
+
         }
     }
     public function traerPeriodo($institucion_id)

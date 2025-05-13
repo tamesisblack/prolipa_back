@@ -71,7 +71,6 @@ class AreaController extends Controller
      */
     public function store(Request $request)
     {
-
        if($request->idarea){
 
         $area = Area::findOrFail($request->idarea);

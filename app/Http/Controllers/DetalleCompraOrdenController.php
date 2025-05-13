@@ -30,7 +30,7 @@ class DetalleCompraOrdenController extends Controller
      }
     public function Get_ComparOrdendetalle(Request $request){
         $query = DB::SELECT("SELECT d.pro_codigo, d.det_com_cantidad, d.det_com_valor_u, 
-        dot.det_or_cantidad, d.det_com_factura, d.det_com_nota, c.orden_trabajo, d.det_com_codigo, p.pro_nombre  
+        dot.det_or_cantidad, d.det_com_factura, d.det_com_nota, c.orden_trabajo, d.det_com_codigo, p.pro_nombre, p.gru_pro_codigo 
         FROM  1_4_cal_compra AS c 
         INNER JOIN 1_4_cal_detalle_compra AS d ON c.com_codigo=d.com_codigo 
         INNER JOIN 1_1_orden_trabajo AS o ON c.orden_trabajo=o.or_codigo 

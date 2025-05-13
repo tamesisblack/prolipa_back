@@ -146,5 +146,5 @@ class SalleAreasController extends Controller
         ->where('area_basica', 1)
         ->where('n_evaluacion', $request->n_evaluacion)
         ->update(['area_basica' => 0]);
-    }
+    }   
 }

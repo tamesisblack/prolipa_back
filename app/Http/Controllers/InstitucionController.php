@@ -1038,7 +1038,8 @@ class InstitucionController extends Controller
         ->where('idInstitucion','=',$id)
         ->select([
             'ifcodigoEvaluacion',
-            'idInstitucion'
+            'idInstitucion',
+            'evaluacion_personalizada',
         ])
         ->get();
         return $dato;

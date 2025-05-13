@@ -47,34 +47,22 @@ class EmpaqueController extends Controller
         // Construimos la consulta base
         $queryPadre = DB::table('empacado_remision as r')
             ->leftJoin('empresas as e', 'e.id', '=', 'r.remi_idempresa')
-            ->leftJoin('empacado_rempacado as rem', 'rem.remision_id', '=', 'r.id')
             ->select(
                 'r.*', 
                 'e.descripcion_corta', 
-                'rem.empa_codigo', 
-                'rem.empa_fecha', 
-                'rem.empa_facturas',
-                'rem.empa_estado',
-                'rem.empa_libros',
-                'rem.empa_cartones',
-                'rem.idempresa',
-                'rem.id as idRempacado'
             );
         if($todos){
-            $queryPadre->where('r.remi_estado', '1')
-            ->where('rem.empa_estado', '1');
+            $queryPadre->where('r.remi_estado', '1');
         }
         
         // Condicional para aplicar la fecha si está presente
         if ($fecha) {
-            $queryPadre->whereDate('rem.empa_fecha', '=', $fecha)
-            ->where('r.remi_estado', '1')
-            ->where('rem.empa_estado', '1');
+            $queryPadre->whereDate('r.remi_fecha_inicio', '=', $fecha)
+            ->where('r.remi_estado', '1');
         }
         if ($individual) {
             $queryPadre->where('r.remi_num_factura', $individual)
-            ->where('r.remi_estado', '<>','0')
-            ->where('rem.empa_estado','<>', '0');
+            ->where('r.remi_estado', '<>','0');
         }
      
         // Ejecutar la consulta
@@ -87,7 +75,7 @@ class EmpaqueController extends Controller
         foreach ($queryPadre as $key => $value) {
             // Detalle de empaque
             $detalleEmpaque = DB::table('empacado_rempacado_detalle')
-                ->where('empacado_rempacado_id', $value->idRempacado)
+                ->where('empacado_rempacado_id', $value->id)
                 ->where('idempresa', $value->remi_idempresa)
                 ->sum('cantidad');
 
@@ -95,7 +83,7 @@ class EmpaqueController extends Controller
 
             // Detalle de unidades libros de pre-factura
             $detalleLibros = DB::table('f_detalle_venta')
-                ->where('ven_codigo', $value->empa_facturas)
+                ->where('ven_codigo', $value->remi_num_factura)
                 ->where('id_empresa', $value->remi_idempresa)
                 ->select(DB::raw('sum(det_ven_cantidad_despacho) as libros'))
                 ->get();
@@ -109,7 +97,7 @@ class EmpaqueController extends Controller
             $prefactura = DB::table('f_venta')
                 ->leftJoin('institucion', 'institucion.idInstitucion', '=', 'f_venta.institucion_id')
                 ->leftJoin('usuario', 'usuario.idusuario', '=', 'f_venta.ven_cliente')
-                ->where('ven_codigo', $value->empa_facturas)
+                ->where('ven_codigo', $value->remi_num_factura)
                 ->where('id_empresa', $value->remi_idempresa)
                 ->select(
                     'institucion.ruc', 
@@ -182,139 +170,7 @@ class EmpaqueController extends Controller
     }
 
     //API:POST/empaqueBodega?saveEmpaque=1
-    // public function saveEmpaque($request){
-    //     try{
-    //         set_time_limit(6000000);
-    //         ini_set('max_execution_time', 6000000);
-    //         $array=json_decode($request->detalle);
-    //         DB::beginTransaction();
-    //         //REGISTRO DE REMISION
-    //             $remision = new Remision;
-    //             $remision->remi_codigo                  = $request->remi_codigo;
-    //             $remision->remi_idempresa               = $request->remi_idempresa;
-    //             $remision->remi_motivo = $request->remi_motivo;
-    //             $remision->remi_dir_partida = $request->remi_dir_partida; 
-    //             $remision->remi_destinatario = $request->remi_destinatario;
-    //             $remision->remi_ruc_destinatario = $request->remi_ruc_destinatario;
-    //             $remision->remi_direccion = $request->remi_direccion;
-    //             $remision->remi_nombre_transportista = $request->remi_nombre_transportista;
-    //             $remision->remi_ci_transportista = $request->remi_ci_transportista;
-    //             $remision->remi_detalle = $request->remi_detalle;
-    //             $remision->remi_num_factura = $request->empa_facturas;
-    //             $remision->remi_fecha_inicio = now();
-    //             $remision->trans_codigo = $request->trans_codigo;
-    //             $remision->remi_obs = $request->remi_obs;
-    //             $remision->remi_responsable = $request->remi_responsable;
-    //             $remision->remi_carton = (int)$request->remi_carton;
-    //             $remision->remi_paquete = (int)$request->remi_paquete;
-    //             $remision->remi_funda = (int)$request->remi_funda;
-    //             $remision->remi_rollo = (int)$request->remi_rollo;
-    //             $remision->remi_flete = (int)$request->remi_flete;
-    //             $remision->remi_pagado = (int)$request->remi_pagado;
-    //             $remision->user_created = $request->user_created;
-    //             $remision->created_at = now();
-    //             $remision->updated_at = now();
-    //             $remision->save();
-
-    //             //ACTUALIZA EL TIPO DE DOCUMENTO REMISION Y EMPAQUE
-    //             if($request->remi_idempresa==1){
-    //                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_letra='D'");
-    //                 $query2 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_Prolipa as cod from f_tipo_documento where tdo_letra='E'");
-    //             }else if($request->remi_idempresa==3){
-    //                 $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_letra='D'");
-    //                 $query2 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from f_tipo_documento where tdo_letra='E'");
-    //             }
-    //             if(!empty($query1)){
-    //                 $id=$query1[0]->id;
-    //                 $codi=$query1[0]->cod;
-    //                 $co=(int)$codi+1;
-    //                 $tipo_doc = f_tipo_documento::findOrFail($id);
-    //                 if($request->remi_idempresa==1){
-    //                     $tipo_doc->tdo_secuencial_Prolipa = $co;
-    //                 }else if($request->remi_idempresa==3){
-    //                     $tipo_doc->tdo_secuencial_calmed = $co;
-    //                 }
-    //                 $tipo_doc->save();
-    //             }
-    //             if(!empty($query2)){
-    //                 $ide=$query2[0]->id;
-    //                 $codig=$query2[0]->cod;
-    //                 $cod=(int)$codig+1;
-    //                 $tipo_doc = f_tipo_documento::findOrFail($ide);
-    //                 if($request->remi_idempresa==1){
-    //                     $tipo_doc->tdo_secuencial_Prolipa = $cod;
-    //                 }else if($request->remi_idempresa==3){
-    //                     $tipo_doc->tdo_secuencial_calmed = $cod;
-    //                 }
-    //                 $tipo_doc->save();
-    //             }
-    //             // VENTA ESTADO
-    //             $venta = Ventas::where('ven_codigo', $request->empa_facturas)
-    //             ->where('id_empresa', $request->remi_idempresa)
-    //             ->firstOrFail();
-    //             $venta->est_ven_codigo=$request->estado;
-    //             $venta->save();
-                
-    //             //EMPACADO
-    //             $emp = _1_4_Empacado::where('empa_codigo', $request->id_emp)
-    //             ->where('idempresa', $request->remi_idempresa)
-    //             ->first();
-
-
-    //             if(!$emp){
-    //                 $emp                = new _1_4_Empacado();
-    //                 $emp->empa_codigo       = $request->id_emp;
-    //                 $emp->idempresa         = $request->remi_idempresa;
-    //                 $emp->empa_fecha        = now();
-    //                 $emp->empa_libros       = $request->libros;
-    //                 $emp->empa_facturas     = $request->empa_facturas;
-    //                 $emp->empa_cartones     = $request->empa_cartones;
-    //                 $emp->usu_codigo        = $request->usu_codigo;
-    //                 $emp->remi_codigo       = $request->remi_codigo;
-    //                 $emp->user_created      = $request->user_created;
-    //                 $emp->save();
-
-    //             }else{
-    //                 return response()->json(['message' => 'Empaque no creado'], 404);
-    //             }
-
-    //             $emp->empa_codigo       = $request->id_emp;
-    //             $emp->idempresa         = $request->remi_idempresa;
-    //             $emp->empa_fecha        = now();
-    //             $emp->empa_libros       = $request->libros;
-    //             $emp->empa_facturas     = $request->empa_facturas;
-    //             $emp->empa_cartones     = $request->empa_cartones;
-    //             $emp->usu_codigo        = $request->usu_codigo;
-    //             $emp->remi_codigo       = $request->remi_codigo;
-    //             $emp->user_created      = $request->user_created;
-    //             // $emp->tipo              = $request->tipo;
-    //             $emp->save();
-    //             //DETALLE DEL EMPACADO
-    //             $cont=1;
-    //             foreach($array as $key => $iten){
-    //                 for ($i=0; $i < $iten->cantidad; $i++) { 
-    //                     $detalle = new EmpaqueDetalle();
-    //                     $detalle->det_empa_codigo = $request->id_emp.'-'.$cont;
-    //                     $detalle->empa_codigo=$request->id_emp;
-    //                     $detalle->idempresa=$request->remi_idempresa;
-    //                     $detalle->tip_empa_codigo=$iten->id;
-    //                     $detalle->dete_estado=1;
-    //                     $detalle->created_at=now();
-    //                     $detalle->updated_at=now();
-    //                     $detalle->user_created=$request->user_created;
-    //                     $detalle->save();
-    //                     $cont++;
-    //                 }
-    //             }
-    //         //actualizar el estado de despacho
-    //         $this->despachar($request);
-    //         DB::commit();
-    //         return response()->json(['message' => 'Empaque creado con éxito',"data" => $remision], 200);
-    //     }catch(\Exception $e){
-    //         return response()->json(['message' => 'Error al crear el empaque'.$e], 500);
-    //         DB::rollback();
-    //     }
-    // }
+  
     public function saveEmpaque($request)
     {
         try {
@@ -333,16 +189,16 @@ class EmpaqueController extends Controller
     
             // Generar códigos con el orden correcto
             $emp_codigo = $this->empaqueRepository->actualizarSecuencia($idDocumentoEmpaque, $request->id_empresa, 'E'); // EMPACADO
-            $remi_codigo = $this->empaqueRepository->actualizarSecuencia($idDocumentoRemision, $request->id_empresa, 'D'); // REMISIÓN
+            // $remi_codigo = $this->empaqueRepository->actualizarSecuencia($idDocumentoRemision, $request->id_empresa, 'D'); // REMISIÓN
     
             // Validación para evitar errores si la secuencia no se genera
-            if (!$remi_codigo || !$emp_codigo) {
+            if (!$emp_codigo) {
                 return response()->json(['error' => 'No se pudo generar la secuencia del documento'], 200);
             }
     
             // REGISTRO DE REMISIÓN
             $remision = new EmpacadoRemision([
-                'remi_codigo'                   => $remi_codigo,
+                'remi_codigo'                   => $emp_codigo,
                 'remi_idempresa'                => $request->id_empresa,
                 'remi_motivo'                   => $request->remi_motivo,
                 'remi_dir_partida'              => $request->remi_dir_partida,
@@ -378,28 +234,11 @@ class EmpaqueController extends Controller
             $venta->est_ven_codigo = $request->estado;
             $venta->save();
     
-            // EMPACADO
-            $emp = EmpacadoRempacado::firstOrNew([
-                'remision_id'   => $remision->id,
-                'idempresa'     => $request->id_empresa,
-            ]);
-            $emp->empa_codigo   = $emp_codigo;
-            $emp->empa_fecha    = now();
-            $emp->empa_libros   = $request->libros;
-            $emp->empa_facturas = $request->ven_codigo;
-            $emp->empa_cartones = $request->empa_cartones;
-            $emp->usu_codigo    = $request->usu_codigo;
-            $emp->user_created  = $request->user_created;
-            $emp->save();
 
-            if (!$emp->save()) {
-                return response()->json(["status" => "0", "message" => "Error al guardar el empacado"], 200);
-            }
-    
             // DETALLE DEL EMPACADO
             foreach ($arrayEmpaquesSugeridos as $item) {
                 $detalle = new EmpacadoRempacadoDetalle();
-                $detalle->empacado_rempacado_id     = $emp->id;
+                $detalle->empacado_rempacado_id     = $remision->id;
                 $detalle->idempresa                 = $request->id_empresa;
                 $detalle->tip_empa_codigo           = $item->id;
                 $detalle->dete_estado               = 1;
@@ -470,12 +309,29 @@ class EmpaqueController extends Controller
                     if (!$detalle) {
                         throw new \Exception('El det_ven_codigo no existe en la base de datos');
                     }
-
-                    // Actualiza la cantidad de despacho
-                    DB::table('f_detalle_venta')
-                      ->where('det_ven_codigo', $item->det_ven_codigo)
-                      ->where('id_empresa', $request->id_empresa)
-                      ->update(['det_ven_cantidad_despacho' => $item->despacho]);
+                    $cantidadDespachada = 0;
+                    $det_ven_cantidad_despacho = $detalle->det_ven_cantidad_despacho;
+                    $det_ven_cantidad       = $detalle->det_ven_cantidad;
+                    if($request->EditEmpaque == '1'){
+                        // Si es un edit, se suma el cantidad despachada con la pendiente
+                        $cantidadDespachada    = $det_ven_cantidad_despacho + $item->despacho;
+                        //si la cantidad despachada es mayor a la prefacturada se coloca la prefacturada
+                        if($cantidadDespachada>=$det_ven_cantidad){
+                            $cantidadDespachada = $det_ven_cantidad;
+                        }
+                          // Actualiza la cantidad de despacho
+                        DB::table('f_detalle_venta')
+                        ->where('det_ven_codigo', $item->det_ven_codigo)
+                        ->where('id_empresa', $request->id_empresa)
+                        ->update(['det_ven_cantidad_despacho' => $cantidadDespachada]);
+                    }else{
+                        // Actualiza la cantidad de despacho
+                        DB::table('f_detalle_venta')
+                        ->where('det_ven_codigo', $item->det_ven_codigo)
+                        ->where('id_empresa', $request->id_empresa)
+                        ->update(['det_ven_cantidad_despacho' => $item->despacho]);
+                    }
+                  
                 }
             }
 
@@ -530,14 +386,7 @@ class EmpaqueController extends Controller
             $venta->est_ven_codigo = $request->estado;
             $venta->save();
     
-            // EMPACADO
-            $emp = EmpacadoRempacado::where('remision_id', $remision->id)
-                ->where('idempresa', $request->id_empresa)
-                ->firstOrFail();
-    
-            $emp->empa_cartones = $request->empa_cartones;
-            $emp->empa_libros   = $request->libros;
-            $emp->save();
+           
     
             // EMPACADO DETALLE
             EmpacadoRempacadoDetalle::where('empacado_rempacado_id', $remision->id)
@@ -547,7 +396,7 @@ class EmpaqueController extends Controller
             // DETALLE DEL EMPACADO
             foreach ($arrayEmpaquesSugeridos as $item) {
                 $detalle                        = new EmpacadoRempacadoDetalle();
-                $detalle->empacado_rempacado_id = $emp->id;
+                $detalle->empacado_rempacado_id = $remision->id;
                 $detalle->idempresa             = $request->id_empresa;
                 $detalle->tip_empa_codigo       = $item->id;
                 $detalle->dete_estado           = 1;
@@ -579,7 +428,6 @@ class EmpaqueController extends Controller
         try{
             set_time_limit(6000000);
             ini_set('max_execution_time', 6000000);
-            $miarray = json_decode($request->libros);
             DB::beginTransaction();
 
                 //REMISION
@@ -587,19 +435,12 @@ class EmpaqueController extends Controller
                 ->where('remi_idempresa', $request->remi_idempresa)
                 ->firstOrFail();
                 $remision->remi_estado= 0;
+                $remision->user_anula = $request->user_created;
                 $remision->save();
                 if(!$remision){
                     return ["status" => "0", "message" => "No se encontro la remision"];
                 }
                 
-                //EMPACADO
-                $emp                = EmpacadoRempacado::where('remision_id', $request->id)->where('idempresa', $request->remi_idempresa)->firstOrFail();
-                $emp->empa_estado   = 0;
-                $emp->save();
-                if(!$emp){
-                    return ["status" => "0", "message" => "No se encontro el empacado remision"];
-                }
-
                 //VENTAS
                 $venta =  Ventas::where('ven_codigo', $request->factura)
                 ->where('id_empresa', $request->remi_idempresa)
@@ -607,40 +448,17 @@ class EmpaqueController extends Controller
                 if(!$venta){
                     return ["status" => "0", "message" => "No se encontro el documento de venta"];
                 }
-                //DETALLE VENTAS
-                // $query=DB::SELECT("SELECT 
-                // SUM(det_ven_cantidad) as cantidadTotal, SUM(det_ven_cantidad_despacho) as totalEmpacado
-                // FROM f_detalle_venta dv 
-                // WHERE dv.ven_codigo='$request->factura'
-                // AND dv.id_empresa=$request->remi_idempresa
-                // ");
-                // //si es igual dejar como pendiente
-                // $cantidadTotal = $query[0]->cantidadTotal;
-                // $totalEmpacado = $query[0]->totalEmpacado;
-                // if($cantidadTotal==$totalEmpacado){
-                //     $venta->est_ven_codigo=2;
-                // }
-                // //si no es igual dejar como excluido 
-                // else{
-                //     $venta->est_ven_codigo=11;
-                // }
+                //DETALLE VENTAS REGRESA A PENDIENTE DE DESPACHO
                 $venta->est_ven_codigo=2;
                 $venta->updated_at    = now();
                 $venta->save();
-                foreach($miarray as $key => $item){
-                    if($item){
-                        $dventa = DetalleVentas::where('ven_codigo', $request->factura)
-                        ->where('id_empresa', $request->remi_idempresa)
-                        ->where('pro_codigo', $item)
-                        ->firstOrFail();
-                        if (!$dventa){
-                            return ["status" => "0", "message" => "El documento de ventano existe en la base de datos"];
-                        }
-                        $dventa->det_ven_cantidad_despacho=0;
-                        $dventa->save();
-                    }
+                if(!$venta){
+                    return ["status" => "0", "message" => "El documento de venta no existe en la base de datos"];
                 }
-            DB::commit();
+                DetalleVentas::where('ven_codigo', $request->factura)
+                ->where('id_empresa', $request->remi_idempresa)
+                ->update(['det_ven_cantidad_despacho' => 0]);
+                DB::commit();
             return ["status" => "1", "message" => "Empaque anulado con éxito"];
         }catch(\Exception $e){
             return ["status" => "0", "message" => "Error al anular el empaque".$e->getMessage()];
@@ -675,18 +493,7 @@ class EmpaqueController extends Controller
                 if ($remision->isDirty()) {
                     $remision->save();
                 }
-            
-                $emp = EmpacadoRempacado::where('remision_id', $request->id)
-                    ->where('empa_facturas', $request->factura)
-                    ->firstOrFail();
-            
-                $emp->empa_estado = 2;
-            
-                // Solo guardar si hay cambios
-                if ($emp->isDirty()) {
-                    $emp->save();
-                }
-            
+                        
                 DB::commit();
             
                 return response()->json(['message' => 'Empaque finalizado con éxito', "data" => $remision], 200);
@@ -719,22 +526,6 @@ class EmpaqueController extends Controller
                 $remision->remi_estado      = 2;
                 $remision->save();
             
-                // Buscar el empacado
-                $emp = EmpacadoRempacado::where('remision_id', $request->id)
-                    ->where('empa_facturas', $request->factura)
-                    ->first();
-            
-                // Validar que el empacado exista
-                if (!$emp) {
-                    return ["status" => "0", "message" => "No se encontro el reempacado remision"];
-                }
-            
-                // Actualizar el empacado
-                $emp->empa_estado = 2;
-                $emp->save();
-                if(!$emp){
-                    return ["status" => "0", "message" => "No se encontro el reempacado remision"];
-                }
                 // Confirmar la transacción
                 DB::commit();
             

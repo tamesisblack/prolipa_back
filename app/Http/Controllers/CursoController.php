@@ -66,7 +66,7 @@ class CursoController extends Controller
     {
         $cursos = DB::SELECT("
             SELECT 
-                c.idcurso, c.codigo, c.nombre, c.estado, c.seccion,
+                c.idcurso, c.codigo, c.nombre, c.estado, c.seccion, c.aula,
                 a.idasignatura, a.nombreasignatura, a.area_idarea, a.nivel_idnivel, a.tipo_asignatura,
                 l.idlibro, l.nombrelibro,
                 p.idperiodoescolar, p.periodoescolar,
@@ -190,24 +190,39 @@ class CursoController extends Controller
 
     public function store(Request $request)
     {
-
         $periodo=DB::SELECT("SELECT u.idusuario, i.idInstitucion, MAX(pi.periodoescolar_idperiodoescolar) AS periodo FROM usuario u, institucion i, periodoescolar_has_institucion pi WHERE u.institucion_idInstitucion = i.idInstitucion AND i.idInstitucion = pi.institucion_idInstitucion AND u.idusuario = $request->idusuario");
 
-        if(empty($request->idcurso)){
-            $curso = Curso::create([
-                'nombre' => $request->nombre,
-                'id_asignatura'=> $request->id_asignatura,
-                'seccion' => $request->seccion,
-                'materia' => $request->materia,
-                'aula' => $request->aula,
-                'codigo' => $this->codigo(8),
-                'idusuario'=> $request->idusuario,
-                'id_periodo'=> $periodo[0]->periodo,
-            ]);
+        if ($request->filled('idcurso')) {
+            $dato = Curso::find($request->idcurso);
         }else{
-            $curso=DB::update("UPDATE curso SET nombre=?,seccion=?,materia=?,aula=?, id_asignatura=? WHERE idcurso=?",[$request->nombre,$request->seccion,$request->materia,$request->aula,$request->id_asignatura,$request->idcurso]);
+            $dato = new Curso();
+            $dato->codigo = $this->codigo(8);
         }
-        return $periodo[0]->periodo;
+
+        $dato->nombre = $request->nombre;
+        $dato->id_asignatura = $request->id_asignatura;
+        $dato->seccion = $request->seccion;
+        $dato->materia = $request->materia;
+        $dato->aula = $request->aula;
+        $dato->idusuario = $request->idusuario;
+        $dato->id_periodo = $periodo[0]->periodo;
+        $dato->save();
+
+        return $dato;
+        // if(empty($request->idcurso)){
+        //     $curso = Curso::create([
+        //         'nombre' => $request->nombre,
+        //         'id_asignatura'=> $request->id_asignatura,
+        //         'seccion' => $request->seccion,
+        //         'materia' => $request->materia,
+        //         'aula' => $request->aula,
+        //         'codigo' => $this->codigo(8),
+        //         'idusuario'=> $request->idusuario,
+        //     ]);
+        // }else{
+        //     $curso=DB::update("UPDATE curso SET nombre=?,seccion=?,materia=?,aula=?, id_asignatura=? WHERE idcurso=?",[$request->nombre,$request->seccion,$request->materia,$request->aula,$request->id_asignatura,$request->idcurso]);
+        // }
+        // return $periodo[0]->periodo;
     }
 
     function codigo($count)
@@ -243,7 +258,8 @@ class CursoController extends Controller
         AND c.id_asignatura = '$request->id_asignatura'
         AND c.id_periodo = '$request->periodo_id'
          AND c.estado = '1'
-         GROUP BY c.codigo");
+         GROUP BY c.codigo
+         ORDER BY idcurso DESC");
         return $cursos;
     }
 

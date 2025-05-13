@@ -33,6 +33,7 @@ class PrefacturaController extends Controller
     {
         if($request->getReportePrefacturaAgrupado) { return $this->getReportePrefacturaAgrupado($request); }
         if($request->notasMovidasAnteriores)       { return $this->getNotasMovidasAnteriores($request); }
+        if($request->getPrefacturasMovidas)       { return $this->getPrefacturasMovidas($request); }
     }
     //api:get/prefactura_documentos?getReportePrefacturaAgrupado=1&periodo_id=25&tipoVenta=1
     public function getReportePrefacturaAgrupado(Request $request)
@@ -282,6 +283,56 @@ class PrefacturaController extends Controller
             "notas" => $notas
         ];
     }
+
+    public function getPrefacturasMovidas(Request $request)
+    {
+        $periodoId = $request->get('periodo_id');
+
+        // Obtener todos los registros de intercambio para los detalles
+        $todas = DB::table('historico_intercambio_documentos')
+            ->whereNotNull('ven_codigo_original')
+            ->where('periodo_id', $periodoId)
+            ->get();
+
+        // Obtener agrupación por ven_codigo_intercambio
+        $prefacturas = DB::table('historico_intercambio_documentos as h')
+            ->whereNotNull('h.ven_codigo_intercambio')
+            ->where('h.periodo_id', $periodoId)
+            ->select('h.ven_codigo_intercambio', 'h.empresa_id', DB::raw('GROUP_CONCAT(h.ven_codigo_original) as ven_codigos_originales'))
+            ->groupBy('h.ven_codigo_intercambio', 'h.empresa_id')
+            ->get();
+
+        foreach ($prefacturas as $item) {
+            // Consultar información adicional
+            $getDatosDocumentos = DB::SELECT("SELECT i.nombreInstitucion,
+                CONCAT(u.nombres,' ', u.apellidos) AS cliente, u.cedula
+                FROM f_venta v
+                LEFT JOIN institucion i ON i.idInstitucion = v.institucion_id
+                LEFT JOIN usuario u ON u.idusuario = v.ven_cliente
+                WHERE v.ven_codigo = '$item->ven_codigo_intercambio'
+                AND v.id_empresa = '$item->empresa_id'
+            ");
+
+            if (count($getDatosDocumentos) > 0) {
+                $item->nombreInstitucion = $getDatosDocumentos[0]->nombreInstitucion;
+                $item->cliente = $getDatosDocumentos[0]->cliente;
+                $item->cedula = $getDatosDocumentos[0]->cedula;
+            } else {
+                $item->nombreInstitucion = null;
+                $item->cliente = null;
+                $item->cedula = null;
+            }
+
+            // Convertir la lista de ven_codigos_originales en un array
+            $item->ven_codigos_originales = explode(',', $item->ven_codigos_originales);
+        }
+
+        return [
+            "todas" => $todas,
+            "prefacturas" => $prefacturas
+        ];
+    }
+
 
     /**
      * Show the form for creating a new resource.

@@ -44,8 +44,10 @@ class PedidosGerenciaController extends Controller
     }
     //api:get/pedidos_gerencia?listarSolicitudesPedido=1&id_pedido=1&tipo=0
     public function listarSolicitudesPedido($request){
-        $id_pedido  = $request->id_pedido;
-        $tipo       = $request->tipo;
+        $pedido               = Pedidos::find($request->id_pedido);
+        $id_pedido            = $request->id_pedido;
+        $tipo                 = $request->tipo;
+        $ca_codigo_agrupado   = $pedido->ca_codigo_agrupado;
         $query = DB::SELECT("SELECT pedidos_solicitudes_gerencia.*,
         pedidos.contrato_generado,institucion.nombreInstitucion,pedidos.id_pedido,
         CONCAT(usuario.nombres,' ',usuario.apellidos) as asesor,
@@ -59,8 +61,14 @@ class PedidosGerenciaController extends Controller
         AND pedidos_solicitudes_gerencia.tipo = $tipo
         ORDER BY pedidos_solicitudes_gerencia.id DESC
         ");
-        //la fecha created_at coloca formato de fecha y-m-d h:i:s
-        return $query;
+        $agrupado = DB::SELECT("SELECT * from f_proforma p
+            WHERE p.idPuntoventa = '$ca_codigo_agrupado'
+            AND p.prof_estado <> '0'
+        ");
+        return [
+            "arregloComision" => $query,
+            "agrupado"        => $agrupado
+        ];
     }
     /**
      * Show the form for creating a new resource.

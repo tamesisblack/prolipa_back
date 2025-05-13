@@ -224,7 +224,7 @@ class PerseoClienteController extends Controller
             else                { $process = $this->tr_PerseoPost($url, $formData, $empresa); }
             return $process;
         } catch (\Exception $e) {
-            return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar la proforma a perseo", "error" => $e->getMessage()];
+            return ["status" => "0", "message" => "Ocurrió un error al enviar información al sistema Perseo.", "error" => $e->getMessage()];
         }
     }
     /*

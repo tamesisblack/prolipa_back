@@ -310,9 +310,6 @@ class DiagnosticoController extends Controller
         (case when (c.bc_estado = '2') then 'codigo leido'
         when (c.bc_estado = '1') then 'codigo sin leer'
         end) as barrasEstado,
-        (case when (c.codigos_barras = '1') then 'con código de barras'
-            when (c.codigos_barras = '0')  then 'sin código de barras'
-        end) as status,
         (case when (c.venta_estado = '0') then ''
             when (c.venta_estado = '1') then 'Venta directa'
             when (c.venta_estado = '2') then 'Venta por lista'

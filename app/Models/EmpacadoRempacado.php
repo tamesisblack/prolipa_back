@@ -14,8 +14,6 @@ class EmpacadoRempacado extends Model
         'idempresa',
         'empa_fecha',
         'empa_libros',
-        'empa_facturas',
-        'empa_cartones',
         'usu_codigo',
         'remi_codigo',
         'user_created',

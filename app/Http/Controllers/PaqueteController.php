@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use DB;
+use Illuminate\Support\Facades\DB;
 use App\Models\CodigoLibros;
 use Illuminate\Http\Request;
 use App\Models\CodigosLibros;
@@ -14,7 +14,6 @@ use App\Traits\Codigos\TraitCodigosGeneral;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Codigos\PaquetesRepository;
 
-use function Symfony\Component\VarDumper\Dumper\esc;
 
 class PaqueteController extends Controller
 {
@@ -127,6 +126,10 @@ class PaqueteController extends Controller
                             $ifcodigo_paqueteD = $validarD[0]->codigo_paquete;
                             $codigo_unionD = strtoupper($validarD[0]->codigo_union);
 
+                            $ifcodigo_combo = $validarA[0]->codigo_combo;
+                            if($ifcodigo_combo){
+                                return ["status" => "0", "message" => "El paquete $codigoPaquete ya tiene un combo asociado"];
+                            }
                             //===VALIDACION====
                             if ($ifcodigo_paqueteA == null && (($codigo_unionA == $codigoDiagnostico) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0"))) {
                                 $errorA = 0;
@@ -293,11 +296,16 @@ class PaqueteController extends Controller
 
                             if (count($validarB) > 0) {
                                 //VARIABLES PARA EL PROCESO
+                                $ifcodigo_combo     = $validarA[0]->codigo_combo;
                                 $ifcodigo_paqueteA  = strtoupper($validarA[0]->codigo_paquete);
                                 $codigo_unionA      = strtoupper($validarA[0]->codigo_union);
                                 $ifcodigo_paqueteB  = strtoupper($validarB[0]->codigo_paquete);
                                 $codigo_unionB      = strtoupper($validarB[0]->codigo_union);
 
+                                ///VALIDAR SI UN CODIGO TIENE COMBO NO DEJAR PASAR
+                                if($ifcodigo_combo){
+                                    return ["status" => "0", "message" => "El paquete $codigoPaquete ya tiene un combo asociado"];
+                                }
                                 //===VALIDACION====
                                 if ($ifcodigo_paqueteA == null && (($codigo_unionA == $codigoB) || ($codigo_unionA == null || $codigo_unionA == "" || $codigo_unionA == "0"))) $errorA = 0;
                                 if ($ifcodigo_paqueteB == null && (($codigo_unionB == $codigoA) || ($codigo_unionB == null || $codigo_unionB == "" || $codigo_unionB == "0"))) $errorB = 0;
@@ -1042,6 +1050,9 @@ class PaqueteController extends Controller
         $periodo_id                 = $request->periodo_id;
         $usuario_editor             = $request->id_usuario;
         $comentario                 = $request->observacion;
+        // tipoBodega => 3 paquete; 4 = combo
+        $tipoBodega                 = $request->tipoBodega;
+        $letraProceso               = $tipoBodega == 3 ? 'paquete' : 'combo';
         $fecha                      = date('Y-m-d H:i:s');
         $arregloResumen             = [];
         //====PROCESO===================================
@@ -1054,15 +1065,24 @@ class PaqueteController extends Controller
                 $contadorD                  = 0;
                 $noExisteA                  = 0;
                 $noExisteD                  = 0;
-                $getExistsPaquete   = $this->getExistsPaquete($item->codigoPaquete);
+                $codigoPaquete              = strtoupper($item->codigoPaquete);
+                // VALIDAR QUE EL CODIGO DE PAQUETE EXISTE
+                if($tipoBodega == 3){
+                    $getExistsPaquete = $this->getExistsPaquete($codigoPaquete);
+                }
+                // VALIDAR QUE EL COMBO EXISTE
+                else{
+                    $getExistsPaquete = $this->getExistsCombo($codigoPaquete);
+                }
                 if(!empty($getExistsPaquete)){
                     $codigosHijos           = [];
                     $arrayDiagnosticos      = collect();
                     $mensajePadre           = "";
                     //codigos hijos del paquete activacion
-                    $codigosHijos           = $this->getCodigos($item->codigoPaquete,0,3);
+                    // TipoBodega => 3 paquete; 4 = combo
+                    $codigosHijos           = $this->getCodigos($codigoPaquete, 0, $tipoBodega == 3 ? 3 : 5);
                     //Codigos hijos del paquete diagnostico
-                    $arrayDiagnosticos   = collect($this->getCodigos($item->codigoPaquete,0,4));
+                    $arrayDiagnosticos      = collect($this->getCodigos($item->codigoPaquete,0,$tipoBodega == 3 ? 4 : 6));
                     if(count($codigosHijos) > 0){
                         foreach($codigosHijos as $key2 => $tr){
                             $validarA               = [];
@@ -1084,12 +1104,7 @@ class PaqueteController extends Controller
                             //validacion
                             $validarA               = [$tr];
                             $validarD               = $codeDiagnostico;
-                            $ifErrorProformaA       = 0;
-                            $messageProformaA       = "";
                             $ifsetProformaA         = 0;
-                            $ifErrorProformaD       = 0;
-                            $messageProformaD       = "";
-                            $ifsetProformaD         = 0;
                             //======si ambos codigos existen========
                             if(count($validarA) > 0 && count($validarD) > 0){
                                 $mensajeFront               = "";
@@ -1100,12 +1115,8 @@ class PaqueteController extends Controller
                                 $ifContratoA                = $validarA[0]->contrato;
                                 //numero de verificacion
                                 $ifVerificacion             = $validarA[0]->verificacion;
-                                //numero de verificacion
-                                $ifVerificacionA            = $validarA[0]->verificacion;
                                 //para ver la empresa de la proforma
                                 $ifproforma_empresaA        = $validarA[0]->proforma_empresa;
-                                //para ver el estado devuelto proforma
-                                $ifdevuelto_proformaA       = $validarA[0]->devuelto_proforma;
                                 ///para ver el codigo de proforma
                                 $ifcodigo_proformaA         = $validarA[0]->codigo_proforma;
                                 //para ver el codigo de liquidacion
@@ -1115,12 +1126,7 @@ class PaqueteController extends Controller
                                 //validar si el codigo se encuentra liquidado
                                 $ifDevueltoD                = $validarD[0]->estado_liquidacion;
                                 $ifliquidado_regaladoD      = $validarD[0]->liquidado_regalado;
-                                //para ver la empresa de la proforma
-                                $ifproforma_empresaD        = $validarD[0]->proforma_empresa;
-                                //para ver el estado devuelto proforma
-                                $ifdevuelto_proformaD       = $validarD[0]->devuelto_proforma;
-                                ///para ver el codigo de proforma
-                                $ifcodigo_proformaD         = $validarD[0]->codigo_proforma;
+                               
                                 //===VALIDACION====
 
                                 if($request->dLiquidado ==  '1'){
@@ -1199,7 +1205,7 @@ class PaqueteController extends Controller
                             }
                         }
                     }else{
-                        $mensajePadre = "El paquete no tiene codigos";
+                        $mensajePadre = "El $letraProceso no tiene codigos";
                     }
                     //codigos resumen
                     $arregloResumen[$contadorResumen] = [
@@ -1217,7 +1223,7 @@ class PaqueteController extends Controller
                 }else{
                     $arregloProblemaPaquetes [$contadorErrPaquetes] = [
                         "paquete"   => $item->codigoPaquete,
-                        "problema" => 'Paquete no existe'
+                        "problema"  => $letraProceso.' no existe'
                     ];
                     $contadorErrPaquetes++;
                 }
@@ -1420,7 +1426,7 @@ class PaqueteController extends Controller
                             }
                         }
                     } else {
-                        $mensajePadre = "El paquete no tiene códigos";
+                        $mensajePadre = "El $letraProceso no tiene códigos";
                     }
 
                     // Summary record

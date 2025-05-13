@@ -110,23 +110,26 @@ ORDER BY or_fecha DESC LIMIT 1");
             return $query;
         }
         if ($request->busqueda == 'pendiente') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
+            LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
             WHERE or_estado =1 ORDER BY or_fecha DESC limit 100");
             return $query;
         }
         if ($request->busqueda == 'finalizado') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
+            LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
             WHERE or_estado =2 ORDER BY or_fecha DESC limit 100");
             return $query;
         }
         if ($request->busqueda == 'orden') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
                      INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
                      LEFT JOIN empresas e ON e.id = o.or_empresa
+                     LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
                      WHERE or_codigo LIKE '%$request->razonbusqueda%'");
             return $query;
         }

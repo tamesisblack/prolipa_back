@@ -10,10 +10,10 @@ use Illuminate\Support\Facades\Http;
 trait TraitPedidosGeneral
 {
     //=====PERSEO=======
-    public $api_keyProlipaProduction    = "RfVaC9hIMhn49J4jSq2_I7GbWYHrlGRtitYwIuTepQg-";
-    public $api_keyCalmedProduction     = "RfVaC9hIMhn49J4jSq2_IzB1.iNzqGb9M38jmd1DfQs-";
-    public $api_keyProlipaLocal         = "RfVaC9hIMhn49J4jSq2_I_.QLazmDGrbZQ8o8ePUEcU-";
-    public $api_keyCalmedLocal          = "RfVaC9hIMhn49J4jSq2_I91geWPRm0IWEft2beVW9NI-";
+    public $api_keyProlipaProduction    = "RfVaC9hIMhn49J4jSq2_I_50FLWFrX8qOhXa9PacnqU-";
+    public $api_keyCalmedProduction     = "RfVaC9hIMhn49J4jSq2_I8kXMeIRjM.3WlDNPyOqfu0";
+    public $api_keyProlipaLocal         = "RfVaC9hIMhn49J4jSq2_IzB1.iNzqGb9M38jmd1DfQs-";
+    public $api_keyCalmedLocal          = "RfVaC9hIMhn49J4jSq2_I5FdjyUYFOLEGVaHnPJ9Pyw-";
     //=====END PERSEO=======
     //=====SOLINFA==========
     public $api_KeyGONZALEZ             = "RfVaC9hIMhn49J4jSq2_Iw3h5qF1Dg0ecy.kFTzdqnA-";
@@ -21,7 +21,7 @@ trait TraitPedidosGeneral
     //=====END SOLINFA======
     public $ipProlipa                   = "http://186.4.218.168:9095/api/";
     public $ipPerseo                    = "http://45.184.225.106:8181/api/";
-    public $gl_perseoProduccion         = 0;
+    public $gl_perseoProduccion         = 1;
     // public $ipLocal        = "http://localhost:5000/api/";
     public function FacturacionGet($endpoint)
     {
@@ -110,6 +110,7 @@ trait TraitPedidosGeneral
             OR o.estado_libros_obsequios  = "3"
             OR o.estado_libros_obsequios  = "4"
             OR o.estado_libros_obsequios  = "6"
+            OR o.estado_libros_obsequios  = "7"
             )
         ) as contadorHijosDocentesAbiertosEnviados,
         (
@@ -138,9 +139,13 @@ trait TraitPedidosGeneral
             AND l.ifAntAprobado = "1"
             AND l.id_pedido = p.id_pedido
         ) AS contadorPendientesAnticipos,
+        (
+            SELECT con.anticipo_global FROM pedidos_convenios con
+            WHERE con.id = p.pedidos_convenios_id
+        ) AS anticipo_global,
         pe.periodoescolar as periodo,pe.codigo_contrato,
         CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
-        i.region_idregion as region,uf.cod_usuario,
+        i.region_idregion as region,uf.iniciales as iniciales_facturador,
         ph.fecha_generar_contrato,
         (p.TotalVentaReal - ((p.TotalVentaReal * p.descuento)/100)) AS ven_neta,
         (p.TotalVentaReal * p.descuento)/100 as valorDescuento,
@@ -165,6 +170,7 @@ trait TraitPedidosGeneral
         if($filtro == 2) { $resultado->where('p.id_periodo','=', $parametro1)->where('p.id_asesor','=',$parametro2)->OrderBy('p.id_pedido','DESC'); }
         //filtro facturador no admin
         if($filtro == 3) { $resultado->where('p.id_periodo','=', $parametro1)->where('p.id_asesor','=',$parametro2)->where('p.estado','<>','0')
+
             ->where(function ($query) {
                 $query->where('p.solicitud_gerencia_estado', '0')
                 ->orWhere('p.solicitud_gerencia_estado', '2');
@@ -177,6 +183,8 @@ trait TraitPedidosGeneral
         }
         //filtro x periodo pero el ca_codigo_agrupado es nulo
         if($filtro == 4) { $resultado->where('p.id_periodo','=',$parametro1)->where('p.estado','<>','0')->whereNull('p.ca_codigo_agrupado')->OrderBy('p.id_pedido','DESC'); }
+        //filtro x periodo root
+        if($filtro == 5) { $resultado->where('p.id_periodo','=',$parametro1)->OrderBy('p.id_pedido','DESC'); }
         $consulta = $resultado->get();
         return $consulta;
     }
@@ -242,9 +250,6 @@ trait TraitPedidosGeneral
         AND c.estado = '1'
         ");
         return $query;
-    }
-    public function updateDatosVerificacionPorIngresar($contrato,$estado){
-        $query = Pedidos::Where('contrato_generado','=',$contrato)->update(['datos_verificacion_por_ingresar' => $estado]);
     }
     //asesores que tiene pedidos
     public function getAsesoresPedidos(){
@@ -357,8 +362,18 @@ trait TraitPedidosGeneral
         return $query;
     }
     public function tr_getDocumentos($ca_codigo_agrupado){
-        $query = DB::SELECT("SELECT DISTINCT fv.ven_codigo FROM f_venta fv
+        $query = DB::SELECT("SELECT DISTINCT fv.ven_codigo, fv.est_ven_codigo, ev.est_ven_nombre FROM f_venta fv
         INNER JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
+        LEFT JOIN 1_4_estado_venta ev on fv.est_ven_codigo = ev.est_ven_codigo
+        WHERE fpr.idPuntoventa = '$ca_codigo_agrupado'
+        -- AND fv.est_ven_codigo <> 3
+        ");
+        return $query;
+    }
+    public function tr_getDocumentosRuc($ca_codigo_agrupado){
+        $query = DB::SELECT("SELECT DISTINCT fv.ruc_cliente FROM f_venta fv
+        INNER JOIN f_proforma fpr ON fpr.prof_id = fv.ven_idproforma
+        LEFT JOIN 1_4_estado_venta ev on fv.est_ven_codigo = ev.est_ven_codigo
         WHERE fpr.idPuntoventa = '$ca_codigo_agrupado'
         AND fv.est_ven_codigo <> 3
         ");
@@ -433,7 +448,7 @@ trait TraitPedidosGeneral
             ORDER BY p.id_pedido DESC
             ");
         }
-       
+
        return $query;
     }
     public function tr_getInstitucionesPeriodo($id_periodo){
@@ -871,7 +886,7 @@ trait TraitPedidosGeneral
 
     public function tr_institucionesVentasPeriodo($id_periodo){
         $query = DB::SELECT("SELECT DISTINCT i.idInstitucion AS id_institucion, i.nombreInstitucion
-            FROM  f_venta fv 
+            FROM  f_venta fv
             INNER JOIN institucion i ON i.idInstitucion = fv.institucion_id
             WHERE fv.periodo_id = ?
             AND fv.est_ven_codigo <> 3
@@ -879,17 +894,17 @@ trait TraitPedidosGeneral
         ",[$id_periodo]);
         return $query;
     }
-    
+
     //asesores que tiene Ventas
     public function getAsesoresVentasPeriodo($id_periodo){
-        $query = DB::SELECT("SELECT DISTINCT u.idusuario AS id_asesor, 
+        $query = DB::SELECT("SELECT DISTINCT u.idusuario AS id_asesor,
             CONCAT(u.nombres, ' ', u.apellidos) AS asesor
             FROM f_venta fv
             INNER JOIN institucion i ON i.idInstitucion = fv.institucion_id
             INNER JOIN usuario u ON i.asesor_id = u.idusuario
             WHERE fv.periodo_id = ?
             AND fv.est_ven_codigo <> 3
-            AND fv.institucion_id IS NOT NULL 
+            AND fv.institucion_id IS NOT NULL
             AND fv.idtipodoc IN (1, 2, 3, 4);
         ",[$id_periodo]);
         return $query;

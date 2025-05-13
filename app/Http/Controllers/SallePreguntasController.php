@@ -966,7 +966,7 @@ class SallePreguntasController extends Controller
     public function transformar_preguntas_salle(Request $request){
         $nuevo_tipo = 1;
         if( $request->id_tipo_pregunta == 1 ){ $nuevo_tipo = 5; }
-        DB::UPDATE("UPDATE `salle_preguntas` SET `id_tipo_pregunta`= ? WHERE `id_pregunta` = ?",[$nuevo_tipo, $request->id_pregunta]);
+        DB::UPDATE("UPDATE `salle_preguntas` SET `id_tipo_preSallePreguntasControllergunta`= ? WHERE `id_pregunta` = ?",[$nuevo_tipo, $request->id_pregunta]);
     }
     public function salle_intento_eval(Request $request){
         $periodo = date('Y');
@@ -1065,11 +1065,12 @@ class SallePreguntasController extends Controller
         try {
             // Iniciar la transacción
             DB::beginTransaction();
-
+            $preguntasYaIngresadas          = [];
             // Variables
             $id_asignatura                  = $request->id_asignatura;
             $n_evaluacion                   = $request->n_evaluacion;
             $user_created                   = $request->user_created;
+            $preguntafromProlipa            = $request->preguntafromProlipa;
             $contador                       = 0;
             $contadorNoIngresado            = 0;
             $arregloPreguntasNoIngresadas   = collect();
@@ -1077,10 +1078,14 @@ class SallePreguntasController extends Controller
             set_time_limit(6000000);
             ini_set('max_execution_time', 6000000);
 
-            $miArrayDeObjetos = json_decode($request->data_preguntas);
+            $miArrayDeObjetos = json_decode($request->arrayPreguntas);
             foreach ($miArrayDeObjetos as $key => $item) {
                 // Validar que la pregunta no esté ingresada
-                $pregunta = $this->getPreguntaXNombre($request, $item);
+                if($request->preguntafromProlipa){
+                    $pregunta = $this->getPreguntaXNombreProlipa($request, $item);
+                }else{
+                    $pregunta = $this->getPreguntaXNombre($request, $item);
+                }
                 if (empty($pregunta) || $request->duplicate == 1) {
                     $preg_sync = new SallePreguntas();
                     $preg_sync->id_asignatura           = $id_asignatura;
@@ -1091,14 +1096,23 @@ class SallePreguntasController extends Controller
                     $preg_sync->estado                  = 1;
                     $preg_sync->editor                  = $user_created;
                     $preg_sync->n_evaluacion            = $n_evaluacion;
+                    if($preguntafromProlipa){
+                        $preg_sync->preguntafromProlipa   = 1;
+                        $preg_sync->id_pregunta_prolipa   = $item->id;
+                    }
                     $preg_sync->save();
 
                     // Crear opciones de preguntas
                     if ($preg_sync) {
-                        $this->crearOpcionesPregunta($request, $item, $preg_sync);
+                        if($preguntafromProlipa){
+                            $this->crearOpcionesPreguntaProlipa($request, $item, $preg_sync);
+                        }else{
+                            $this->crearOpcionesPregunta($request, $item, $preg_sync);  
+                        }
                         $contador++;
                     }
                 } else {
+                    $preguntasYaIngresadas[] = $item;
                     $arregloPreguntasNoIngresadas->push($pregunta);
                     $contadorNoIngresado++;
                 }
@@ -1109,19 +1123,21 @@ class SallePreguntasController extends Controller
 
             if (count($arregloPreguntasNoIngresadas) == 0) {
                 return [
-                    "ingresadas"              => $contador,
+                    "preguntasIngresadas"     => $contador,
                     "PreguntasNoIngresadas"   => [],
+                    "preguntasYaIngresadas"   => $preguntasYaIngresadas,
                 ];
             } else {
                 return [
-                    "ingresadas"              => $contador,
+                    "preguntasIngresadas"     => $contador,
                     "PreguntasNoIngresadas"   => array_merge(...$arregloPreguntasNoIngresadas->all()),
+                    "preguntasYaIngresadas"   => $preguntasYaIngresadas,
                 ];
             }
         } catch (\Exception $ex) {
             // Revertir la transacción en caso de error
             DB::rollBack();
-            return ["status" => "0", "message" => "Hubo problemas con la conexión al servidor", "error" => $ex->getMessage()];
+            return ["status" => "0", "message" => "Hubo problemas con la conexión al servidor", "error" => $ex->getMessage(),'line' => $ex->getLine()];
         }
     }
     public function crearOpcionesPregunta($request,$item,$pregunta){
@@ -1147,10 +1163,42 @@ class SallePreguntasController extends Controller
             }
         }
     }
+    public function crearOpcionesPreguntaProlipa($request,$item, $pregunta){
+        $idPreguntaNueva = $pregunta->id_pregunta;
+        $query = DB::SELECT("SELECT * FROM opciones_preguntas p
+            WHERE p.id_pregunta = '$item->id'
+        ");
+        //si la pregunta tiene opciones las elimino
+        if(count($query) > 0){
+            foreach($query as $key => $item){
+                //validar que si la opcion no existe se cree
+                $validateOpcion = $this->getOpcionXPreguntaProlipa($idPreguntaNueva,$item);
+                if(empty($validateOpcion)){
+                    $opcion = new SallePreguntasOpcion();
+                    $opcion->id_pregunta        = $idPreguntaNueva;
+                    $opcion->opcion             = $item->opcion;
+                    $opcion->img_opcion         = $item->img_opcion;
+                    $opcion->tipo               = $item->tipo;
+                    $opcion->cant_coincidencias = $item->cant_coincidencias;
+                    $opcion->n_evaluacion       = $request->n_evaluacion;
+                    $opcion->id_prolipa         = $item->id_opcion_pregunta;
+                    $opcion->save();
+                }
+            }
+        }
+    }
     public function getOpcionXPregunta($idPreguntaNueva,$item){
         $query = DB::SELECT("SELECT * FROM salle_opciones_preguntas  o
         WHERE o.id_pregunta = '$idPreguntaNueva'
         AND o.opcion        = '$item->opcion'
+        ");
+        return $query;
+    }
+    public function getOpcionXPreguntaProlipa($idPreguntaNueva,$item){
+        $query = DB::SELECT("SELECT * FROM salle_opciones_preguntas  o
+        WHERE o.id_pregunta = '$idPreguntaNueva'
+        AND o.opcion        = '$item->opcion'
+        AND o.id_prolipa    = '$item->id_opcion_pregunta'
         ");
         return $query;
     }
@@ -1169,6 +1217,19 @@ class SallePreguntasController extends Controller
             $item->id_tipo_pregunta,
             $item->descripcion,
         ]);
+
+        return $query;
+    }
+    public function getPreguntaXNombreProlipa($request, $item)
+    {
+        $query = DB::select("SELECT *
+            FROM salle_preguntas p
+            WHERE p.id_asignatura   = '$request->id_asignatura'
+            AND p.n_evaluacion      = '$request->n_evaluacion'
+            AND p.id_tipo_pregunta  = '$item->id_tipo_pregunta'
+            AND p.descripcion       = '$item->descripcion'
+            AND p.id_pregunta_prolipa = '$item->id'
+        ");
 
         return $query;
     }

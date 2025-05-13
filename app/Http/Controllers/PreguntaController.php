@@ -259,14 +259,15 @@ class PreguntaController extends Controller
         if(count($query) == 0){
             return [];
         }
+        return $query;
         //solo traer el pregunta_id
-        $colección = collect($query);
-        $resultado = $colección->map(function ($objeto) {
-            return [
-                'id' => $objeto['pregunta_id']
-            ];
-        });
-        return $resultado->all();
+        // $colección = collect($query);
+        // $resultado = $colección->map(function ($objeto) {
+        //     return [
+        //         'id' => $objeto['pregunta_id']
+        //     ];
+        // });
+        // return $resultado->all();
     }
     public function preguntas_x_tema_Docente(Request $request){
         $id_group                       = $request->id_group;
@@ -800,10 +801,7 @@ class PreguntaController extends Controller
         if($evaluacion_personalizada == 1){
             for( $i=1; $i<=$request->grupos; $i++ ){
                 for( $j=0; $j<count($tipos); $j++ ){
-                    echo "test $j "."<br>";
                     for( $k=0; $k<$cantidades[$j]; $k++ ){
-                        echo "entro";
-                        echo "hola $j "."<br>";
                         $unidad_rand = rand(0, count($unidades)-1);
                         $this->preguntasRepository->obtenerPreguntaAleatoriaPersonalizada($tipos[$j], $request->evaluacion, $unidades[$unidad_rand], $i, $intentos,$institucion_id);
                     }

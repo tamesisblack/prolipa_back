@@ -88,11 +88,6 @@ trait TraitVerificacionGeneral
                     when (ci.verif3 > 0) then 'verif3'
                     when (ci.verif4 > 0) then 'verif4'
                     when (ci.verif5 > 0) then 'verif5'
-                    when (ci.verif6 > 0) then 'verif6'
-                    when (ci.verif7 > 0) then 'verif7'
-                    when (ci.verif8 > 0) then 'verif8'
-                    when (ci.verif9 > 0) then 'verif9'
-                    when (ci.verif10 > 0) then 'verif10'
                     end) as verificacion
                 FROM codigoslibros ci
                 WHERE ci.codigo = c.codigo
@@ -118,11 +113,6 @@ trait TraitVerificacionGeneral
                     when (ci.verif3 > 0) then 'verif3'
                     when (ci.verif4 > 0) then 'verif4'
                     when (ci.verif5 > 0) then 'verif5'
-                    when (ci.verif6 > 0) then 'verif6'
-                    when (ci.verif7 > 0) then 'verif7'
-                    when (ci.verif8 > 0) then 'verif8'
-                    when (ci.verif9 > 0) then 'verif9'
-                    when (ci.verif10 > 0) then 'verif10'
                     end) as verificacion
                 FROM codigoslibros ci
                 WHERE ci.codigo = c.codigo

@@ -563,7 +563,7 @@ class EstudianteController extends Controller
             (case when (c.estado_liquidacion = '0') then 'liquidado'
                 when (c.estado_liquidacion = '1') then 'sin liquidar'
                 when (c.estado_liquidacion = '2') then 'codigo regalado'
-            end) as liquidacion,c.verif1,c.verif2,c.verif3,c.verif4,c.verif5,c.verif6,c.verif7,c.verif8,c.verif9,c.verif10,
+            end) as liquidacion,c.verif1,c.verif2,c.verif3,c.verif4,c.verif5,
             l.nombrelibro
             FROM codigoslibros c
             LEFT JOIN periodoescolar p ON p.idperiodoescolar = c.id_periodo
@@ -573,66 +573,64 @@ class EstudianteController extends Controller
             ");
             return ["codigos" => $traercodigos];
         }
-        //para buscar los cursos del estudiante
-        // if($request->busquedaCurso){
-        //     $cantidad = DB::SELECT("SELECT  COUNT(DISTINCT e.codigo) as cantidad_cursos
-        //     FROM estudiante e
-        //       LEFT JOIN curso c ON c.codigo = e.codigo
-        //       LEFT JOIN periodoescolar pe ON c.id_periodo = pe.idperiodoescolar
-        //       WHERE  usuario_idusuario  = '$request->idusuario'
-        //       AND e.estado = '1'
-        //       AND c.estado = '1'
-        //       AND pe.estado = '1'
-        //     ");
-        //     $codigos = DB::SELECT("SELECT DISTINCT c.codigo, e.usuario_idusuario FROM
-        //         estudiante e
-        //         LEFT JOIN curso c ON c.codigo = e.codigo
-        //         LEFT JOIN periodoescolar pe ON c.id_periodo = pe.idperiodoescolar
-        //         WHERE  usuario_idusuario  = '$request->idusuario'
-        //         AND e.estado = '1'
-        //         AND c.estado = '1'
-        //         AND pe.estado = '1'
-        //     ");
-        //     return ["cantidad" => $cantidad , "codigos" => $codigos];
-        // }
-
+        
         if ($request->busquedaCurso) {
-            $resultados = DB::table('estudiante as e')
+            // Primero obtenemos los datos básicos agrupados por docente
+            $docentes = DB::table('estudiante as e')
                 ->join('curso as c', 'c.codigo', '=', 'e.codigo')
                 ->join('periodoescolar as pe', 'c.id_periodo', '=', 'pe.idperiodoescolar')
-                ->join('usuario as u', 'c.idusuario', '=', 'u.idusuario') // Relación con el docente
-                ->join('asignatura as a', 'c.id_asignatura', '=', 'a.idasignatura') // Relación con asignatura
+                ->join('usuario as u', 'c.idusuario', '=', 'u.idusuario')
+                ->join('asignatura as a', 'c.id_asignatura', '=', 'a.idasignatura')
                 ->where('e.usuario_idusuario', $request->idusuario)
                 ->where('e.estado', '1')
                 ->where('c.estado', '1')
                 ->where('pe.estado', '1')
-                ->groupBy('c.idusuario', 'u.nombres', 'u.apellidos', 'u.name_usuario', 'u.cedula') // Agrupamos por docente
-                ->selectRaw('
-                    JSON_OBJECT(
-                        "docente_nombres", u.nombres,
-                        "docente_apellidos", u.apellidos,
-                        "docente_name_usuario", u.name_usuario,
-                        "docente_cedula", u.cedula,
-                        "cursos", JSON_ARRAYAGG(
-                            JSON_OBJECT(
-                                "codigo", c.codigo,
-                                "id_asignatura", a.idasignatura,
-                                "nombre_asignatura", a.nombreasignatura,
-                                "id_periodo", c.id_periodo,
-                                "periodo_escolar", pe.periodoescolar,
-                                "fecha_asignacion", e.created_at
-                            )
-                        )
-                    ) as docente_info
-                ')
+                ->groupBy('c.idusuario', 'u.nombres', 'u.apellidos', 'u.name_usuario', 'u.cedula')
+                ->select(
+                    'u.nombres as docente_nombres',
+                    'u.apellidos as docente_apellidos',
+                    'u.name_usuario as docente_name_usuario',
+                    'u.cedula as docente_cedula',
+                    'c.idusuario'
+                )
                 ->get();
         
+            // Luego para cada docente, obtenemos sus cursos
+            $resultados = $docentes->map(function ($docente) {
+                $cursos = DB::table('estudiante as e')
+                    ->join('curso as c', 'c.codigo', '=', 'e.codigo')
+                    ->join('periodoescolar as pe', 'c.id_periodo', '=', 'pe.idperiodoescolar')
+                    ->join('asignatura as a', 'c.id_asignatura', '=', 'a.idasignatura')
+                    ->where('e.usuario_idusuario', request('idusuario'))
+                    ->where('e.estado', '1')
+                    ->where('c.estado', '1')
+                    ->where('pe.estado', '1')
+                    ->where('c.idusuario', $docente->idusuario)
+                    ->select(
+                        'c.codigo',
+                        'a.idasignatura',
+                        'a.nombreasignatura',
+                        'c.id_periodo',
+                        'pe.periodoescolar',
+                        'e.created_at as fecha_asignacion'
+                    )
+                    ->orderBy('e.created_at', 'desc') // Orden descendente por fecha de asignación
+                    ->get();
+        
+                return [
+                    'docente_nombres' => $docente->docente_nombres,
+                    'docente_apellidos' => $docente->docente_apellidos,
+                    'docente_name_usuario' => $docente->docente_name_usuario,
+                    'docente_cedula' => $docente->docente_cedula,
+                    'cursos' => $cursos->toArray()
+                ];
+            });
+        
             return [
-                "data_cursos" => $resultados->map(function ($item) {
-                    return json_decode($item->docente_info, true);
-                })
+                "data_cursos" => $resultados
             ];
         }
+
         //para buscar por email
         if($request->busqueda == 'email'){
             if($request->asesor){

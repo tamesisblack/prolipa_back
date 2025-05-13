@@ -6,6 +6,7 @@ use App\Models\CompraOrdenTrabajo;
 use App\Models\DetalleCompraOrden;
 use App\Models\_14Producto;
 use DB;
+use App\Models\_14ProductoStockHistorico;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -165,6 +166,7 @@ class CompraOrdenTrabajoController extends Controller
     
     public function PostCompraOrdenTrabajo_Registrar_modificar(Request $request)
     {
+        // return $request;
         try {
             $request->validate([
                 'prov_codigo' => 'required',
@@ -172,10 +174,111 @@ class CompraOrdenTrabajoController extends Controller
             ]);
     
             DB::beginTransaction();
-    
+            //INICIO VERIFICA SI HAY STOCK DISPONIBLE EN EL CASO DEL EDITAR Y QUIERE REDUCIR STOCK Y VA A QUEDAR < 0 NO LE VA A DEJAR
+            // Actualización de productos y detalles de compra
+            $detalleCompraItems = json_decode($request->data_detallecompra);
+            $empresa = $request->empresa;
+            $productosConStockInsuficiente = [];
+            // Solo realizar la verificación si se está editando
+            if ($request->editar == 'yes') {
+                foreach ($detalleCompraItems as $item) {
+                    $producto = _14Producto::findOrFail($item->pro_codigo);
+                    $pro_codigo = $producto->pro_codigo;
+                    $stockAntiguo = 0;
+                    $stockDisponible = 0;
+                    $stockResultante = 0;
+                    $depositoAntiguo = 0;
+                    $depositoDisponible = 0;
+                    $depositoResultante = 0;
+                    $reservarAntiguo = $item->cantidades_antiguo;
+                    $reservarDisponible = $producto->pro_reservar;
+                    $reservarResultante = ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades;
+                    if ($request->distribuirStock) {
+                        $stockAntiguo = $item->stock_antiguo;
+                        $depositoAntiguo = $item->depositos_antiguo;
+                        if ($empresa == "1") {
+                            $stockDisponible = $producto->pro_stock;
+                            $stockResultante = ($producto->pro_stock - $item->stock_antiguo) + $item->stock;
+                            $depositoDisponible = $producto->pro_deposito;
+                            $depositoResultante = ($producto->pro_deposito - $item->depositos_antiguo) + $item->depositos;
+                        } else if ($empresa == "3") {
+                            $stockDisponible = $producto->pro_stockCalmed;
+                            $stockResultante = ($producto->pro_stockCalmed - $item->stock_antiguo) + $item->stock;
+                            $depositoDisponible = $producto->pro_depositoCalmed;
+                            $depositoResultante = ($producto->pro_depositoCalmed - $item->depositos_antiguo) + $item->depositos;
+                        }
+                    } else {
+                        $stockAntiguo = $item->cantidades_antiguo;
+                        // NUEVA LÓGICA PARA gru_pro_codigo == 2
+                        if ($item->gru_pro_codigo == 2) {
+                            if ($empresa == "1") {
+                                $stockDisponible = $producto->pro_stock;
+                                $stockResultante = ($producto->pro_stock - $item->cantidades_antiguo) + $item->cantidades;
+                            } else if ($empresa == "3") {
+                                $stockDisponible = $producto->pro_stockCalmed;
+                                $stockResultante = ($producto->pro_stockCalmed - $item->cantidades_antiguo) + $item->cantidades;
+                            }
+                        } else {
+                            // LÓGICA ORIGINAL
+                            if ($empresa == "1") {
+                                $stockDisponible = $producto->pro_deposito;
+                                $stockResultante = ($producto->pro_deposito - $item->cantidades_antiguo) + $item->cantidades;
+                            } else if ($empresa == "3") {
+                                $stockDisponible = $producto->pro_depositoCalmed;
+                                $stockResultante = ($producto->pro_depositoCalmed - $item->cantidades_antiguo) + $item->cantidades;
+                            }
+                        }
+                    }
+                    $tieneStockNegativo = false;
+                    $detallesInsuficientes = [];
+                    if ($stockResultante < 0) {
+                        $tieneStockNegativo = true;
+                        $detallesInsuficientes['stock'] = [
+                            'antiguo' => $stockAntiguo,
+                            'actual' => $stockDisponible,
+                            'solicitado' => $request->distribuirStock ? $item->stock : $item->cantidades,
+                            'faltante' => $stockResultante,
+                        ];
+                    }
+                    if ($request->distribuirStock) {
+                        if ($depositoResultante < 0) {
+                            $tieneStockNegativo = true;
+                            $detallesInsuficientes['deposito'] = [
+                                'antiguo' => $depositoAntiguo,
+                                'actual' => $depositoDisponible,
+                                'solicitado' => $item->depositos,
+                                'faltante' => $depositoResultante,
+                            ];
+                        }
+                    }
+                    if ($reservarResultante < 0) {
+                        $tieneStockNegativo = true;
+                        $detallesInsuficientes['reservar'] = [
+                            'antiguo' => $reservarAntiguo,
+                            'actual' => $reservarDisponible,
+                            'solicitado' => $item->cantidades,
+                            'faltante' => $reservarResultante,
+                        ];
+                    }
+                    if ($tieneStockNegativo) {
+                        $productosConStockInsuficiente[] = [
+                            'pro_codigo' => $pro_codigo,
+                            'detalles' => $detallesInsuficientes,
+                        ];
+                    }
+                }
+                if (!empty($productosConStockInsuficiente)) {
+                    DB::rollBack();
+                    return response()->json([
+                        'error' => 'No se puede actualizar el stock. Los siguientes productos quedarían con cantidades negativas en stock, depósito o reserva.',
+                        'productos_insuficientes' => $productosConStockInsuficiente,
+                        'status' => 3
+                    ], 200);
+                }
+            }
+            //FIN VERIFICACION STOCK
             // Variables de compra y operación de modificación o creación
             $compra = null;
-            $empresa = $request->empresa;
     
             if ($request->editar == 'yes') {
                 $compra = CompraOrdenTrabajo::find($request->com_codigo);
@@ -215,18 +318,58 @@ class CompraOrdenTrabajoController extends Controller
                 ]);
             }
     
-            // Actualización de productos y detalles de compra
-            $detalleCompraItems = json_decode($request->data_detallecompra);
-    
             foreach ($detalleCompraItems as $item) {
                 $producto = _14Producto::findOrFail($item->pro_codigo);
-    
+                // Guardar valores antes de actualizar (old_values)
+                $old_values = [
+                    'pro_codigo' => $producto->pro_codigo,
+                    'pro_reservar' => $producto->pro_reservar,
+                    'pro_stock' => $producto->pro_stock,
+                    'pro_stockCalmed' => $producto->pro_stockCalmed,
+                    'pro_deposito' => $producto->pro_deposito,
+                    'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+                ];
                 if ($request->distribuirStock) {
                     $this->actualizarProductoConDistribucion($request, $item, $producto, $compra, $empresa);
                 } else {
                     $this->actualizarProductoSinDistribucion($request, $item, $producto, $compra, $empresa);
                 }
+                // Guardar valores después de actualizar (new_values)
+                $new_values = [
+                    'pro_codigo' => $producto->pro_codigo,
+                    'pro_reservar' => $producto->pro_reservar,
+                    'pro_stock' => $producto->pro_stock,
+                    'pro_stockCalmed' => $producto->pro_stockCalmed,
+                    'pro_deposito' => $producto->pro_deposito,
+                    'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+                ];
+                // Verificar si hubo cambios en alguno de los campos
+                $cambios = false;
+                foreach (['pro_reservar', 'pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed'] as $campo) {
+                    if ($old_values[$campo] != $new_values[$campo]) {
+                        $cambios = true;
+                        break;
+                    }
+                }
+                // Solo agregar al historial si hubo algún cambio
+                if ($cambios) {
+                    $HistoricoStock[] = [
+                        'psh_old_values' => json_encode($old_values),
+                        'psh_new_values' => json_encode($new_values),
+                    ];
+                }
             }
+            $registroHistorial = [
+                'psh_old_values' => json_encode(array_column($HistoricoStock, 'psh_old_values', 'pro_codigo')),
+                'psh_new_values' => json_encode(array_column($HistoricoStock, 'psh_new_values', 'pro_codigo')),
+                'psh_tipo' => ($request->editar == 'yes') ? 7 : 6, // Condicional ternario para tipo de historico
+                'or_codigo' => $request->orden_trabajo,
+                'user_created' => $request->user_created,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            _14ProductoStockHistorico::insert($registroHistorial);
+            //FIN SECCION HISTORICO PRODUCTOS Y ACTUALIZACION STOCK
     
             DB::commit();
     
@@ -296,28 +439,60 @@ class CompraOrdenTrabajoController extends Controller
     {
         try {
             if ($request->editar == 'yes') {
-                if ($empresa == "1") {
-                    $producto->update([
-                        'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
-                        'pro_deposito' => ($producto->pro_deposito - $item->cantidades_antiguo) + $item->cantidades,
-                    ]);
-                } else if ($empresa == "3") {
-                    $producto->update([
-                        'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
-                        'pro_depositoCalmed' => ($producto->pro_depositoCalmed - $item->cantidades_antiguo) + $item->cantidades,
-                    ]);
+                if ($item->gru_pro_codigo == 2) {
+                    // GRUPO 2: usar pro_stock y pro_stockCalmed
+                    if ($empresa == "1") {
+                        $producto->update([
+                            'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
+                            'pro_stock' => ($producto->pro_stock - $item->cantidades_antiguo) + $item->cantidades,
+                        ]);
+                    } else if ($empresa == "3") {
+                        $producto->update([
+                            'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
+                            'pro_stockCalmed' => ($producto->pro_stockCalmed - $item->cantidades_antiguo) + $item->cantidades,
+                        ]);
+                    }
+                } else {
+                    // OTROS GRUPOS: lógica original
+                    if ($empresa == "1") {
+                        $producto->update([
+                            'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
+                            'pro_deposito' => ($producto->pro_deposito - $item->cantidades_antiguo) + $item->cantidades,
+                        ]);
+                    } else if ($empresa == "3") {
+                        $producto->update([
+                            'pro_reservar' => ($producto->pro_reservar - $item->cantidades_antiguo) + $item->cantidades,
+                            'pro_depositoCalmed' => ($producto->pro_depositoCalmed - $item->cantidades_antiguo) + $item->cantidades,
+                        ]);
+                    }
                 }
             } else {
-                if ($empresa == "1") {
-                    $producto->update([
-                        'pro_reservar' => $producto->pro_reservar + $item->cantidades,
-                        'pro_deposito' => $producto->pro_deposito + $item->cantidades,
-                    ]);
-                } else if ($empresa == "3") {
-                    $producto->update([
-                        'pro_reservar' => $producto->pro_reservar + $item->cantidades,
-                        'pro_depositoCalmed' => $producto->pro_depositoCalmed + $item->cantidades,
-                    ]);
+                if ($item->gru_pro_codigo == 2) {
+                    // GRUPO 2: usar pro_stock y pro_stockCalmed
+                    if ($empresa == "1") {
+                        $producto->update([
+                            'pro_reservar' => $producto->pro_reservar + $item->cantidades,
+                            'pro_stock' => $producto->pro_stock + $item->cantidades,
+                        ]);
+                    } else if ($empresa == "3") {
+                        $producto->update([
+                            'pro_reservar' => $producto->pro_reservar + $item->cantidades,
+                            'pro_stockCalmed' => $producto->pro_stockCalmed + $item->cantidades,
+                        ]);
+                    }
+                } else {
+                    // OTROS GRUPOS: lógica original
+                    if ($empresa == "1") {
+                        $producto->update([
+                            'pro_reservar' => $producto->pro_reservar + $item->cantidades,
+                            'pro_deposito' => $producto->pro_deposito + $item->cantidades,
+                        ]);
+                    } else if ($empresa == "3") {
+                        $producto->update([
+                            'pro_reservar' => $producto->pro_reservar + $item->cantidades,
+                            'pro_depositoCalmed' => $producto->pro_depositoCalmed + $item->cantidades,
+                        ]);
+                    }
                 }
             }
     

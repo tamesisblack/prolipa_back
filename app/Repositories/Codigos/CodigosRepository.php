@@ -49,7 +49,7 @@ class  CodigosRepository extends BaseRepository
         if($ifSetCombo == 1)            { $arrayCombo  = [ 'combo' => $combo]; }
         if($tipoComboImportacion == 1)  { $arrayCombo  = [ 'combo' => $comboIndividual, ]; }
         //paquete
-        if($paquete == null)            { $arrayPaquete = []; }else{ $arrayPaquete  = [ 'codigo_paquete' => $paquete, 'fecha_registro_paquete'    => $fecha]; }
+        // if($paquete == null)            { $arrayPaquete = []; }else{ $arrayPaquete  = [ 'codigo_paquete' => $paquete, 'fecha_registro_paquete'    => $fecha]; }
         //codigo de union
         if($union == null)              { $arrayUnion  = [];  } else{ $arrayUnion  = [ 'codigo_union' => $union ]; }
         //si proforma es true
@@ -149,11 +149,6 @@ class  CodigosRepository extends BaseRepository
             'verif3'                    => null,
             'verif4'                    => null,
             'verif5'                    => null,
-            'verif6'                    => null,
-            'verif7'                    => null,
-            'verif8'                    => null,
-            'verif9'                    => null,
-            'verif10'                   => null,
             'venta_lista_institucion'   => '0',
             'porcentaje_descuento'      => '0',
             'factura'                   => null,
@@ -345,103 +340,114 @@ class  CodigosRepository extends BaseRepository
         $codigo_liquidacion = $datos->codigo_liquidacion;
         $proforma_empresa   = $datos->proforma_empresa;
         $codigo_proforma    = $datos->codigo_proforma;
-        //tipo_importacion 1 => importacion codigos; 2 => importacion paquetes
+        //tipo_importacion 1 => importacion codigos; 2 => importacion paquetes, 3 => importacion combos
         $tipo_importacion   = $datos->tipo_importacion;
-        $estadoIngreso = 1; // 1 = Éxito, 2 = Error
-        $message = ""; // Para acumular un solo mensaje
+        $estadoIngreso      = 1; // 1 = Éxito, 2 = Error
+        $message            = ""; // Para acumular un solo mensaje
+        $oldValues          = [];
+        $newValues          = [];
 
+        //actualizar pre factura
+        if ($ifsetProforma == 1) {
 
+            $getDevolucion = DetalleVentas::getLibroDetalle($codigo_proforma, $proforma_empresa, $codigo_liquidacion);
 
-        //actualizar el libro
-            //actualizar pre factura
-            if ($ifsetProforma == 1) {
-                $getDevolucion = DetalleVentas::getLibroDetalle($codigo_proforma, $proforma_empresa, $codigo_liquidacion);
+            if (!empty($getDevolucion) && isset($getDevolucion[0]->det_ven_dev)) {
+                // old values STOCK
+                $oldValues              = $this->save_historicoStockOld($codigo_liquidacion);
+                $documento = Ventas::where('ven_codigo', $codigo_proforma)->where('id_empresa', $proforma_empresa)->first();
+                //idtipodoc => 1 es prefactura; 2 = notas
+                $idtipodoc = $documento->idtipodoc;
+                $documentoPrefactura = $idtipodoc == '1' ? '0' : '1';
+                $det_ven_dev = $getDevolucion[0]->det_ven_dev;
+                $nuevoValorDevolucion = $det_ven_dev + 1;
 
-                if (!empty($getDevolucion) && isset($getDevolucion[0]->det_ven_dev)) {
-                    $documento = Ventas::where('ven_codigo', $codigo_proforma)->where('id_empresa', $proforma_empresa)->first();
-                    //idtipodoc => 1 es prefactura; 2 = notas
-                    $idtipodoc = $documento->idtipodoc;
-                    $documentoPrefactura = $idtipodoc == '1' ? '0' : '1';
-                    $det_ven_dev = $getDevolucion[0]->det_ven_dev;
-                    $nuevoValorDevolucion = $det_ven_dev + 1;
+                // Actualizar el detalle de venta devolución
+                $result = DetalleVentas::updateDevolucion($codigo_proforma, $proforma_empresa, $codigo_liquidacion, $nuevoValorDevolucion);
+                if ($result['status'] !== 1) {
+                    $estadoIngreso = 2;
+                    $message .= "No se pudo actualizar la devolución del detalle de la pre factura. ";
+                } else {
+                    $valorNew                   = 1;
+                    //get stock
+                    $getStock                   = _14Producto::obtenerProducto($codigo_liquidacion);
+                    $stockAnteriorReserva       = $getStock->pro_reservar;
+                    //prolipa
+                    // if($proforma_empresa == 1)  {
+                    //     //si es documento de prefactura
+                    //     if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stock; }
+                    //     //si es documento de notas
+                    //     if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_deposito; }
+                    // }
+                    // //calmed
+                    // if($proforma_empresa == 3)  {
+                    //     //si es documento de prefactura
+                    //     if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stockCalmed; }
+                    //     //si es documento de notas
+                    //     if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_depositoCalmed; }
+                    // }
+                    // SOLO SE VA DEVOLVER A CALMED STOCK NOTAS
+                    $empresaNuevo               = 3;
+                    // tipoDocumento = 0; => prefactura; tipoDocumento = 1 => notas
+                    $tipoDocumento              = 1;
+                    $stockEmpresa               = $getStock->pro_depositoCalmed;
+                    $nuevoStockReserva          = $stockAnteriorReserva + $valorNew;
+                    $nuevoStockEmpresa          = $stockEmpresa + $valorNew;
+                    //actualizar stock en la tabla de productos
+                    _14Producto::updateStock($codigo_liquidacion,$empresaNuevo,$nuevoStockReserva,$nuevoStockEmpresa,$tipoDocumento);
+                    // new values STOCK
+                    $newValues              = $this->save_historicoStockNew($codigo_liquidacion);
+                    $estadoIngreso = 1;
+                }
+            } else {
+                $estadoIngreso = 2;
+                $message .= "No se encontró el detalle del libro con código de proforma: $codigo_proforma. ";
+            }
+        }
+        if($estadoIngreso == 1){
+            // Método auxiliar para actualizar registros
+            $actualizarLibro = function ($libro, $codigo, $tipo_importacion) use (&$estadoIngreso, &$message, &$ifsetProforma) {
+                if ($libro) {
+                    $libro->bc_estado = '1';
+                    $libro->estado_liquidacion = '3';
+                    if ($tipo_importacion == 1) {
+                        $libro->codigo_paquete = null;
+                        $libro->combo = null;
+                        $libro->codigo_combo = null;
+                    }
+                    if($ifsetProforma == 1){
+                        $libro->devuelto_proforma = 1;
+                    }
+                    $libro->save();
 
-                    // Actualizar el detalle de venta devolución
-                    $result = DetalleVentas::updateDevolucion($codigo_proforma, $proforma_empresa, $codigo_liquidacion, $nuevoValorDevolucion);
-                    if ($result['status'] !== 1) {
+                    // Validar si se actualizó correctamente
+                    if (!$libro->wasChanged()) {
                         $estadoIngreso = 2;
-                        $message .= "No se pudo actualizar la devolución del detalle de la pre factura. ";
+                        $message .= "No se pudo actualizar el registro con código: $codigo. ";
                     } else {
-                        $valorNew                   = 1;
-                        //get stock
-                        $getStock                   = _14Producto::obtenerProducto($codigo_liquidacion);
-                        $stockAnteriorReserva       = $getStock->pro_reservar;
-                        //prolipa
-                        if($proforma_empresa == 1)  {
-                            //si es documento de prefactura
-                            if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stock; }
-                            //si es documento de notas
-                            if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_deposito; }
-                        }
-                        //calmed
-                        if($proforma_empresa == 3)  {
-                            //si es documento de prefactura
-                            if($documentoPrefactura == 0)  { $stockEmpresa  = $getStock->pro_stockCalmed; }
-                            //si es documento de notas
-                            if($documentoPrefactura == 1)  { $stockEmpresa  = $getStock->pro_depositoCalmed; }
-                        }
-                        $nuevoStockReserva          = $stockAnteriorReserva + $valorNew;
-                        $nuevoStockEmpresa          = $stockEmpresa + $valorNew;
-                        //actualizar stock en la tabla de productos
-                        _14Producto::updateStock($codigo_liquidacion,$proforma_empresa,$nuevoStockReserva,$nuevoStockEmpresa,$documentoPrefactura);
-                       $estadoIngreso = 1;
+                        $message .= "Registro actualizado con éxito: $codigo. ";
                     }
                 } else {
                     $estadoIngreso = 2;
-                    $message .= "No se encontró el detalle del libro con código de proforma: $codigo_proforma. ";
+                    $message .= "El registro con código: $codigo no existe. ";
                 }
+            };
+
+            // Actualizar el registro principal
+            $actualizarLibro(CodigosLibros::find($codigo), $codigo, $tipo_importacion);
+
+            // Si el registro principal se guardó correctamente, actualizar el registro unido
+            if ($codigo_union != '0') {
+                $actualizarLibro(CodigosLibros::find($codigo_union), $codigo_union, $tipo_importacion);
             }
-            if($estadoIngreso == 1){
-                // Método auxiliar para actualizar registros
-                $actualizarLibro = function ($libro, $codigo, $tipo_importacion) use (&$estadoIngreso, &$message, &$ifsetProforma) {
-                    if ($libro) {
-                        $libro->bc_estado = '1';
-                        $libro->estado_liquidacion = '3';
-                        if ($tipo_importacion == 1) {
-                            $libro->codigo_paquete = null;
-                        }
-                        if($ifsetProforma == 1){
-                            $libro->devuelto_proforma = 1;
-                        }
-                        $libro->save();
-
-                        // Validar si se actualizó correctamente
-                        if (!$libro->wasChanged()) {
-                            $estadoIngreso = 2;
-                            $message .= "No se pudo actualizar el registro con código: $codigo. ";
-                        } else {
-                            $message .= "Registro actualizado con éxito: $codigo. ";
-                        }
-                    } else {
-                        $estadoIngreso = 2;
-                        $message .= "El registro con código: $codigo no existe. ";
-                    }
-                };
-
-                // Actualizar el registro principal
-                $actualizarLibro(CodigosLibros::find($codigo), $codigo, $tipo_importacion);
-
-                // Si el registro principal se guardó correctamente, actualizar el registro unido
-                if ($codigo_union != '0') {
-                    $actualizarLibro(CodigosLibros::find($codigo_union), $codigo_union, $tipo_importacion);
-                }
-            }
-
-
+        }
 
         // Retornar resultados
         return [
             "ingreso" => $estadoIngreso,
             "message" => trim($message), // Mensaje único
+            "oldValues" => $oldValues,
+            "newValues" => $newValues,
         ];
     }
 
@@ -466,8 +472,10 @@ class  CodigosRepository extends BaseRepository
             else                                        { $arrayCombinar = array_merge($datosUpdate, $arrayProforma); }
             //limpiar paquete
             $arrayPaquete = ['codigo_paquete' => null];
+            $arrayCombos  = ['codigo_combo'   => null, 'combo' => null];
+            //si la importacion es 1 individual se elimina el paquete y combo
             if($tipo_importacion == 1){
-                $arrayCombinar = array_merge($arrayCombinar, $arrayPaquete);
+                $arrayCombinar = array_merge($arrayCombinar, $arrayPaquete, $arrayCombos);
             }
             //si hay codigo de union lo actualizo
             if($withCodigoUnion == 1){
@@ -481,12 +489,7 @@ class  CodigosRepository extends BaseRepository
                     $ifLiquidado                = $objectCodigoUnion[0]->estado_liquidacion;
                     //para ver si es codigo regalado no este liquidado
                     $ifliquidado_regalado       = $objectCodigoUnion[0]->liquidado_regalado;
-                    //para ver la empresa de la proforma
-                    $ifproforma_empresa         = $objectCodigoUnion[0]->proforma_empresa;
-                    //para ver el estado devuelto proforma
-                    $ifdevuelto_proforma        = $objectCodigoUnion[0]->devuelto_proforma;
-                    ///para ver el codigo de proforma
-                    $ifcodigo_proforma          = $objectCodigoUnion[0]->codigo_proforma;
+                    //para ver si es codigo regalado no este liquidado
                     if($request->dLiquidado ==  '1'){
                         //VALIDACION AUNQUE ESTE LIQUIDADO
                         if($ifLiquidado == '0' || $ifLiquidado == '1' || $ifLiquidado == '2' || $ifLiquidado == '4')             { $unionCorrecto = true; }
@@ -496,32 +499,13 @@ class  CodigosRepository extends BaseRepository
                         if(($ifLiquidado == '1' || $ifLiquidado == '2' || $ifLiquidado == '4') && $ifliquidado_regalado == '0')  { $unionCorrecto = true; }
                         else                                                                                                     { $unionCorrecto = false; }
                     }
-                    //====PROFORMA============================================
-                    //ifdevuelto_proforma => 0 => nada; 1 => devuelta antes del enviar el pedido; 2 => enviada despues de enviar al pedido
-                    // if($ifproforma_empresa > 0 && $ifdevuelto_proforma != 1){
-                    //     $ifErrorProforma                = 0;
-                    //     $datosProforma                  = $this->validateProforma($ifdevuelto_proforma,$ifcodigo_proforma,$ifproforma_empresa);
-                    //     $ifErrorProforma                = $datosProforma["ifErrorProforma"];
-                    //     $messageIngreso                 = $datosProforma["messageProforma"];
-                    //     $ifsetProforma                  = $datosProforma["ifsetProforma"];
-                    //     if($ifsetProforma == 1 && $ifErrorProforma == 0)    { $unionCorrecto = true; }
-                    //     else                                                { $unionCorrecto = false; }
-                    // }
-                    //====PROFORMA============================================
                     //==PROCESO====
                     ///correcto o que la proforma se vaya a estado 2 que es para asignar que devolvio despues de enviar de perseo
                     if($unionCorrecto || $ifGuardarProforma == 2){
                         if($unionCorrecto){
                             $estadoIngreso = 1;
                         }
-                        //PROFORMA
-                        //regresar el stock
-                        if($ifGuardarProforma == 1){
-                            $getEstadoIngreso = $this->validacionIngresoDevolucionPrefactura($codigo_liquidacion,$proforma_empresa,$codigo_proforma);
-                            $estadoIngreso    = $getEstadoIngreso["estadoIngreso"];
-                            $messageIngreso   = $getEstadoIngreso["messageIngreso"];
 
-                        }
                         if($estadoIngreso == 1 || $ifGuardarProforma == 2){
                             //PROFORMA
                             $codigoU = DB::table('codigoslibros')
@@ -546,12 +530,8 @@ class  CodigosRepository extends BaseRepository
                     }
                 }
             }else{
-                //regresar el stock
-                if($ifGuardarProforma == 1){
-                    $getEstadoIngreso = $this->validacionIngresoDevolucionPrefactura($codigo_liquidacion,$proforma_empresa,$codigo_proforma);
-                    $estadoIngreso    = $getEstadoIngreso["estadoIngreso"];
-                    $messageIngreso   = $getEstadoIngreso["messageIngreso"];
-                }else                 { $estadoIngreso    = 1; }
+
+                $estadoIngreso    = 1;
                 ///CODIGO UNICO===
                 //actualizar el primer codigo CODIGO SIN UNION
                 if($estadoIngreso == 1 || $ifGuardarProforma == 2){
@@ -591,54 +571,6 @@ class  CodigosRepository extends BaseRepository
         }
     }
 
-
-    public function validacionIngresoDevolucionPrefactura($codigo_liquidacion=null,$proforma_empresa=null,$codigo_proforma=null){
-        try{
-            $det_ven_dev                = 0;
-            $valorNew                   = 1;
-            $nuevoValorDevolucion       = 0;
-            $estadoIngreso              = 1;
-            $messageIngreso             = "";
-
-            //actualizar detalle venta devolucion
-            $getDevolucion              = DetalleVentas::getLibroDetalle($codigo_proforma, $proforma_empresa, $codigo_liquidacion);
-            if($getDevolucion->isEmpty()){ $estadoIngreso = 2; $messageIngreso = "No se encontro $codigo_liquidacion en la pre factura $codigo_proforma"; }
-            else{
-                $det_ven_dev            = $getDevolucion[0]->det_ven_dev;
-                $nuevoValorDevolucion   = $det_ven_dev + $valorNew;
-                //actualizar valor pre factura devolucion
-                $result = DetalleVentas::updateDevolucion($codigo_proforma, $proforma_empresa, $codigo_liquidacion, $nuevoValorDevolucion);
-                if ($result['status'] === 1) {
-                     //get stock
-                     $getStock                   = _14Producto::obtenerProducto($codigo_liquidacion);
-                     $stockAnteriorReserva       = $getStock->pro_reservar;
-                     //prolipa
-                     if($proforma_empresa == 1)  { $stockEmpresa  = $getStock->pro_stock; }
-                     //calmed
-                     if($proforma_empresa == 3)  { $stockEmpresa  = $getStock->pro_stockCalmed; }
-                     $nuevoStockReserva          = $stockAnteriorReserva + $valorNew;
-                     $nuevoStockEmpresa          = $stockEmpresa + $valorNew;
-                     //actualizar stock en la tabla de productos
-                     _14Producto::updateStock($codigo_liquidacion,$proforma_empresa,$nuevoStockReserva,$nuevoStockEmpresa);
-                   $estadoIngreso = 1;
-                } else {
-                    { $estadoIngreso = 2; $messageIngreso = "No se pudo actualizar  la devolucion el detalle de la pre factura"; }
-                }
-            }
-
-            return
-            [
-                "estadoIngreso"  => $estadoIngreso,
-                "messageIngreso" => $messageIngreso
-            ];
-        }
-        catch(\Exception $e){
-            return [
-                "estadoIngreso"  => 2,
-                "messageIngreso" => $e->getMessage()
-            ];
-        }
-    }
     //SAVE CODIGOS
     public function save_Codigos($request,$item,$codigo,$prueba_diagnostica,$contador){
         $contadorIngreso                            = 0;
@@ -1236,12 +1168,12 @@ class  CodigosRepository extends BaseRepository
         try {
             // Convertir $getCombos a una colección de Laravel si es un array normal
             $getCombos = collect($getCombos);
-        
+
             // Agrupar por código de combo
             $result = $codigos->groupBy(function ($item) {
                 return $item->combo;
             });
-        
+
             // Mapear los resultados para incluir la información adicional de cada combo
             $result = $result->map(function ($group) use ($getCombos) {
                 // Agrupar por 'codigo_combo' y contar las ocurrencias
@@ -1252,10 +1184,10 @@ class  CodigosRepository extends BaseRepository
                         'cantidad' => $subGroup->count()  // Cantidad de ocurrencias de este código de combo
                     ];
                 });
-        
+
                 // Buscar la información del combo dentro de $getCombos usando el código del combo
                 $comboInfo = $getCombos->firstWhere('codigo_liquidacion', $group->first()->combo);
-        
+
                 // Retornar el formato solicitado con la información adicional del combo
                 return(object)[
                     'codigo_libro'              => $group->first()->combo,
@@ -1275,13 +1207,54 @@ class  CodigosRepository extends BaseRepository
                     'tipo_codigo'               => 1 // 0 = codigo individual; 1 = combo general
                 ];
             });
-        
+
             // Convertir el resultado en un array simple
             return $result->values()->toArray();
-    
+
         } catch (\Exception $e) {
             // Lanza una excepción personalizada
             throw new \Exception('Error al procesar los combos: ' . $e->getMessage());
+        }
+    }
+    public function save_historicoStockOld($pro_codigo){
+        try{
+
+            $producto               = _14Producto::obtenerProducto($pro_codigo);
+            if (!$producto) {
+                throw new \Exception("No se pudo obtener el producto $pro_codigo");
+            }
+            $oldValues = [
+                'pro_codigo'         => $producto->pro_codigo,
+                'pro_reservar'       => $producto->pro_reservar ?? 0,
+                'pro_stock'          => $producto->pro_stock ?? 0,
+                'pro_stockCalmed'    => $producto->pro_stockCalmed ?? 0,
+                'pro_deposito'       => $producto->pro_deposito ?? 0,
+                'pro_depositoCalmed' => $producto->pro_depositoCalmed ?? 0,
+            ];
+            return $oldValues;
+        }
+        catch(\Exception $e){
+            throw new \Exception("Error al guardar el historico stock old producto $pro_codigo");
+        }
+    }
+    public function save_historicoStockNew($pro_codigo){
+        try{
+            $producto               = _14Producto::obtenerProducto($pro_codigo);
+            if (!$producto) {
+                throw new \Exception("No se pudo obtener el producto $pro_codigo");
+            }
+            $newValues = [
+                'pro_codigo'         => $producto->pro_codigo,
+                'pro_reservar'       => $producto->pro_reservar ?? 0,
+                'pro_stock'          => $producto->pro_stock ?? 0,
+                'pro_stockCalmed'    => $producto->pro_stockCalmed ?? 0,
+                'pro_deposito'       => $producto->pro_deposito ?? 0,
+                'pro_depositoCalmed' => $producto->pro_depositoCalmed ?? 0,
+            ];
+            return $newValues;
+        }
+        catch(\Exception $e){
+            throw new \Exception("Error al guardar el historico stock new producto $pro_codigo");
         }
     }
 }

@@ -168,7 +168,7 @@ class PerseoTransaccionController extends Controller
             return $process;
         } catch (\Exception $e) {
             DB::rollBack();
-            return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar la proforma a perseo", "error" => $e->getMessage()];
+            return ["status" => "0", "message" => "Ocurrió un error al intentar enviar la proforma a Perseo.", "error" => $e->getMessage()];
         }
     }
     /*
@@ -291,7 +291,7 @@ class PerseoTransaccionController extends Controller
         } catch (\Exception $e) {
             //transaccion de laravel rollback
             DB::rollBack();
-            return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar el pedido a perseo", "error" => $e->getMessage()];
+            return ["status" => "0", "message" => "Ocurrió un error al intentar enviar el pedido a Perseo.", "error" => $e->getMessage()];
         }
     }
     /*
@@ -489,7 +489,7 @@ class PerseoTransaccionController extends Controller
         } catch (\Exception $e) {
             //transaccion de laravel rollback
             DB::rollBack();
-            return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar el cobro a perseo", "error" => $e->getMessage()];
+            return ["status" => "0", "message" => "Ocurrió un error al intentar enviar el cobro a Perseo.", "error" => $e->getMessage()];
         }
     }
     //api:get/perseo/transaccion/transaccion

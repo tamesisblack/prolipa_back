@@ -817,24 +817,43 @@ class UsuarioController extends Controller
 
     }
     ///CONSULTAS SALLE
-    public function usuarioSalle()
+    public function usuarioSalle(Request $request)
     {
-        $docentes = DB::select("SELECT u.*, i.idInstitucion, i.nombreInstitucion, i.tipo_institucion,
-         concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, MAX(se.id_evaluacion) AS id_evaluacion,
-         u.id_group
-         FROM usuario u
-         INNER JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
-         INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
-         lEFT JOIN salle_evaluaciones se ON u.idusuario = se.id_usuario
-         WHERE (
-            u.id_group = '13'
-            OR u.id_group = '6'
-        )
-         AND i.tipo_institucion = '2'
-         GROUP BY u.idusuario
-         ");
-        $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad WHERE u.id_group = 12 and u.institucion_idInstitucion = i.idInstitucion ");
-        return array('docentes'=>$docentes , 'admins'=>$admins,);
+        if($request->tipoUsuario == "admin"){
+            $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad 
+            FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad 
+            WHERE u.id_group = 12 and u.institucion_idInstitucion = i.idInstitucion ");
+            return array('admins'=>$admins,);
+        }
+        if($request->tipoUsuario == "docentes"){
+            $docentes = DB::select("SELECT u.*, i.idInstitucion, i.nombreInstitucion, i.tipo_institucion,
+            concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad, MAX(se.id_evaluacion) AS id_evaluacion,
+            u.id_group
+            FROM usuario u
+            INNER JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
+            INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
+            lEFT JOIN salle_evaluaciones se ON u.idusuario = se.id_usuario
+            WHERE (
+                u.id_group = '13'
+                OR u.id_group = '6'
+            )
+            AND i.tipo_institucion = '2'
+            GROUP BY u.idusuario
+            ");
+            return array('docentes'=>$docentes);
+        }
+        if ($request->has('contarUsuarios') && $request->contarUsuarios == true) {
+            $counts = DB::select("
+                SELECT
+                    (SELECT COUNT(*) FROM usuario WHERE id_group = 12) AS contarAdmin,
+                    (SELECT COUNT(*) FROM usuario WHERE id_group = 13) AS contarDocentes,
+                    (SELECT COUNT(*) FROM institucion WHERE tipo_institucion = 2 AND estado_idEstado = 1) AS contarInstituciones,
+                    (SELECT COUNT(*) FROM salle_areas) AS contarAreas,
+                    (SELECT COUNT(*) FROM salle_asignaturas) AS contarAsignaturas
+            ")[0];
+        
+            return (array) $counts;
+        }      
     }
     //API:GET/usuarioSalle/{n_evaluacion}
     public function usuarioSallexEvaluacion($n_evaluacion){
@@ -884,11 +903,23 @@ class UsuarioController extends Controller
         }else{
             $usuario = Usuario::find( $request->idusuario );
 
-            $datosValidados=$request->validate([
-                'cedula' => 'required|max:13|unique:usuario,cedula,'.$request->idusuario.',idusuario',
-                'email' => 'required|unique:usuario,email,'.$request->idusuario.',idusuario'
-                // 'email' => ['required','email',Rule::unique('usuario')->ignore($request->idusuario, 'idusuario')] //opcion 2 tambien funciona
-                ]);
+            // $datosValidados=$request->validate([
+            //     'cedula' => 'required|max:13|unique:usuario,cedula,'.$request->idusuario.',idusuario',
+            //     'email' => 'required|unique:usuario,email,'.$request->idusuario.',idusuario'
+            //     // 'email' => ['required','email',Rule::unique('usuario')->ignore($request->idusuario, 'idusuario')] //opcion 2 tambien funciona
+            //     ]);
+            // Versión más legible usando Rule::unique
+            $rules['cedula'] = [
+                'required',
+                'max:13',
+                Rule::unique('usuario')->ignore($request->idusuario, 'idusuario')
+            ];
+            
+            $rules['email'] = [
+                'required',
+                'email',
+                Rule::unique('usuario')->ignore($request->idusuario, 'idusuario')
+            ];
         }
         $usuario->cedula = $request->cedula;
         $usuario->nombres = $request->nombre;
@@ -1590,7 +1621,6 @@ class UsuarioController extends Controller
                         "email" => $validar[0]->email,
                         "estado_liquidacion" => $validar[0]->estado_liquidacion,
                         "estado" => $validar[0]->estado,
-                        "status" => $validar[0]->status,
                         "contador" => $validar[0]->contador
                     ];
                     $contador++;

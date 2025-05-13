@@ -225,7 +225,7 @@ class PerseoFacturacionController extends Controller
         catch(\Exception $e){
             //transaccion de laravel rollback
             DB::rollBack();
-            return ["status" => "0", "message" => "Ocurrio un eror al intentar mandar la factura a perseo", "error" => $e->getMessage()];
+            return ["status" => "0", "message" => "Ocurrió un error al intentar enviar la factura a Perseo.", "error" => $e->getMessage()];
         }
     }
     /*Procedimiento para realizar la autorización de una factura específica. El filtro requerido es el id de la factura que ya debe constar en el sistema central. */

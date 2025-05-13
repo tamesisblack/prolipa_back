@@ -278,4 +278,73 @@ class CalificacionEvalController extends Controller
         }
     }
 
+
+    //metodos de control de tiempo 
+    public function obtenerTiempoTranscurrido(Request $request)
+    {
+        // Valida si la evaluación existe para el estudiante
+        $calificacion = DB::table('calificaciones')
+            ->where('id_estudiante', $request->id_estudiante)
+            ->where('id_evaluacion', $request->id_evaluacion)
+            ->first();
+
+        if ($calificacion) {
+            // Retorna el tiempo transcurrido (en milisegundos)
+            return response()->json([
+                'status' => 1,
+                'tiempo_transcurrido' => $calificacion->tiempo_transcurrido
+            ]);
+        } else {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Evaluación no encontrada'
+            ]);
+        }
+    }
+
+    // public function guardarTiempoTranscurrido(Request $request)
+    // {
+    //     // Encuentra la calificación del estudiante para la evaluación específica
+    //     $calificacion = DB::table('calificaciones')
+    //         ->where('id_estudiante', $request->id_estudiante)
+    //         ->where('id_evaluacion', $request->id_evaluacion)
+    //         ->first();
+
+    //     if ($calificacion) {
+    //         // Actualiza el tiempo transcurrido con el nuevo valor
+    //         DB::table('calificaciones')
+    //             ->where('id_estudiante', $request->id_estudiante)
+    //             ->where('id_evaluacion', $request->id_evaluacion)
+    //             ->update(['tiempo_transcurrido' => $request->tiempoTranscurrido]);
+
+    //         return response()->json(['status' => 1, 'message' => 'Tiempo guardado correctamente']);
+    //     } else {
+    //         return response()->json(['status' => 0, 'message' => 'Evaluación no encontrada']);
+    //     }
+    // }
+
+    public function guardarTiempoTranscurrido(Request $request)
+    {
+        $data = $request->all();
+
+        // Si usas sendBeacon y no llega como form-data, asegúrate que Laravel lo pueda parsear
+        if (empty($data)) {
+            $data = json_decode(file_get_contents('php://input'), true);
+        }
+
+        if (!$data) {
+            return response()->json(['status' => 0, 'message' => 'Datos inválidos']);
+        }
+
+        // Luego haces tu lógica de guardado
+        DB::table('calificaciones')
+            ->where('id_estudiante', $data['id_estudiante'])
+            ->where('id_evaluacion', $data['id_evaluacion'])
+            ->update([
+                'tiempo_transcurrido' => $data['tiempoTranscurrido'],
+            ]);
+
+        return response()->json(['status' => 1, 'message' => 'Tiempo guardado']);
+    }
+
 }

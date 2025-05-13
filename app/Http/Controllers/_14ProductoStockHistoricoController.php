@@ -14,7 +14,7 @@ class _14ProductoStockHistoricoController extends Controller
         $query = DB::SELECT("SELECT cpsh.*, concat(u.nombres, ' ', u.apellidos) as nombreeditor 
         from `1_4_cal_producto_stock_historico` cpsh
         left join usuario u on cpsh.user_created = u.idusuario 
-        order by cpsh.psh_id asc ");
+        order by cpsh.psh_id DESC ");
     
         // Procesa los resultados para reemplazar las barras invertidas en los valores JSON
         // $resultados = array_map(function ($registro) {
@@ -43,7 +43,7 @@ class _14ProductoStockHistoricoController extends Controller
             FROM `1_4_cal_producto_stock_historico` cpsh
             LEFT JOIN usuario u ON cpsh.user_created = u.idusuario
             WHERE cpsh.created_at >= ? AND cpsh.created_at <= ?
-            ORDER BY cpsh.psh_id ASC", [$fecha_desde, $fecha_hasta]);
+            ORDER BY cpsh.psh_id DESC", [$fecha_desde, $fecha_hasta]);
     
         return $query;
     }

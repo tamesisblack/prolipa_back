@@ -8,6 +8,7 @@ use App\Http\Controllers\J_juegosController;
 use App\Http\Controllers\JuegosController;
 use App\Http\Controllers\TemporadaController;
 use App\Http\Controllers\EstudianteController;
+use App\Http\Controllers\NotificacionController;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -28,7 +29,8 @@ Route::get('juego_y_contenido/{id}', [J_juegosController::class, 'juego_y_conten
 Route::post('j_guardar_calificacion', [J_juegosController::class, 'j_guardar_calificacion']);
 Route::post('calificacion_estudiante', [J_juegosController::class, 'calificacion_estudiante']);
 Route::get('estudiante_sopa/{id}', [EstudianteController::class, 'show']);
-
+Route::post('push', [NotificacionController::class, 'pusherNot']);
+Route::post('pruebaPush', [NotificacionController::class, 'pruebaPush']);
 ///=======PERSEO=========
 require_once "others/perseo/PerseoRouter.php";
 ////ACORTADORES==

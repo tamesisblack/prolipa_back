@@ -617,6 +617,22 @@ class AbonoController extends Controller
         ");
         return $query;
     }
+    public function get_notasCreditoxParametro(Request $request){
+        // $query = DB::SELECT("SELECT fv.* FROM f_venta fv
+        // WHERE fv.institucion_id='$request->institucion'
+        // AND fv.periodo_id='$request->periodo'
+        // AND fv.id_empresa='$request->empresa'
+        // AND fv.clientesidPerseo ='$request->cliente'
+        // AND fv.est_ven_codigo <> 3");
+        $query = DB::SELECT("SELECT fv.* FROM f_venta fv
+        WHERE fv.periodo_id='$request->periodo'
+        AND fv.id_empresa='$request->empresa'
+        AND fv.ruc_cliente REGEXP '$request->cliente'
+        AND fv.est_ven_codigo <> 3
+        AND fv.idtipodoc = 16
+        ");
+        return $query;
+    }
     public function get_facturasNotasAll(Request $request){
         // $query = DB::SELECT("SELECT fv.* FROM f_venta fv
         // WHERE fv.institucion_id='$request->institucion'
@@ -645,7 +661,12 @@ class AbonoController extends Controller
     {
         $busqueda   = $request->busqueda;
         $id_periodo = $request->id_periodo;
-        $query = $this->tr_getPuntosVenta($busqueda);
+        $getPeriodo = DB::table("periodoescolar")
+        ->where('idperiodoescolar',$id_periodo)
+        ->get();
+        $region = $getPeriodo[0]->region_idregion;
+        $query = $this->tr_getPuntosVentaXPeriodo($busqueda,$region,$id_periodo);
+        // $query = $this->tr_getPuntosVenta($busqueda);
         //traer datos de la tabla f_formulario_proforma por id_periodo
         foreach($query as $key => $item){
             $query[$key]->datosClienteInstitucion = DB::SELECT("SELECT DISTINCT usu.cedula, CONCAT(usu.nombres,' ', usu.apellidos) nombres
@@ -681,6 +702,31 @@ class AbonoController extends Controller
         FROM institucion i
         LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
         WHERE i.nombreInstitucion LIKE '%$busqueda%'");
+        return $query;
+    }
+    public function tr_getPuntosVentaXPeriodo($busqueda,$region,$id_periodo){
+        $query = DB::SELECT("SELECT i.idInstitucion,
+            i.nombreInstitucion,
+            i.ruc,
+            i.email,
+            i.telefonoInstitucion,
+            i.direccionInstitucion,
+            c.nombre AS ciudad,
+            MAX(CASE
+                WHEN p.id_institucion IS NOT NULL THEN 1
+                ELSE 0
+            END) AS validate_pedidos,
+        CONCAT(u.nombres,' ',u.apellidos) as representante
+        FROM institucion i
+        LEFT JOIN usuario u ON i.asesor_id=u.idusuario
+        LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+        LEFT JOIN pedidos p ON p.id_institucion = i.idInstitucion and p.id_periodo = $id_periodo
+        WHERE i.nombreInstitucion LIKE '%$busqueda%'
+        AND i.region_idregion = '$region'
+        AND i.estado_idEstado = '1'
+        GROUP BY
+            i.idInstitucion, i.nombreInstitucion, i.ruc, i.email, i.telefonoInstitucion, i.direccionInstitucion, c.nombre
+        ");
         return $query;
     }
     public function traerCobros(Request $request){
@@ -1131,6 +1177,7 @@ class AbonoController extends Controller
             ->join('institucion as i', 'i.idInstitucion', '=', 'fv.institucion_id')
             ->join('empresas as ep', 'ep.id', '=', 'fv.id_empresa')
             ->leftJoin('usuario as usu', 'usu.idusuario', '=', 'i.asesor_id')
+            ->leftJoin('usuario as u', 'u.idusuario', '=', 'fv.ven_cliente')
             ->where('fv.est_ven_codigo', '<>', 3)
             ->where('fv.periodo_id', '=', $request->periodo)
             ->where('fv.ven_desc_por', '<', 100)
@@ -1144,6 +1191,7 @@ class AbonoController extends Controller
                 'ep.id AS id_empresa',
                 'i.nombreInstitucion',
                 DB::raw("CONCAT(usu.nombres, ' ', usu.apellidos) AS asesor"),
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS cliente_facturado"),
                 'i.idInstitucion',
                 'i.punto_venta',
                 'fv.institucion_id',
@@ -1287,6 +1335,8 @@ class AbonoController extends Controller
                         'todos_los_documentos' => '',
                         'abono_total' => 0,
                         'retencion_total' => 0,
+                        'abono_liquidacion' => 0,
+                        'abono_cruce' => 0,
                         'devolucion' => $devolucionConDescuento,
                         'devolucion_todas' => [], // Puedes dejarlo vacío o añadir detalles si es necesario
                     ];
@@ -1302,57 +1352,311 @@ class AbonoController extends Controller
             // Buscar el cliente en el reporte para obtener sus datos
             $clienteReporte = $reporte->firstWhere('ruc_cliente', $ruc);
 
-            // Buscar los registros de la tabla abono
-            $abonoSinF_venta = DB::table('abono as ab')
-                ->leftJoin('f_venta as fv', function ($join) {
-                    $join->on('ab.abono_ruc_cliente', '=', 'fv.ruc_cliente')
-                        ->on('ab.abono_empresa', '=', 'fv.id_empresa');
-                })
-                ->whereNull('fv.ven_codigo') // Solo si no tiene documentos en f_venta
-                ->whereRaw('(ab.abono_facturas > 0 OR ab.abono_notas > 0)') // Corrección de whereRaw
-                ->where('ab.abono_ruc_cliente', '=', $ruc) // Corrección de espacio extra
-                ->where('ab.abono_estado', '=', 0) // Corrección de espacio extra
-                ->where('ab.abono_tipo', '<>', 4) // Corrección de espacio extra
-                ->select(
-                    'ab.abono_ruc_cliente',
-                    'ab.abono_empresa',
-                    DB::raw('SUM(ab.abono_facturas) + SUM(ab.abono_notas) AS suma_abonos')
-                )
-                ->groupBy('ab.abono_ruc_cliente', 'ab.abono_empresa')
-                ->limit(2) // Limita a máximo 2 registros
-                ->get();
+            // // Buscar los registros de la tabla abono
+            // $abonoSinF_venta = DB::table('abono as ab')
+            //     ->leftJoin('f_venta as fv', function ($join) {
+            //         $join->on('ab.abono_ruc_cliente', '=', 'fv.ruc_cliente')
+            //             ->on('ab.abono_empresa', '=', 'fv.id_empresa');
+            //     })
+            //     ->leftJoin('usuario as u', 'u.idusuario', '=', 'ab.abono_ruc_cliente')
+            //     ->whereNull('fv.ven_codigo') // Solo si no tiene documentos en f_venta
+            //     ->whereRaw('(ab.abono_facturas > 0 OR ab.abono_notas > 0)') // Corrección de whereRaw
+            //     ->where('ab.abono_ruc_cliente', '=', $ruc) // Corrección de espacio extra
+            //     ->where('ab.abono_estado', '=', 0) // Corrección de espacio extra
+            //     ->where('ab.abono_tipo', '<>', 4) // Corrección de espacio extra
+            //     ->select(
+            //         'ab.abono_ruc_cliente',
+            //         'ab.abono_empresa',
+            //         DB::raw('SUM(ab.abono_facturas) + SUM(ab.abono_notas) AS suma_abonos'),
+            //         DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS cliente_facturado"),
+            //     )
+            //     ->groupBy('ab.abono_ruc_cliente', 'ab.abono_empresa')
+            //     ->limit(2) // Limita a máximo 2 registros
+            //     ->get();
 
-            // Validar que al menos existe un abono antes de procesar
-            if ($abonoSinF_venta->isNotEmpty()) {
-                foreach ($abonoSinF_venta as $abono) {
-                    // Crear el objeto para agregarlo al reporte
-                    $reporte[] = (object) [
-                        'idtipodoc' => 10, // Código de tipo "DEVOLUCION SIN EMPRESA"
-                        'tdo_id' => 10,
-                        'tdo_nombre' => 'ABONO SIN VENTAS',
-                        'empresa' => $abono->abono_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.',
-                        'id_empresa' => $abono->abono_empresa,
-                        'nombreInstitucion' => $clienteReporte->nombreInstitucion, // Tomar del reporte original
-                        'asesor' => $clienteReporte->asesor, // Tomar del reporte original
-                        'idInstitucion' => $clienteReporte->idInstitucion,
-                        'punto_venta' => $clienteReporte->punto_venta, // Tomar del reporte original
-                        'institucion_id' => $clienteReporte->idInstitucion,
-                        'ruc_cliente' => $clienteReporte->ruc_cliente, // Tomar del reporte original
-                        'subtotal_total' => 0,
-                        'descuento_total' => 0,
-                        'valor_total' => 0,
-                        'todos_los_documentos' => '',
-                        'abono_total' => $abono->suma_abonos,
-                        'retencion_total' => 0,
-                        'devolucion' => 0,
-                        'devolucion_todas' => [], // Puedes dejarlo vacío o añadir detalles si es necesario
-                    ];
+            // // Validar que al menos existe un abono antes de procesar
+            // if ($abonoSinF_venta->isNotEmpty()) {
+            //     foreach ($abonoSinF_venta as $abono) {
+            //         // Crear el objeto para agregarlo al reporte
+            //         $reporte[] = (object) [
+            //             'idtipodoc' => 10, // Código de tipo "DEVOLUCION SIN EMPRESA"
+            //             'tdo_id' => 10,
+            //             'tdo_nombre' => 'ABONO SIN VENTAS',
+            //             'empresa' => $abono->abono_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.',
+            //             'id_empresa' => $abono->abono_empresa,
+            //             'nombreInstitucion' => $clienteReporte->nombreInstitucion, // Tomar del reporte original
+            //             'cliente_facturado' => $clienteReporte->cliente_facturado, // Tomar del reporte original
+            //             'asesor' => $clienteReporte->asesor, // Tomar del reporte original
+            //             'idInstitucion' => $clienteReporte->idInstitucion,
+            //             'punto_venta' => $clienteReporte->punto_venta, // Tomar del reporte original
+            //             'institucion_id' => $clienteReporte->idInstitucion,
+            //             'ruc_cliente' => $clienteReporte->ruc_cliente, // Tomar del reporte original
+            //             'subtotal_total' => 0,
+            //             'descuento_total' => 0,
+            //             'valor_total' => 0,
+            //             'todos_los_documentos' => '',
+            //             'abono_total' => $abono->suma_abonos,
+            //             'retencion_total' => 0,
+            //             'devolucion' => 0,
+            //             'devolucion_todas' => [], // Puedes dejarlo vacío o añadir detalles si es necesario
+            //         ];
+            //     }
+            // }   
+        }
+        // 1. Abonos sin facturas (solo notas)
+        $abonosSinFacturas = DB::table('abono as ab')
+        ->select(
+            'ab.abono_ruc_cliente',
+            'ab.abono_empresa',
+            DB::raw("SUM(ab.abono_facturas) AS suma_abono_facturas"),
+            DB::raw("CONCAT(u.nombres, ' - ',u.apellidos) AS nombre_cliente"),
+            DB::raw("CASE
+                        WHEN ab.abono_facturas > 0 
+                            AND (fv.ven_codigo IS NULL OR fv.idtipodoc NOT IN (1)) 
+                        THEN 'No hay documentos'
+                        ELSE 'Existen documentos'
+                    END AS estado_documentos")
+        )
+        ->leftJoin('usuario as u', 'u.cedula', '=', 'ab.abono_ruc_cliente') // Asegúrate que esta relación es correcta
+        ->leftJoin('f_venta as fv', function ($join) {
+            $join->on('ab.abono_ruc_cliente', '=', 'fv.ruc_cliente')
+                ->on('ab.abono_empresa', '=', 'fv.id_empresa')
+                ->whereIn('fv.idtipodoc', [1]); // Solo documentos con idtipodoc 3 o 4
+        })
+        ->where('ab.abono_estado', '=', 0) // Estado activo
+        ->where('ab.abono_tipo', '<>', 4) // Excluir tipo 4
+        ->where('ab.abono_notas', '=', 0.00) // Solo abonos con facturas
+        ->where('ab.abono_facturas', '>', 0) // Solo abonos con notas
+        ->where('ab.abono_periodo', '=', $request->periodo)
+        ->where(function ($query) {
+            // Filtra solo los abonos que no tienen documentos asociados de tipo 3 o 4
+            $query->whereNull('fv.ven_codigo')
+                ->orWhereNotIn('fv.idtipodoc', [1]);
+        })
+        ->groupBy('ab.abono_ruc_cliente', 'ab.abono_empresa') // Agrupar por cliente y empresa
+        ->get();
+
+        // 2. Abonos sin notas (solo facturas)
+        $abonosSinNotas = DB::table('abono as ab')
+            ->select(
+                'ab.abono_ruc_cliente',
+                'ab.abono_empresa',
+                DB::raw("SUM(ab.abono_notas) AS suma_abono_notas"),
+                DB::raw("CONCAT(u.nombres, ' - ',u.apellidos) AS nombre_cliente"),
+                DB::raw("CASE
+                            WHEN ab.abono_notas > 0 
+                                AND (fv.ven_codigo IS NULL OR fv.idtipodoc NOT IN (3, 4)) 
+                            THEN 'No hay documentos'
+                            ELSE 'Existen documentos'
+                        END AS estado_documentos")
+            )
+            ->leftJoin('usuario as u', 'u.cedula', '=', 'ab.abono_ruc_cliente') // Asegúrate que esta relación es correcta
+            ->leftJoin('f_venta as fv', function ($join) {
+                $join->on('ab.abono_ruc_cliente', '=', 'fv.ruc_cliente')
+                    ->on('ab.abono_empresa', '=', 'fv.id_empresa')
+                    ->whereIn('fv.idtipodoc', [3, 4]); // Solo documentos con idtipodoc 3 o 4
+            })
+            ->where('ab.abono_estado', '=', 0) // Estado activo
+            ->where('ab.abono_tipo', '<>', 4) // Excluir tipo 4
+            ->where('ab.abono_facturas', '=', 0.00) // Solo abonos con facturas
+            ->where('ab.abono_notas', '>', 0) // Solo abonos con notas
+            ->where('ab.abono_periodo', '=', $request->periodo)
+            ->where(function ($query) {
+                // Filtra solo los abonos que no tienen documentos asociados de tipo 3 o 4
+                $query->whereNull('fv.ven_codigo')
+                    ->orWhereNotIn('fv.idtipodoc', [3, 4]);
+            })
+            ->groupBy('ab.abono_ruc_cliente', 'ab.abono_empresa') // Agrupar por cliente y empresa
+            ->get();
+
+        if ($abonosSinFacturas->isNotEmpty()) {
+            // Procesar los resultados y agregarlos al reporte
+            foreach ($abonosSinFacturas as $abono) {
+                $clienteReporte = $reporte->firstWhere('ruc_cliente', $abono->abono_ruc_cliente);
+                
+                if ($clienteReporte) {
+                    $nombreInstitucion = $clienteReporte->nombreInstitucion ?? $abono->nombre_cliente;
+                    $asesor = $clienteReporte->asesor ?? ''; // O cualquier valor por defecto
+                    $idInstitucion = $clienteReporte->idInstitucion ?? '';
+                    $punto_venta = $clienteReporte->punto_venta ?? '';
+                    $institucion_id = $clienteReporte->idInstitucion ?? '';
+                    $ruc_cliente = $clienteReporte->ruc_cliente ?? $abono->abono_ruc_cliente;
+                } else {
+                    // Si no se encuentra el cliente en el reporte, puedes asignar valores predeterminados o manejar el error.
+                    $nombreInstitucion = $abono->nombre_cliente;
+                    $asesor = ''; // Asignar valores predeterminados si lo deseas
+                    $idInstitucion = '';
+                    $punto_venta = '';
+                    $institucion_id = '';
+                    $ruc_cliente = $abono->abono_ruc_cliente;
                 }
+
+                // Agregar abono sin facturas al reporte
+                $reporte[] = (object) [
+                    'idtipodoc' => 21, // Código para "ABONO SIN FACTURAS"
+                    'tdo_id' => 21,
+                    'tdo_nombre' => 'ABONO SIN PRE-FACTURAS',
+                    'empresa' => $abono->abono_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.',
+                    'id_empresa' => $abono->abono_empresa,
+                    'nombreInstitucion' => $nombreInstitucion,
+                    'asesor' => $asesor,
+                    'idInstitucion' => $idInstitucion,
+                    'punto_venta' => $punto_venta,
+                    'institucion_id' => $institucion_id,
+                    'ruc_cliente' => $ruc_cliente,
+                    'subtotal_total' => 0, // Si es necesario, puedes calcularlo aquí
+                    'descuento_total' => 0, // Lo mismo que el subtotal_total
+                    'valor_total' => 0, // Lo mismo que el subtotal_total
+                    'todos_los_documentos' => '', // Puedes agregar los documentos si es necesario
+                    'abono_total' => $abono->suma_abono_facturas,
+                    'retencion_total' => 0, // Si hay retenciones, asegúrate de calcularlo
+                    'devolucion' => 0, // En este caso, parece no haber devolución
+                    'devolucion_todas' => [], // Puedes dejarlo vacío o añadir detalles si es necesario
+                    'abono_liquidacion' => 0, 
+                    'abono_cruce' => 0,       
+                ];
             }
         }
 
+        if ($abonosSinNotas->isNotEmpty()) {
+            foreach ($abonosSinNotas as $abono) {
+                $clienteReporte = $reporte->firstWhere('ruc_cliente', $abono->abono_ruc_cliente);
 
-        return $reporte;
+                if ($clienteReporte) {
+                    $nombreInstitucion = $clienteReporte->nombreInstitucion ?? $abono->nombre_cliente;
+                    $asesor = $clienteReporte->asesor ?? ''; // O cualquier valor por defecto
+                    $idInstitucion = $clienteReporte->idInstitucion ?? '';
+                    $punto_venta = $clienteReporte->punto_venta ?? '';
+                    $institucion_id = $clienteReporte->idInstitucion ?? '';
+                    $ruc_cliente = $clienteReporte->ruc_cliente ?? $abono->abono_ruc_cliente;
+                } else {
+                    // Si no se encuentra el cliente en el reporte, puedes asignar valores predeterminados o manejar el error.
+                    $nombreInstitucion = $abono->nombre_cliente;
+                    $asesor = ''; // Asignar valores predeterminados si lo deseas
+                    $idInstitucion = '';
+                    $punto_venta = '';
+                    $institucion_id = '';
+                    $ruc_cliente = $abono->abono_ruc_cliente;
+                }
+                // Agregar abono sin notas al reporte
+                $reporte[] = (object) [
+                    'idtipodoc' => 22, // Código para "ABONO SIN NOTAS"
+                    'tdo_id' => 22,
+                    'tdo_nombre' => 'ABONO SIN NOTAS',
+                    'empresa' => $abono->abono_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.',
+                    'id_empresa' => $abono->abono_empresa,
+                    'nombreInstitucion' => $nombreInstitucion,
+                    'asesor' => $asesor,
+                    'idInstitucion' => $idInstitucion,
+                    'punto_venta' => $punto_venta,
+                    'institucion_id' => $institucion_id,
+                    'ruc_cliente' => $ruc_cliente,
+                    'subtotal_total' => 0, // Si es necesario, puedes calcularlo aquí
+                    'descuento_total' => 0, // Lo mismo que el subtotal_total
+                    'valor_total' => 0, // Lo mismo que el subtotal_total
+                    'todos_los_documentos' => '', // Puedes agregar los documentos si es necesario
+                    'abono_total' => $abono->suma_abono_notas,
+                    'retencion_total' => 0, // Si hay retenciones, asegúrate de calcularlo
+                    'devolucion' => 0, // En este caso, parece no haber devolución
+                    'devolucion_todas' => [], // Puedes dejarlo vacío o añadir detalles si es necesario
+                    'abono_liquidacion' => 0, 
+                    'abono_cruce' => 0,       
+                ];
+            }
+        }
+        // Paso 8: Obtener las notas de crédito
+        $notasCredito = DB::table('f_venta as fv')
+        ->join('f_tipo_documento as ft', 'fv.idtipodoc', '=', 'ft.tdo_id')
+        ->where('fv.idtipodoc', '=', 16) // Tipo 16 es el código de las notas de crédito
+        ->where('fv.periodo_id', '=', $request->periodo)
+        ->where('fv.est_ven_codigo', '<>', 3) // Excluir ventas canceladas
+        ->where('fv.ven_desc_por', '<', 100)
+        ->select(
+            'fv.id_empresa',
+            'fv.ruc_cliente',
+            'fv.institucion_id',
+            'fv.idtipodoc',
+            'ft.tdo_nombre',
+            'fv.ven_valor',
+            'fv.ven_subtotal',
+            'fv.ven_desc_por'
+        )
+        ->get();
+
+        // Paso 9: Añadir las notas de crédito al reporte
+        foreach ($notasCredito as $nota) {
+            // Buscar el cliente en el reporte original para tomar sus datos
+            $clienteReporte = $reporte->firstWhere('ruc_cliente', $nota->ruc_cliente);
+
+            if ($clienteReporte) {
+                // Crear el objeto para agregarlo al reporte
+                $reporte[] = (object) [
+                    'idtipodoc' => 16, // Tipo de documento "NOTA DE CREDITO"
+                    'tdo_id' => 16,
+                    'tdo_nombre' => 'NOTA DE CREDITO',
+                    'empresa' => $nota->id_empresa == 1 ? 'PROLIPA' : 'GRUPOCALMED CIA.LTDA.', // Asumiendo que se determina por el ID de la empresa
+                    'id_empresa' => $nota->id_empresa,
+                    'nombreInstitucion' => $clienteReporte->nombreInstitucion,
+                    'asesor' => $clienteReporte->asesor,
+                    'idInstitucion' => $clienteReporte->idInstitucion,
+                    'punto_venta' => $clienteReporte->punto_venta,
+                    'institucion_id' => $nota->institucion_id,
+                    'ruc_cliente' => $nota->ruc_cliente,
+                    'subtotal_total' => round($nota->ven_subtotal, 2), // No aplica en notas de crédito
+                    'descuento_total' => round($nota->ven_desc_por, 2), // No aplica en notas de crédito
+                    'valor_total' => round($nota->ven_valor, 2), // Sumar el valor de la nota de crédito
+                    'todos_los_documentos' => '', // Puedes agregar los detalles si es necesario
+                    'abono_total' => 0,
+                    'retencion_total' => 0,
+                    'devolucion' => 0,
+                    'devolucion_todas' => [], // Puedes dejarlo vacío o agregar detalles si es necesario
+                    'abono_liquidacion' => 0, 
+                    'abono_cruce' => 0,       
+                ];
+            }
+        }
+
+        // return $reporte;
+        
+        $reporteAgrupado = collect($reporte)->groupBy(function($item) {
+            return $item->ruc_cliente . '|' . $item->idtipodoc . '|' . $item->id_empresa;
+        })->map(function($grupo) {
+            $base = $grupo->first();
+        
+            return (object) [
+                'idtipodoc' => $base->idtipodoc,
+                'tdo_id' => $base->tdo_id,
+                'tdo_nombre' => $base->tdo_nombre,
+                'empresa' => $base->empresa,
+                'id_empresa' => $base->id_empresa,
+                'ruc_cliente' => $base->ruc_cliente,
+        
+                'nombreInstitucion' => $grupo->pluck('nombreInstitucion')->unique()->implode(' / '),
+                'asesor' => $grupo->pluck('asesor')->unique()->implode(' / '),
+                'cliente_facturado' => $grupo->pluck('cliente_facturado')->unique()->implode(' / '),
+        
+                'idInstitucion' => null,
+                'institucion_id' => null,
+                'punto_venta' => null,
+        
+                'subtotal_total' => $grupo->sum('subtotal_total'),
+                'descuento_total' => $grupo->sum('descuento_total'),
+                'valor_total' => $grupo->sum('valor_total'),
+                'abono_total' => $base->abono_total,
+                'retencion_total' => $base->retencion_total,
+                'abono_liquidacion' => $base->abono_liquidacion,
+                'abono_cruce' => $base->abono_cruce,
+                'devolucion' => $grupo->sum('devolucion'),
+        
+                'todos_los_documentos' => collect($grupo)->pluck('todos_los_documentos')->flatMap(function($docs) {
+                    return explode(',', $docs);
+                })->filter()->unique()->implode(','),
+        
+                'devolucion_todas' => collect($grupo)->pluck('devolucion_todas')->flatten(1)->all(),
+            ];
+        })->values();
+        
+        return $reporteAgrupado;
 
     }
     
@@ -1633,6 +1937,8 @@ class AbonoController extends Controller
             $valorAbono = DB::table('abono as ab')
                 ->where('ab.abono_ruc_cliente', $ruc)
                 ->where('ab.abono_estado', 0)
+                ->where('ab.abono_periodo', $request->periodo)
+                // ->where('ab.abono_tipo', '<>', '3')
                 // ->where('ab.abono_cuenta','<>','6')
                 // ->where('ab.abono_tipo', '<>', '4')
                 ->sum(DB::raw('ab.abono_facturas + ab.abono_notas'));
@@ -2035,6 +2341,7 @@ class AbonoController extends Controller
 
     public function getClienteDocumentos(Request $request){
         $cliente = $request->input('cliente');
+        $periodo = $request->input('periodo');
 
         // Consulta los IDs de la institución para el cliente
         $clientesBase = DB::select("SELECT DISTINCT fv.institucion_id FROM f_venta fv
@@ -2048,6 +2355,7 @@ class AbonoController extends Controller
                 ->join('codigoslibros_devolucion_son as cls', 'cdh.id', '=', 'cls.codigoslibros_devolucion_id')
                 ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'cdh.id_cliente')
                 ->where('cls.id_cliente', '=', $item->institucion_id)
+                ->where('cdh.periodo_id', $periodo)
                 // Validación de documento: null, vacío o 0
                 ->where(function ($query) {
                     $query->whereNull('cls.documento')

@@ -1,14 +1,21 @@
 <?php
 namespace App\Repositories\pedidos;
 
+use App\Models\NotificacionGeneral;
 use App\Models\Verificacion;
 use App\Repositories\BaseRepository;
+use App\Services\PusherService;
 use DB;
+use Pusher\Pusher;
+
 class  VerificacionRepository extends BaseRepository
 {
-    public function __construct(Verificacion $VerificacionRepository)
+    protected $pusherService;
+
+    public function __construct(Verificacion $VerificacionRepository, PusherService $pusherService)
     {
         parent::__construct($VerificacionRepository);
+        $this->pusherService = $pusherService;
     }
     public function getAllCodigosIndividualesContrato($contrato,$num_verificacion,$id_verificacion){
         $query = DB::SELECT("SELECT ls.codigo_liquidacion ,c.codigo,
@@ -44,5 +51,46 @@ class  VerificacionRepository extends BaseRepository
         ");
         return $query;
     }
-
+    public function save_notificacion($request,$color='primary'){
+        try{
+            //validar si existe la notificacion
+            $validar = DB::SELECT("SELECT * FROM notificaciones_general n
+            WHERE n.id_padre = '$request->id_padre'
+            AND n.estado = '0'
+            AND n.tipo = '$request->tipo'");
+            if(count($validar) > 0){
+                return ["status" => "1", "ya esta guardado"];
+            }
+            $notificacion               = new NotificacionGeneral();
+            $notificacion->nombre       = $request->nombre;
+            $notificacion->descripcion  = $request->descripcion;
+            $notificacion->tipo         = $request->tipo;
+            $notificacion->user_created = $request->user_created;
+            $notificacion->id_periodo   = $request->id_periodo;
+            $notificacion->id_padre     = $request->id_padre;
+            $notificacion->color        = $color;
+            $notificacion->save();
+            if($notificacion){
+                return ["status"=>"1","message"=>"Se guardo correctamente"];
+            }else{
+                throw new \Exception("No se pudo guardar");
+            }   
+        }catch(\Exception $e){
+            throw new \Exception("No se pudo guardar" . $e->getMessage());
+        }
+    }
+    public function cerrarNotificacion($idPadre,$tipo){
+        try{
+            $notificacion = NotificacionGeneral::where('id_padre', $idPadre)->where('tipo', $tipo)->first();
+            if($notificacion){
+                $notificacion->estado = 1;
+                $notificacion->save();
+                return $notificacion;
+            }
+        }   
+        catch(\Exception $e){
+            throw new \Exception("No se pudo cerrar notificacion" . $e->getMessage());
+        }
+    }
+   
 }

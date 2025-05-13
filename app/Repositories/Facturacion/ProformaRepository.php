@@ -30,28 +30,25 @@ class  ProformaRepository extends BaseRepository
     }
     public function listadoInstitucionesXVenta($periodo, $empresa, $tipoInstitucion)
     {
-        // Usamos Query Builder para una mejor legibilidad y seguridad
         $query = DB::table('f_venta as v')
-            ->distinct()  // Evitamos repetir resultados
-            ->join('institucion as i', 'v.institucion_id', '=', 'i.idInstitucion')  // LEFT JOIN equivalente
-            ->where('v.est_ven_codigo', '<>', '3')  // Aseguramos que no sea '3'
-            // ->whereNull('v.doc_intercambio')
+            ->distinct()
+            ->join('institucion as i', 'v.institucion_id', '=', 'i.idInstitucion')
+            ->where('v.est_ven_codigo', '<>', '3')
             ->where(function ($query) {
-                // Validamos que no se cumpla la condición: idtipodoc es 3 o 4 y doc_intercambio no es nulo
-                $query->whereNotIn('v.idtipodoc', [3, 4])  // Excluye idtipodoc 3 o 4
-                      ->orWhereNull('v.doc_intercambio');  // O donde doc_intercambio sea nulo
+                $query->whereNotIn('v.idtipodoc', [3, 4])
+                    ->orWhereNull('v.doc_intercambio');
             })
-            ->where('v.periodo_id', $periodo)  // Usamos los parámetros correctamente
-            ->where('v.id_empresa', $empresa)
-            ->where('i.punto_venta', $tipoInstitucion)  // Filtro adicional de la tabla 'institucion'
-            ->select('v.institucion_id', 'i.nombreInstitucion')  // Campos que deseas obtener
-            ->orderBy('i.nombreInstitucion', 'asc')  // Ordenamos por nombre
-            ->get();  // Obtenemos el resultado
-    
+            ->where('v.periodo_id', $periodo)
+            ->when(!is_null($empresa), function ($q) use ($empresa) {
+                $q->where('v.id_empresa', $empresa);
+            })
+            ->where('i.punto_venta', $tipoInstitucion)
+            ->select('v.institucion_id', 'i.nombreInstitucion')
+            ->orderBy('i.nombreInstitucion', 'asc')
+            ->get();
+
         return $query;
     }
-    
-    
 
     public function listadoDocumentosVenta($periodo, $empresa, $tipoInstitucion, $institucion, $tipoDocumento = [1])
     {
@@ -61,7 +58,7 @@ class  ProformaRepository extends BaseRepository
                 $join->on('v2.ven_codigo', '=', 'v.ven_codigo')
                     ->where('v.id_empresa', '=', $empresa);
             })
-            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'v2.institucion_id')  
+            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'v2.institucion_id')
             ->leftJoin('libros_series as ls', 'ls.codigo_liquidacion', '=', 'v.pro_codigo')
             ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
             ->leftJoin('f_proforma as pr', 'pr.prof_id', '=', 'v2.ven_idproforma')
@@ -87,26 +84,29 @@ class  ProformaRepository extends BaseRepository
     public function listadoDocumentosAgrupado($periodo, $empresa, $tipoInstitucion, $institucion)
     {
         $query = DB::table('f_detalle_venta_agrupado as v')
-        ->select('v.*','s.nombre_serie')
-        ->leftJoin('f_venta_agrupado as v2', function ($join) {
-            $join->on('v2.id_factura', '=', 'v.id_factura')
-                 ->on('v.id_empresa', '=', 'v2.id_empresa');
-        })
-        ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'v2.institucion_id')
-        ->leftJoin('libros_series as ls', 'ls.codigo_liquidacion', '=', 'v.pro_codigo')
-        ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
-        ->where('v2.institucion_id', '=', $institucion)
-        ->where('i.punto_venta', '=', $tipoInstitucion)
-        ->where('i.idInstitucion', '=', $institucion)
-        ->where('v2.periodo_id', '=', $periodo)
-        ->where('v2.estadoPerseo', '=', 1)
-        ->where('v2.est_ven_codigo', '=', 0)
-        ->where('v2.id_empresa', '=', $empresa)
-        ->orderBy('v.pro_codigo', 'asc')
-        ->get();
+            ->select('v.*', 's.nombre_serie','ls.nombre as nombrelibro')
+            ->leftJoin('f_venta_agrupado as v2', function ($join) {
+                $join->on('v2.id_factura', '=', 'v.id_factura')
+                    ->on('v.id_empresa', '=', 'v2.id_empresa');
+            })
+            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'v2.institucion_id')
+            ->leftJoin('libros_series as ls', 'ls.codigo_liquidacion', '=', 'v.pro_codigo')
+            ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
+            ->where('v2.institucion_id', '=', $institucion)
+            ->where('i.punto_venta', '=', $tipoInstitucion)
+            ->where('i.idInstitucion', '=', $institucion)
+            ->where('v2.periodo_id', '=', $periodo)
+            ->where('v2.estadoPerseo', '=', 1)
+            ->where('v2.est_ven_codigo', '=', 0)
+            ->when(!is_null($empresa), function ($q) use ($empresa) {
+                $q->where('v2.id_empresa', '=', $empresa);
+            })
+            ->orderBy('v.pro_codigo', 'asc')
+            ->get();
 
         return $query;
     }
+
     public function listadoContratosAgrupadoInstitucion($getDatosVenta)
     {
         if ($getDatosVenta->isEmpty()) {
@@ -280,6 +280,11 @@ class  ProformaRepository extends BaseRepository
                 if ($documentoPrefactura == 1) {
                     $stockEmpresa = $getStock->pro_depositoCalmed;
                 }
+            }
+
+            // Comprobar si hay suficiente stock para restar
+            if ($stockEmpresa < $valorNew) {
+                throw new Exception('No hay suficiente stock para restar en "'.$codigo_liquidacion.  '". Stock disponible: ' . $stockEmpresa . ', cantidad a restar: ' . $valorNew);
             }
 
             $nuevoStockReserva          = $stockAnteriorReserva - $valorNew;

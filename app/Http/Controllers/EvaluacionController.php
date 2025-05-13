@@ -404,7 +404,7 @@ class EvaluacionController extends Controller
         ->delete();
         return ["status" => "1", "message" => "Se guardo correctamente"];
     }
-    public function getEvaluacionesUltimoPeriodo(Request $request)
+    public function getEvaluacionesUltimoPeriodo_(Request $request)
     {
         $institucionId = $request->input('institucion_idInstitucion');
         $docenteId = $request->input('idusuario');
@@ -465,77 +465,124 @@ class EvaluacionController extends Controller
 
         return response()->json($resultados);
     }
-    public function getEvaluacionesUltimoPeriodo_2(Request $request) 
+    public function getEvaluacionesUltimoPeriodo(Request $request) 
     {
+        
         $institucionId = $request->input('institucion_idInstitucion');
         $docenteId = $request->input('idusuario');
 
-        // Obtener el último período escolar registrado para la institución
-        $ultimoPeriodo = DB::table('periodoescolar_has_institucion')
-            ->where('institucion_idInstitucion', $institucionId)
-            ->orderBy('periodoescolar_idperiodoescolar', 'desc')
+
+        try {
+            // Obtener el último período escolar
+            $ultimoPeriodo = DB::table('periodoescolar_has_institucion')
+                ->where('institucion_idInstitucion', $institucionId)
+                ->orderBy('periodoescolar_idperiodoescolar', 'desc')
+                ->first();
+    
+            if (!$ultimoPeriodo) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No se encontró un período escolar para la institución.'
+                ], 404);
+            }
+    
+            $periodoId = $ultimoPeriodo->periodoescolar_idperiodoescolar;
+    
+            // Obtener el nombre del período escolar
+            $nombrePeriodo = DB::table('periodoescolar')
+                ->where('idperiodoescolar', $periodoId)
+                ->value('periodoescolar');
+
+                // Obtener el estado ifcodigoEvaluacion de la institución
+            $institucion = DB::table('institucion')
+            ->where('idInstitucion', $institucionId)
+            ->select('ifcodigoEvaluacion')
             ->first();
 
-        if (!$ultimoPeriodo) {
-            return response()->json(['error' => 'No se encontró un período escolar para la institución.'], 404);
+            $mostrarCodigoEvaluacion = $institucion->ifcodigoEvaluacion == 1;
+    
+            // Obtener todas las asignaturas del docente en el período
+            $asignaturas = DB::table('asignaturausuario as au')
+                ->join('asignatura as a', 'au.asignatura_idasignatura', '=', 'a.idasignatura')
+                ->where('au.periodo_id', $periodoId)
+                ->where('au.usuario_idusuario', $docenteId)
+                ->select('a.idasignatura', 'a.nombreasignatura')
+                ->get();
+    
+            // Obtener todos los cursos del docente en el período
+            $cursos = DB::table('curso as c')
+                ->where('c.idusuario', $docenteId)
+                ->where('c.id_periodo', $periodoId)
+                ->where('c.estado', '1')
+                ->select('c.idcurso', 'c.nombre', 'c.seccion', 'c.materia', 'c.codigo', 'c.id_asignatura','c.aula')
+                ->get();
+    
+            // Obtener todas las evaluaciones de los cursos del docente
+            $evaluaciones = DB::table('evaluaciones as e')
+                ->where('e.id_docente', $docenteId)
+                ->where('e.estado', '1')
+                ->select('e.id', 'e.nombre_evaluacion', 'e.id_asignatura', 'e.codigo_curso', 
+                         'e.descripcion', 'e.puntos', 'e.duracion', 'e.fecha_inicio', 'e.fecha_fin','e.codigo_evaluacion')
+                ->get();
+    
+            // Estructurar los datos jerárquicamente
+            $resultado = $asignaturas->map(function ($asignatura) use ($cursos, $evaluaciones) {
+                $cursosAsignatura = $cursos->where('id_asignatura', $asignatura->idasignatura);
+                
+                $cursosConEvaluaciones = $cursosAsignatura->map(function ($curso) use ($evaluaciones) {
+                    $evals = $evaluaciones->where('codigo_curso', $curso->codigo);
+                    
+                    return [
+                        'idcurso' => $curso->idcurso,
+                        'nombre' => $curso->nombre,
+                        'seccion' => $curso->seccion,
+                        'materia' => $curso->materia,
+                        'codigo' => $curso->codigo,
+                        'aula' => $curso->aula,
+                        'evaluaciones' => $evals->map(function ($eval) {
+                            return [
+                                'id' => $eval->id,
+                                'codigo_curso' => $eval->codigo_curso,
+                                'nombre_evaluacion' => $eval->nombre_evaluacion,
+                                'descripcion' => $eval->descripcion,
+                                'puntos' => $eval->puntos,
+                                'duracion' => $eval->duracion,
+                                'fecha_inicio' => $eval->fecha_inicio,
+                                'fecha_fin' => $eval->fecha_fin,
+                                'codigo_evaluacion' => $eval->codigo_evaluacion,
+                            ];
+                        })->values()->toArray()
+                    ];
+                })->values()->toArray();
+    
+                return [
+                    'idasignatura' => $asignatura->idasignatura,
+                    'nombreasignatura' => $asignatura->nombreasignatura,
+                    'cursos' => $cursosConEvaluaciones
+                ];
+            });
+    
+            return response()->json([
+                'success' => true,
+                'periodo_escolar' => $nombrePeriodo,
+                'data' => $resultado,
+                'mostrar_codigo_evaluacion' => $mostrarCodigoEvaluacion, // Opcional: informar al frontend
+            ]);
+    
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al obtener los datos',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Obtener el nombre del período escolar
-        $nombrePeriodo = DB::table('periodoescolar')
-            ->where('idperiodoescolar', $ultimoPeriodo->periodoescolar_idperiodoescolar)
-            ->value('periodoescolar');
-
-        // Obtener los cursos activos asignados al docente
-        $cursos = DB::table('curso')
-            ->join('asignatura', 'curso.id_asignatura', '=', 'asignatura.idasignatura')
-            ->where('curso.idusuario', $docenteId)
-            ->where('curso.estado', "1") // Filtrar solo los cursos activos
-            ->select(
-                'curso.codigo',
-                'curso.nombre as nombre_curso',
-                'curso.seccion',
-                'curso.aula',
-                'curso.estado as estado_curso', // Se añade el estado del curso
-                'asignatura.idasignatura',
-                'asignatura.nombreasignatura',
-                'asignatura.estado as estado_asignatura'
-            )
-            ->get();
-
-        // Obtener las evaluaciones asociadas a los cursos activos
-        $evaluaciones = DB::table('evaluaciones')
-            ->join('eval_tipos', 'evaluaciones.id_tipoeval', '=', 'eval_tipos.id')
-            ->whereIn('evaluaciones.codigo_curso', $cursos->pluck('codigo')) // Filtrar por cursos activos
-            ->select(
-                'evaluaciones.id',
-                'evaluaciones.nombre_evaluacion',
-                'evaluaciones.id_docente',
-                'evaluaciones.codigo_curso',
-                'evaluaciones.puntos',
-                'evaluaciones.duracion',
-                'evaluaciones.descripcion',
-                'evaluaciones.fecha_inicio',
-                'evaluaciones.fecha_fin',
-                'evaluaciones.estado',
-                'evaluaciones.grupos_evaluacion',
-                'evaluaciones.cant_unidades',
-                'evaluaciones.codigo_evaluacion',
-                'evaluaciones.ver_calificaciones',
-                'evaluaciones.id_tipoeval',
-                'eval_tipos.tipo_nombre'
-            )
-            ->get();
-
-        // Anidar evaluaciones dentro de cada curso
-        $cursos->each(function ($curso) use ($evaluaciones) {
-            $curso->evaluaciones = $evaluaciones->where('codigo_curso', $curso->codigo)->values();
-        });
-
-        return response()->json([
-            'institucion_id' => $institucionId,
-            'nombre_periodo' => $nombrePeriodo,
-            'cursos' => $cursos
-        ]);
+    }
+    public function edit_fecha_evaluacion_admin(Request $request){
+        $evaluacion = Evaluaciones::find($request->id);
+        $evaluacion->fecha_inicio       = $request->fecha_inicio;
+        $evaluacion->fecha_fin          = $request->fecha_fin;
+        $evaluacion->save();
+        return response()->json($evaluacion); // Retorna toda la evaluación actualizada
     }
 
 

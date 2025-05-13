@@ -58,7 +58,7 @@ class f_MovimientosProductoController extends Controller
             INNER JOIN usuario u ON t.user_created = u.idusuario
             LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
             WHERE t.fmp_id LIKE '%$request->razonbusqueda%'
-            ORDER BY t.created_at ASC
+            ORDER BY t.created_at DESC
             ");
             return $query;
         }else if ($request->busqueda == 'TipoMovimiento') {
@@ -70,7 +70,7 @@ class f_MovimientosProductoController extends Controller
                 INNER JOIN usuario u ON t.user_created = u.idusuario
                 LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
                 WHERE t.fmp_id like 'MINO%'
-                ORDER BY t.created_at ASC
+                ORDER BY t.created_at DESC
                 ");
                 return $query;   
             }else if ($request->razonbusqueda == 1) {
@@ -81,7 +81,7 @@ class f_MovimientosProductoController extends Controller
                 INNER JOIN usuario u ON t.user_created = u.idusuario
                 LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
                 WHERE t.fmp_id like 'MENO%'
-                ORDER BY t.created_at ASC
+                ORDER BY t.created_at DESC
                 ");
                 return $query;   
             }else if ($request->razonbusqueda == 2) {
@@ -92,7 +92,7 @@ class f_MovimientosProductoController extends Controller
                 INNER JOIN usuario u ON t.user_created = u.idusuario
                 LEFT JOIN 1_4_proveedor p ON t.prov_codigo = p.prov_codigo
                 WHERE t.fmp_id like 'MCNO%'
-                ORDER BY t.created_at ASC
+                ORDER BY t.created_at DESC
                 ");
                 return $query;   
             }

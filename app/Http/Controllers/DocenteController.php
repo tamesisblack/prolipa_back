@@ -72,9 +72,41 @@ class DocenteController extends Controller
     }
     public function docentesInstitucion($id)
     {
-        $usuarios = User::where('institucion_idInstitucion', $id)
-        ->where('id_group',6)
-        ->get(['idusuario', 'cedula', 'nombres', 'apellidos', 'name_usuario', 'email', 'telefono', 'estado_idEstado', 'id_group', 'institucion_idInstitucion','foto_user']);
+        $usuarios = User::select(
+            'usuario.idusuario', 
+            'usuario.cedula', 
+            'usuario.nombres', 
+            'usuario.apellidos', 
+            'usuario.name_usuario', 
+            'usuario.email', 
+            'usuario.telefono', 
+            'usuario.estado_idEstado', 
+            'usuario.id_group', 
+            'usuario.institucion_idInstitucion', 
+            'usuario.foto_user',
+            'i.idInstitucion',
+            DB::RAW('MAX(se.id_evaluacion) AS id_evaluacion')
+        )
+        ->leftJoin('salle_evaluaciones as se', 'se.id_usuario', '=', 'usuario.idusuario')
+        ->leftjoin('institucion as i', 'i.idInstitucion', '=', 'usuario.institucion_idInstitucion')
+        ->where('institucion_idInstitucion', $id)
+        ->whereIn('id_group', [6, 13])
+        ->groupBy(
+            'usuario.idusuario', 
+            'usuario.cedula', 
+            'usuario.nombres', 
+            'usuario.apellidos', 
+            'usuario.name_usuario', 
+            'usuario.email', 
+            'usuario.telefono', 
+            'usuario.estado_idEstado', 
+            'usuario.id_group', 
+            'usuario.institucion_idInstitucion', 
+            'usuario.foto_user',
+            'i.idInstitucion'
+        )
+        ->get();
+        
         return $usuarios;
     }
 

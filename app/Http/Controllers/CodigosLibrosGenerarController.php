@@ -360,7 +360,7 @@ class CodigosLibrosGenerarController extends Controller
     public function codigosLibrosCodigo($codigo)
     {
 
-        $codigos_libros = DB::SELECT("SELECT c.verif1,c.verif2,c.verif3,c.verif4,c.verif5,c.verif6,c.verif7,c.verif8,c.verif9,c.verif10,
+        $codigos_libros = DB::SELECT("SELECT c.verif1,c.verif2,c.verif3,c.verif4,c.verif5,
          c.contrato,c.codigo, c.serie, l.nombrelibro as libro, c.anio, c.idusuario, c.idusuario_creador_codigo, c.libro_idlibro,
          c.contador,c.bc_estado,c.estado_liquidacion,c.venta_estado,
         c.estado, c.fecha_create, c.created_at, c.updated_at, s.id_serie, s.nombre_serie,
@@ -432,9 +432,6 @@ class CodigosLibrosGenerarController extends Controller
             (case when (c.bc_estado = '2') then 'codigo leido'
             when (c.bc_estado = '1') then 'codigo sin leer'
             end) as barrasEstado,
-            (case when (c.codigos_barras = '1') then 'con código de barras'
-                when (c.codigos_barras = '0')  then 'sin código de barras'
-            end) as status,
             (case when (c.venta_estado = '0') then ''
                 when (c.venta_estado = '1') then 'Venta directa'
                 when (c.venta_estado = '2') then 'Venta por lista'
@@ -446,11 +443,6 @@ class CodigosLibrosGenerarController extends Controller
                     when (ci.verif3 > 0) then 'verif3'
                     when (ci.verif4 > 0) then 'verif4'
                     when (ci.verif5 > 0) then 'verif5'
-                    when (ci.verif6 > 0) then 'verif6'
-                    when (ci.verif7 > 0) then 'verif7'
-                    when (ci.verif8 > 0) then 'verif8'
-                    when (ci.verif9 > 0) then 'verif9'
-                    when (ci.verif10 > 0) then 'verif10'
                     end) as verificacion
                 FROM codigoslibros ci
                 WHERE ci.codigo = c.codigo

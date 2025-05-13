@@ -79,14 +79,8 @@ class GestionCodigosController extends Controller
             $codigo->verif3                     = $request->verif3 == null || $request->verif3 == "null" ? null : $request->verif3;
             $codigo->verif4                     = $request->verif4 == null || $request->verif4 == "null" ? null : $request->verif4;
             $codigo->verif5                     = $request->verif5 == null || $request->verif5 == "null" ? null : $request->verif5;
-            $codigo->verif6                     = $request->verif6 == null || $request->verif6 == "null" ? null : $request->verif6;
-            $codigo->verif7                     = $request->verif7 == null || $request->verif7 == "null" ? null : $request->verif7;
-            $codigo->verif8                     = $request->verif8 == null || $request->verif8 == "null" ? null : $request->verif8;
-            $codigo->verif9                     = $request->verif9 == null || $request->verif9 == "null" ? null : $request->verif9;
-            $codigo->verif10                    = $request->verif10 == null || $request->verif10 == "null" ? null : $request->verif10;
             $codigo->estado_liquidacion         = $request->estado_liquidacion;
             $codigo->bc_estado                  = $request->bc_estado;
-            $codigo->codigos_barras             = $request->codigos_barras;
             $codigo->bc_institucion             = $request->bc_institucion;
             $codigo->bc_periodo                 = $request->bc_periodo;
             $codigo->bc_fecha_ingreso           = $request->bc_fecha_ingreso;
@@ -128,14 +122,8 @@ class GestionCodigosController extends Controller
             if($request->chkBc_Verif3                   == '1') $codigo->verif3                     = $request->verif3;
             if($request->chkBc_Verif4                   == '1') $codigo->verif4                     = $request->verif4;
             if($request->chkBc_Verif5                   == '1') $codigo->verif5                     = $request->verif5;
-            if($request->chkBc_Verif6                   == '1') $codigo->verif6                     = $request->verif6;
-            if($request->chkBc_Verif7                   == '1') $codigo->verif7                     = $request->verif7;
-            if($request->chkBc_Verif8                   == '1') $codigo->verif8                     = $request->verif8;
-            if($request->chkBc_Verif9                   == '1') $codigo->verif9                     = $request->verif9;
-            if($request->chkBc_Verif10                  == '1') $codigo->verif10                    = $request->verif10;
             if($request->chkEstado_liquidacion          == '1') $codigo->estado_liquidacion         = $request->estado_liquidacion;
             if($request->chkBc_estado                   == '1') $codigo->bc_estado                  = $request->bc_estado;
-            if($request->chkBc_Codigos_barras           == '1') $codigo->codigos_barras             = $request->codigos_barras;
             if($request->chkBc_Bc_institucion           == '1') $codigo->bc_institucion             = $request->bc_institucion;
             if($request->chkBc_Bc_periodo               == '1') $codigo->bc_periodo                 = $request->bc_periodo;
             if($request->chkBc_Venta_estado             == '1') $codigo->venta_estado               = $request->venta_estado;
@@ -179,9 +167,6 @@ class GestionCodigosController extends Controller
            (case when (c.bc_estado = '2') then 'codigo leido'
            when (c.bc_estado = '1') then 'codigo sin leer'
            end) as barrasEstado,
-           (case when (c.codigos_barras = '1') then 'con código de barras'
-               when (c.codigos_barras = '0')  then 'sin código de barras'
-           end) as status,
            (case when (c.venta_estado = '0') then ''
                when (c.venta_estado = '1') then 'Venta directa'
                when (c.venta_estado = '2') then 'Venta por lista'
@@ -232,9 +217,6 @@ class GestionCodigosController extends Controller
             (case when (c.bc_estado = '2') then 'codigo leido'
             when (c.bc_estado = '1') then 'codigo sin leer'
             end) as barrasEstado,
-            (case when (c.codigos_barras = '1') then 'con código de barras'
-                when (c.codigos_barras = '0')  then 'sin código de barras'
-            end) as status,
             (case when (c.venta_estado = '0') then ''
                 when (c.venta_estado = '1') then 'Venta directa'
                 when (c.venta_estado = '2') then 'Venta por lista'
@@ -285,9 +267,6 @@ class GestionCodigosController extends Controller
             (case when (c.bc_estado = '2') then 'codigo leido'
             when (c.bc_estado = '1') then 'codigo sin leer'
             end) as barrasEstado,
-            (case when (c.codigos_barras = '1') then 'con código de barras'
-                when (c.codigos_barras = '0')  then 'sin código de barras'
-            end) as status,
             (case when (c.venta_estado = '0') then ''
                 when (c.venta_estado = '1') then 'Venta directa'
                 when (c.venta_estado = '2') then 'Venta por lista'
@@ -334,9 +313,6 @@ class GestionCodigosController extends Controller
         (case when (c.bc_estado = '2') then 'codigo leido'
         when (c.bc_estado = '1') then 'codigo sin leer'
         end) as barrasEstado,
-        (case when (c.codigos_barras = '1') then 'con código de barras'
-            when (c.codigos_barras = '0')  then 'sin código de barras'
-        end) as status,
         (case when (c.venta_estado = '0') then ''
             when (c.venta_estado = '1') then 'Venta directa'
             when (c.venta_estado = '2') then 'Venta por lista'
@@ -385,9 +361,6 @@ class GestionCodigosController extends Controller
             (case when (c.bc_estado = '2') then 'codigo leido'
             when (c.bc_estado = '1') then 'codigo sin leer'
             end) as barrasEstado,
-            (case when (c.codigos_barras = '1') then 'con código de barras'
-                when (c.codigos_barras = '0')  then 'sin código de barras'
-            end) as status,
             (case when (c.venta_estado = '0') then ''
                 when (c.venta_estado = '1') then 'Venta directa'
                 when (c.venta_estado = '2') then 'Venta por lista'
@@ -439,9 +412,6 @@ class GestionCodigosController extends Controller
             (case when (c.bc_estado = '2') then 'codigo leido'
             when (c.bc_estado = '1') then 'codigo sin leer'
             end) as barrasEstado,
-            (case when (c.codigos_barras = '1') then 'con código de barras'
-                when (c.codigos_barras = '0')  then 'sin código de barras'
-            end) as status,
             (case when (c.venta_estado = '0') then ''
                 when (c.venta_estado = '1') then 'Venta directa'
                 when (c.venta_estado = '2') then 'Venta por lista'

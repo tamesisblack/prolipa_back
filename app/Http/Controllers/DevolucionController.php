@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\_14Producto;
+use App\Models\_14ProductoStockHistorico;
 use App\Models\CodigosLibros;
 use App\Models\CodigosLibrosDevolucionHeader;
 use App\Models\CodigosLibrosDevolucionHeaderFacturador;
@@ -71,36 +72,33 @@ class DevolucionController extends Controller
 
 
     }
-    //api:get/devoluciones?listadoProformasAgrupadas=1&institucion=1620
+    //api:get/devoluciones?listadoProformasAgrupadas=1&institucion=1620&periodo_id=27
     public function listadoProformasAgrupadas(Request $request)
     {
-        $institucion                = $request->input('institucion');
-        $getProformas               = $this->proformaRepository->listadoProformasAgrupadas($institucion);
-        if(empty($getProformas))    { return []; }
-        foreach($getProformas as $key => $item){
-            $query = DB::SELECT("SELECT * FROM f_venta_agrupado v
-            WHERE v.id_factura = ?
-            AND v.estadoPerseo = '1'
-            AND v.id_empresa = ?
-            ",[$item->id_factura,$item->id_empresa]);
-            if(count($query) > 0){
-                $getProformas[$key]->ifPedidoPerseo = 1;
-            }else{
-                $getProformas[$key]->ifPedidoPerseo = 0;
-            }
-            //cantidad de combos
-            $query = $this->devolucionRepository->detallePrefactura($item->ven_codigo,$item->id_empresa,$item->institucion_id,1);
-            if(count($query) > 0){
-                $getProformas[$key]->combos = count($query);
-            }else{
-                $getProformas[$key]->combos = 0;
-            }
+        $institucion = $request->input('institucion');
+        $periodo_id  = $request->input('periodo_id');
+
+        $proformas = collect($this->proformaRepository->listadoProformasAgrupadas($institucion))
+                        ->where('periodo_id', $periodo_id)
+                        ->values();
+
+        if ($proformas->isEmpty()) {
+            return [];
         }
-        $resultado = collect($getProformas);
-        //filtrar por ifPedidoPerseo igual a 0
-        $resultado = $resultado->where('ifPedidoPerseo','0')->values();
-        return $resultado;
+
+        foreach ($proformas as $key => $proforma) {
+            $detalleCombos = $this->devolucionRepository->detallePrefactura(
+                $proforma->ven_codigo, 
+                $proforma->id_empresa, 
+                $proforma->institucion_id, 
+                1
+            );
+            $proformas[$key]->combos = count($detalleCombos);
+        }
+
+        return $proformas;
     }
+
     //api:get/devoluciones?getCodigosDevolucionTodos=1&idDevolucion=41
     public function getCodigosDevolucionTodos($request)
     {
@@ -252,9 +250,10 @@ class DevolucionController extends Controller
                 'user_intercambio_cliente'          => $documento->user_intercambio_cliente,
                 'intercambio_cliente'               => $documento->intercambio_cliente,
                 'observacion_intercambio_cliente'   => $documento->observacion_intercambio_cliente,
+                'importacion_con_combos'            => $documento->importacion_con_combos,
                 'usuario_intercambio'      => [
                     'nombres'               => $documento->usuarioIntercambio->nombres ?? null,
-                    'apellidos'             => $documento->usuarioIntercambio->apellidos ?? null
+                    'apellidos'             => $documento->usuarioIntercambio->apellidos ?? null,
                 ],
             ];
         });
@@ -277,7 +276,7 @@ class DevolucionController extends Controller
         ->leftJoin('empresas', 'empresas.id', '=', 'codigoslibros_devolucion_son.id_empresa')
         ->leftJoin('institucion', 'institucion.idInstitucion', '=', 'codigoslibros_devolucion_son.id_cliente')
         ->leftJoin('codigoslibros_devolucion_header', 'codigoslibros_devolucion_header.id', '=', 'codigoslibros_devolucion_son.codigoslibros_devolucion_id')
-        ->leftJoin('periodoescolar', 'periodoescolar.idperiodoescolar', '=', 'codigoslibros_devolucion_son.id_periodo')
+        ->leftJoin('periodoescolar', 'periodoescolar.idperiodoescolar', '=', 'codigoslibros_devolucion_header.periodo_id')
         ->leftJoin('1_4_cal_producto','1_4_cal_producto.pro_codigo','codigoslibros_devolucion_son.pro_codigo')
         // Aquí añadimos el join con f_venta
         ->leftJoin('f_venta', function($join) {
@@ -1163,12 +1162,18 @@ class DevolucionController extends Controller
             if($validarDocumento->estado == 2){
                 return response()->json(['status' => '0', 'message' => 'El documento ya finalizo, no se puede agregar mas devoluciones']);
             }
+            $arrayOldValues = [];
+            $arrayNewValues = [];
             foreach($arrayCombos as $key => $item){
                 $idSon                  = $item->id;
                 $cantidadPendiente      = $item->combo_cantidad;
                 $prefactura             = $item->documento;
                 $id_empresa             = $item->id_empresa;
                 $pro_codigo             = $item->pro_codigo;
+                $oldValues              = [];
+                $newValues              = [];
+                //old values
+                $oldValues              = $this->codigosRepository->save_historicoStockOld($pro_codigo);
                 //obtener el valor de la devolucion
                 $getDevolucion          = DetalleVentas::getLibroDetalle($prefactura, $id_empresa, $pro_codigo);
                 $documento              = Ventas::where('ven_codigo', $prefactura)->where('id_empresa', $id_empresa)->first();
@@ -1181,8 +1186,8 @@ class DevolucionController extends Controller
                 $result                  = DetalleVentas::updateDevolucion($prefactura, $id_empresa, $pro_codigo, $nuevoValorDevolucion);
                 //actualizar el stock
                 //get stock
-                $getStock                   = _14Producto::obtenerProducto($pro_codigo);
-                $stockAnteriorReserva       = $getStock->pro_reservar;
+                $getStock                = _14Producto::obtenerProducto($pro_codigo);
+                $stockAnteriorReserva    = $getStock->pro_reservar;
                 //prolipa
                 if($id_empresa == 1)  {
                     //si es documento de prefactura
@@ -1221,7 +1226,27 @@ class DevolucionController extends Controller
                         }
                     }
                 }
+                // new values
+                $newValues = $this->codigosRepository->save_historicoStockNew($pro_codigo);
+                if(count($newValues) > 0){
+                    // Guardar en historico en el array
+                    $arrayOldValues[] = $oldValues;
+                    $arrayNewValues[] = $newValues;
+                }
             }
+            if(count($arrayOldValues) > 0){
+                // Historico
+                _14ProductoStockHistorico::insert([
+                    'psh_old_values'                        => json_encode($arrayOldValues),
+                    'psh_new_values'                        => json_encode($arrayNewValues),
+                    'psh_tipo'                              => 9,
+                    'id_codigoslibros_devolucion_header'    => $idDevolucion,
+                    'user_created'                          => $id_usuario,
+                    'created_at'                            => now(),
+                    'updated_at'                            => now(),
+                ]);
+            }
+
             DB::commit();
             return [
                 "guardados" => $contador,
@@ -1496,6 +1521,7 @@ class DevolucionController extends Controller
         $institucion = $request->institucion;
         $empresa = $request->empresa;
         $itemsParaBuscar = $request->itemsBusqueda;
+        $periodo = $request->periodo;
 
         // Decodificar JSON si los items vienen como cadena
         if (is_string($itemsParaBuscar)) {
@@ -1521,6 +1547,7 @@ class DevolucionController extends Controller
             $documentos = DB::table('f_venta as fv')
                 ->where('fv.institucion_id', $institucion)
                 ->where('fv.id_empresa', $empresa)
+                ->where('fv.periodo_id', $periodo)
                 ->where('fv.est_ven_codigo','<>',3) // Excluir documentos anulados (estado 3)
                 ->where('fv.idtipodoc', '<>', 16) // Excluir documentos notas de crédito
                 // ->whereNot(function ($query) {

@@ -222,35 +222,41 @@ class SalleReportesController extends Controller
         foreach ($evaluaciones as $key => $value) {
             $areas = DB::SELECT("CALL salle_areas_evaluacion (?);",[$value->id_evaluacion]);
             $data_areas = array(); $promedio_eval_area_acum = 0;
+            $totalCalificaciones = 0;
+            $totalPuntajePreguntas = 0;
+            $data_areas = [];
             foreach ($areas as $keyR => $valueR){
-                $totalPuntajePreguntas = 0;
-                $totalPuntajeRespuestas = 0;
+                $calificacionXArea = 0;
+                $puntajeXArea = 0;
+                $promediox_area = 0;
                 $id_evaluacion = $value->id_evaluacion;
-                 // Obtener el tipo de calificación
+                //  // Obtener el tipo de calificación
                 $query = $this->salleRepository->getCalificacionPreguntasXArea($id_evaluacion,$valueR->id_area);
-                // //totla puntaje respuestas
+                // // //totla puntaje respuestas
                 foreach ($query as $keyRespuestas => $valuerRespuestas) {
-                    $totalPuntajeRespuestas += $valuerRespuestas->puntaje;
+                    $totalCalificaciones += $valuerRespuestas->puntaje;
+                    $calificacionXArea += $valuerRespuestas->puntaje;
                 }
-                //total puntaje por area
+                // //total puntaje por area
                 $query2 = $this->salleRepository->puntajePorArea($id_evaluacion,$valueR->id_area);
                 foreach ($query2 as $keyPuntaje => $valuePuntaje) {
                     $totalPuntajePreguntas += $valuePuntaje->puntaje;
+                    $puntajeXArea += $valuePuntaje->puntaje;
                 }
-                $promedio_eval_area = ( $totalPuntajeRespuestas / $totalPuntajePreguntas ) * 100;
+                $promediox_area = ( $calificacionXArea / $puntajeXArea ) * 100;
                 $data_areas[$keyR] = [
                     'id_area'         => $valueR->id_area,
                     'nombre_area'     => $valueR->nombre_area,
-                    'puntaje'         => floatval(number_format($promedio_eval_area, 2)),
+                    'puntaje'         => round($promediox_area, 2),
                 ];
 
-                $promedio_eval_area_acum += $promedio_eval_area;
-            }
-            //dividir salle_promedio_areas/count($data_areas)
-            $promedio_eval_area_acum = $promedio_eval_area_acum / count($data_areas);
+               
+               
+            }//end foreach areas
+            $promedio_eval_area = ( $totalCalificaciones / $totalPuntajePreguntas ) * 100;
             $data_evaluaciones['items'][$key] = [
                 'id_evaluacion'         => $value->id_evaluacion,
-                'puntaje_evaluacion'    => floatval(number_format($promedio_eval_area_acum, 2)),
+                'puntaje_evaluacion'    => round($promedio_eval_area, 2),
                 'nombre_docente'        => $value->nombre_docente,
                 'areas'                 => $data_areas
             ];

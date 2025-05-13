@@ -479,46 +479,54 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        
-        $codigos = [
-            ['codigo' => 'SEAE2-83KPE2WVMD'],
-            ['codigo' => 'PSEAE2-G2K7TREWTS'],
-            ['codigo' => 'SEAE2-5N9H4EDZY3'],
-            ['codigo' => 'PSEAE2-YUZTX7XRDK'],
-            ['codigo' => 'SEAE2-WYKAE955UM'],
-            ['codigo' => 'PSEAE2-YTE4MBSCRR'],
-            ['codigo' => 'CERP-TAAYYK7EPY'],
-            ['codigo' => 'PCERP-7WYCSHRDBX'],
-            ['codigo' => 'CERP-UY2WRUV4GR'],
-            ['codigo' => 'PCERP-VUVNN7RKGV'],
-            ['codigo' => 'CERP-SWHPNW4YRP'],
-            ['codigo' => 'PCERP-WEZCXTH6XF'],
-            ['codigo' => 'CAMM-HGYGHZ87ZH'],
-            ['codigo' => 'PCAMM-2FPKYBSAWY'],
-            ['codigo' => 'CAMM-YP23GR3P2Y'],
-            ['codigo' => 'PCAMM-ZNPGN3DVUS'],
-            ['codigo' => 'CAMM-4YZEAN965B'],
-            ['codigo' => 'PCAMM-Z9M8935ZPN'],
-            ['codigo' => 'CUNA-KF47ATDMCG'],
-            ['codigo' => 'PCUNA-KD859ETHA6'],
-            ['codigo' => 'CUNA-PY6YCMKTDU'],
-            ['codigo' => 'PCUNA-TZDKFZEH6U'],
-            ['codigo' => 'CUNA-XRPMFGB5H2'],
-            ['codigo' => 'PCUNA-3XHV4R76FN'],
-            ['codigo' => 'SEAE2-test'],
-            ['codigo' => 'PSEAE2-test'],
-        ];
+        $getCodigos = 'SMLL2-P4P6X5N6X8,
+        PSMLL2-2MW3S3BMY8,
+        SMLL2-U2UD5HCMRD,
+        PSMLL2-YF9BA2HNAF,
+        SMLL2-XDBG7CE3AN,
+        PSMLL2-S3NU2HGKYN,
+        SMM2-AMB4RTE8ME,
+        PSMM2-UFY99MA4S4,
+        SMM2-DX787E5Y4R,
+        PSMM2-SP5M8TX4BD,
+        SMM2-KBWHCUAXBR,
+        PSMM2-H3TDA2FB79,
+        SMCN2-XSS6KZYHEW,
+        PSMCN2-DXAB4VE9PH,
+        SMCN2-YUY6ZTGGN2,
+        PSMCN2-BFXXYDT2KM,
+        SMCN2-ATPH88HZDY,
+        PSMCN2-22XG4KNYY7,
+        SMES2-PURKMWD8V9,
+        PSMES2-VB4NYVW9BK,
+        SMES2-GY8ZTTNSFB,
+        PSMES2-E9Y8STK78G,
+        SMES2-UXMSNZBPDA,
+        PSMES2-WHBHEUE9MN,
+        ';
+        $lineas = explode(",", $getCodigos); // Separar por coma
+        // Recorrer y armar el array
+        foreach ($lineas as $linea) {
+            $codigoLimpio = trim($linea); // Limpiar espacios o saltos de línea
+            if (!empty($codigoLimpio)) {
+                $codigos[] = ['codigo' => $codigoLimpio];
+            }
+        }
 
         // Los combos que quieres añadir, excluyendo el combo 'CMB-5YZAW6'
         $combos = [
-            'CMB-RMTZYE',
-            'CMB-X39XC2',
-            'CMB-UGU9Y6',
-            'CMB-TEST'
+            'CMB-W4WWGE',
+            'CMB-FVEGW4',
+            'CMB-YFEVEZ',
         ];
-
+        $libro = 'CFA2';
+        $getLibrosCombo = _14Producto::findOrFail($libro);
+        if(!$getLibrosCombo){
+            return ["status" => "0", "message" => "No se encontro el libro $libro"];
+        }
+        $prefixes       = explode(',', $getLibrosCombo->codigos_combos);
         // Los prefijos (tipos de códigos) que quieres procesar
-        $prefixes = $request->input('prefixes', ['SEAE2', 'CERP', 'CAMM', 'CUNA']);
+        // $prefixes = $request->input('prefixes', ['SEAE2', 'CERP', 'CAMM', 'CUNA']);
         // Definir la cantidad de códigos por combo
         $cantidadPorCombo = 8;
 

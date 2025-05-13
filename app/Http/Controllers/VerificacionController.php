@@ -84,8 +84,7 @@ class VerificacionController extends Controller
                 
                 
                 $buscarcodigosLibros = DB::select("SELECT contrato, codigoslibros.codigo, ls.codigo_liquidacion, libro.nombrelibro, libro.idlibro, 
-                    codigoslibros.verif1, codigoslibros.verif2,codigoslibros.verif3,codigoslibros.verif4,codigoslibros.verif5, codigoslibros.verif6,
-                    codigoslibros.verif7,codigoslibros.verif8,codigoslibros.verif9,codigoslibros.verif10
+                    codigoslibros.verif1, codigoslibros.verif2,codigoslibros.verif3,codigoslibros.verif4,codigoslibros.verif5
                     FROM codigoslibros, libro,  libros_series ls
             
             
@@ -658,7 +657,7 @@ class VerificacionController extends Controller
 
 
                 $code =  $codigosDelLibro[$contador17]->codigo;
-                $buscarVerificacion = DB::select("SELECT verif1,verif2,verif3,verif4,verif5,verif6,verif7,verif8,verif9,verif10 ,idusuario FROM codigoslibros WHERE codigo = '$code'");
+                $buscarVerificacion = DB::select("SELECT verif1,verif2,verif3,verif4,verif5,idusuario FROM codigoslibros WHERE codigo = '$code'");
                  
                 $datoVerificacion =  $buscarVerificacion[0]->$columnaVerificacion;
         
@@ -777,7 +776,7 @@ class VerificacionController extends Controller
 
 
                     $code =  $codigosDelLibro[$contador17]->codigo;
-                    $buscarVerificacion = DB::select("SELECT verif1,verif2,verif3,verif4,verif5,verif6,verif7,verif8,verif9,verif10 ,idusuario FROM codigoslibros WHERE codigo = '$code'");
+                    $buscarVerificacion = DB::select("SELECT verif1,verif2,verif3,verif4,verif5,idusuario FROM codigoslibros WHERE codigo = '$code'");
                     
                     $datoVerificacion =  $buscarVerificacion[0]->$columnaVerificacion;
                     $VerificacionUsuario = $buscarVerificacion[0]->idusuario;

@@ -20,6 +20,79 @@ class _14ProductoController extends Controller {
         return $query;
     }
 
+    public function Mover_Stock_SoloTxt_Todo_A_DepositoCALMED() {
+        // 1. Obtener productos antes del cambio
+        $productosAntes = DB::table('1_4_cal_producto')
+            ->where('gru_pro_codigo', 1)
+            ->get();
+        // 2. Hacer el UPDATE masivo
+        $actualizados = DB::update("UPDATE `1_4_cal_producto` SET
+            pro_depositoCalmed = pro_depositoCalmed + pro_stock + pro_stockCalmed + pro_deposito,
+            pro_stock = 0,
+            pro_stockCalmed = 0,
+            pro_deposito = 0
+            WHERE gru_pro_codigo = 1");
+        // 3. Obtener productos después del cambio
+        $productosDespues = DB::table('1_4_cal_producto')
+            ->where('gru_pro_codigo', 1)
+            ->get()
+            ->keyBy('pro_codigo'); // Para buscar por código luego
+        // 4. Comparar y registrar historial solo si hay cambios
+        $HistoricoStock = [];
+        foreach ($productosAntes as $producto) {
+            $codigo = $producto->pro_codigo;
+            $old_values = [
+                'pro_codigo' => $codigo,
+                'pro_reservar' => $producto->pro_reservar,
+                'pro_stock' => $producto->pro_stock,
+                'pro_stockCalmed' => $producto->pro_stockCalmed,
+                'pro_deposito' => $producto->pro_deposito,
+                'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+            ];
+            $nuevo = $productosDespues[$codigo];
+            $new_values = [
+                'pro_codigo' => $codigo,
+                'pro_reservar' => $nuevo->pro_reservar,
+                'pro_stock' => $nuevo->pro_stock,
+                'pro_stockCalmed' => $nuevo->pro_stockCalmed,
+                'pro_deposito' => $nuevo->pro_deposito,
+                'pro_depositoCalmed' => $nuevo->pro_depositoCalmed,
+            ];
+            $cambios = false;
+            foreach (['pro_reservar', 'pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed'] as $campo) {
+                if ($old_values[$campo] != $new_values[$campo]) {
+                    $cambios = true;
+                    break;
+                }
+            }
+            if ($cambios) {
+                $HistoricoStock[$codigo] = [
+                    'pro_codigo' => $codigo,
+                    'psh_old_values' => json_encode($old_values),
+                    'psh_new_values' => json_encode($new_values),
+                ];
+            }
+        }
+        if (!empty($HistoricoStock)) {
+            $query = DB::SELECT("SELECT * FROM usuario u
+            WHERE u.name_usuario = 'sadmin'
+            ");
+            $registroHistorial = [
+                'psh_old_values' => json_encode(array_column($HistoricoStock, 'psh_old_values', 'pro_codigo')),
+                'psh_new_values' => json_encode(array_column($HistoricoStock, 'psh_new_values', 'pro_codigo')),
+                'psh_tipo' => 8,
+                'user_created' => $query[0]->idusuario,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            _14ProductoStockHistorico::insert($registroHistorial);
+        }
+        return response()->json([
+            'mensaje' => "$actualizados productos actualizados correctamente en Depósito CALMED",
+            'cantidad' => $actualizados
+        ]);
+    }
+
     public function GetProductoxcodynombre(Request $request) {
         $query = DB:: SELECT("SELECT pro_codigo, pro_nombre,pro_stock,pro_deposito,pro_stockCalmed,pro_depositoCalmed,id_perseo_prolipa,id_perseo_calmed,id_perseo_prolipa_produccion,id_perseo_calmed_produccion,temporal FROM 1_4_cal_producto
         WHERE pro_codigo LIKE '%$request->busquedacodnombre%' || pro_nombre LIKE '%$request->busquedacodnombre%'
@@ -879,36 +952,36 @@ class _14ProductoController extends Controller {
     public function GetProductosSoloStocks() {
         // Consulta original
         $productos = DB::select("
-            SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock, 
+            SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock,
                    pro.pro_stockCalmed, pro.pro_deposito, pro.pro_depositoCalmed, pro.gru_pro_codigo
             FROM libros_series ls
             INNER JOIN 1_4_cal_producto pro ON ls.codigo_liquidacion = pro.pro_codigo
-            WHERE pro.ifcombo != 1 
+            WHERE pro.ifcombo != 1
             AND (pro.gru_pro_codigo = 1)
             ORDER BY pro.pro_codigo ASC;
         ");
-    
+
         // Crear una nueva lista con los códigos modificados
         $productosConG = [];
         foreach ($productos as $producto) {
             $nuevoCodigo = 'G' . $producto->pro_codigo;
-    
+
             // Verificar si el producto con el nuevo código existe en la tabla
             $productoConG = DB::selectOne("
-                SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock, 
+                SELECT pro.pro_codigo, pro.pro_nombre, pro.pro_reservar, pro.pro_stock,
                        pro.pro_stockCalmed, pro.pro_deposito, pro.pro_depositoCalmed, pro.gru_pro_codigo
                 FROM 1_4_cal_producto pro
                 WHERE pro.pro_codigo = ?
             ", [$nuevoCodigo]);
-    
+
             if ($productoConG) {
                 $productosConG[] = $productoConG;
             }
         }
-    
+
         // Combinar los productos originales con los productos encontrados con 'G'
         $resultadoFinal = array_merge($productos, $productosConG);
-    
+
         return response()->json($resultadoFinal);
     }
 
@@ -1070,8 +1143,8 @@ class _14ProductoController extends Controller {
             //Proceso para crear movimiento combo no operativo
             $nombre_movimiento_combo = '';
             $id_tipo_documento = 18;
-            $Tipo_Documento = DB::SELECT("SELECT LPAD(CAST(ftd.tdo_secuencial_calmed + 1 AS UNSIGNED), 
-            (SELECT MAX(CHAR_LENGTH(tdo_secuencial_calmed)) FROM f_tipo_documento), '0') AS tdo_secuencial_calmed,ftd.tdo_letra 
+            $Tipo_Documento = DB::SELECT("SELECT LPAD(CAST(ftd.tdo_secuencial_calmed + 1 AS UNSIGNED),
+            (SELECT MAX(CHAR_LENGTH(tdo_secuencial_calmed)) FROM f_tipo_documento), '0') AS tdo_secuencial_calmed,ftd.tdo_letra
             FROM f_tipo_documento ftd WHERE ftd.tdo_id = $id_tipo_documento");
             if (empty($Tipo_Documento)) {
                 throw new \Exception("Tipo de documento no encontrado.");
@@ -1245,7 +1318,7 @@ class _14ProductoController extends Controller {
                     // Verifica que el campo exista
                     // if (isset($diferencia[$campo])) {
                     // Verifica que el campo exista y si es diferente de cero
-                    if (isset($diferencia[$campo]) && $diferencia[$campo] != 0) { 
+                    if (isset($diferencia[$campo]) && $diferencia[$campo] != 0) {
                         // Registrar para pro_codigo
                         f_movimientos_detalle_producto::create([
                             'fmp_id'                 => $nombre_movimiento_combo,
@@ -1282,7 +1355,7 @@ class _14ProductoController extends Controller {
         } catch (\Exception $e) {
             DB::rollBack(); // Rollback en caso de error
             // Re-lanzar la excepción para que el controlador principal lo maneje
-            throw $e; 
+            throw $e;
         }
     }
     //SEGUNDO A APLICAR

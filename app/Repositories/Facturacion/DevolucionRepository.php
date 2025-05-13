@@ -43,7 +43,6 @@ class  DevolucionRepository extends BaseRepository
                 // Si no se proporciona un documento específico, filtrar por el tipo de documento
                 $query->whereIn('dv.idtipodoc', $idtipodoc);
             })
-            ->whereNull('dv.doc_intercambio')
             ->where(function ($query) {
                 // Validamos que no se cumpla la condición: idtipodoc es 3 o 4 y doc_intercambio no es nulo
                 $query->whereNotIn('dv.idtipodoc', [3, 4])  // Excluye idtipodoc 3 o 4
