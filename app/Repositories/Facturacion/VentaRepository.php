@@ -15,8 +15,13 @@ class  VentaRepository extends BaseRepository
         $this->pedidosRepository  = $pedidosRepository;
     }
 
-    public function getVentasTipoVenta($periodo, $tipoVenta){
-        $query = DB::select("SELECT
+    public function getVentasTipoVenta($periodo, $tipoVenta)
+    {
+        // Contar cuántos elementos tiene el array para generar los "?" correctos
+        $placeholders = implode(',', array_fill(0, count($tipoVenta), '?'));
+
+        $query = DB::select("
+            SELECT
                 fdv.pro_codigo AS codigo_liquidacion,
                 p.pro_nombre AS nombrelibro,
                 SUM(fdv.det_ven_cantidad - fdv.det_ven_dev) AS valor
@@ -25,24 +30,36 @@ class  VentaRepository extends BaseRepository
                 AND fv.id_empresa = fdv.id_empresa
             INNER JOIN 1_4_cal_producto p ON fdv.pro_codigo = p.pro_codigo
             WHERE fv.periodo_id = ?
-                AND fv.tip_ven_codigo = ?
+                AND fv.tip_ven_codigo IN ($placeholders)
                 AND fv.idtipodoc IN (1, 3, 4)
                 AND fv.est_ven_codigo <> 3
             GROUP BY fdv.pro_codigo, p.pro_nombre, fdv.det_ven_valor_u
-        ", [$periodo, $tipoVenta]);
+        ", array_merge([$periodo], $tipoVenta));
+
         return $query;
     }
-    public function getPedidosTipoVenta($periodo, $tipoVenta){
-        $getPedidos = DB::SELECT("SELECT  p.*
-        FROM pedidos p
-        WHERE p.id_periodo = ?
-        AND p.estado = '1'
-        AND p.tipo = '0'
-        AND p.contrato_generado IS NOT NULL
-        AND p.tipo_venta = ?
-        ",[$periodo, $tipoVenta]);
+
+    public function getPedidosTipoVenta($periodo, $tipoVenta)
+    {
+        // Crear los placeholders "?, ?, ?" según el número de elementos en el array
+        $placeholders = implode(',', array_fill(0, count($tipoVenta), '?'));
+
+        // Unimos periodo + tipoVenta para pasar todos los parámetros
+        $params = array_merge([$periodo], $tipoVenta);
+
+        $getPedidos = DB::select("
+            SELECT p.*
+            FROM pedidos p
+            WHERE p.id_periodo = ?
+            AND p.estado = '1'
+            AND p.tipo = '0'
+            AND p.contrato_generado IS NOT NULL
+            AND p.tipo_venta IN ($placeholders)
+        ", $params);
+
         return $getPedidos;
     }
+
     public function getProductosPerseo($periodo_id, $empresa, $tipoInstitucion)
     {
         $getInstituciones = $this->proformaRepository->listadoInstitucionesXVenta($periodo_id, $empresa, $tipoInstitucion);
@@ -101,6 +118,7 @@ class  VentaRepository extends BaseRepository
     }
 
     public function getProductosPedidos($periodo, $tipoVenta){
+
         $getPedidos = $this->getPedidosTipoVenta($periodo, $tipoVenta);
         $arrayDetalles = [];
 
@@ -145,7 +163,7 @@ class  VentaRepository extends BaseRepository
                 DB::raw('SUM(pvn.pvn_cantidad) as cantidad'),
                 DB::raw('COUNT(DISTINCT p.id_pedido) as pedidos')
             )
-            ->where('p.tipo_venta', $tipoVenta)
+            ->whereIn('p.tipo_venta', $tipoVenta)
             ->where('p.id_periodo', $periodo)
             ->where('pvn.pvn_tipo', 0)
             ->where('l.Estado_idEstado', 1)

@@ -2910,7 +2910,16 @@ class VentasController extends Controller
             $arrayDespachoBodega = [];
             // tipoInstitucion: 0 => institución venta directa; 1 => venta lista
             $tipoInstitucion = $request->tipoVenta == 1 ? 0 : 1;
-
+            $setTipoVenta = [];
+            if($tipoVenta == 1){
+                $setTipoVenta = [1];
+            }
+            if($tipoVenta == 2){
+                $setTipoVenta = [2];
+            }
+            if($tipoVenta == 3){
+                $setTipoVenta = [1,2];
+            }
 
             // Consulta despachados bodega directa
             if($tipoVenta == 1){
@@ -2932,8 +2941,7 @@ class VentasController extends Controller
             });
 
             // Consulta de Documentos Venta
-            $arrayDocumentosVenta = $this->ventasRepository->getVentasTipoVenta($request->periodo, $request->tipoVenta);
-
+            $arrayDocumentosVenta = $this->ventasRepository->getVentasTipoVenta($request->periodo, $setTipoVenta);
             // Convertir a colección y asegurar formato
             $arrayDocumentosVenta = collect($arrayDocumentosVenta)->map(function ($item) {
                 // Convertir a array asociativo si es objeto
@@ -2944,10 +2952,10 @@ class VentasController extends Controller
             });
             if($nuevo == 0){
                 // Obtener pedidos con contratos
-                $arrayPedidos = $this->ventasRepository->getProductosPedidos($periodo_id, $tipoVenta);
+                $arrayPedidos = $this->ventasRepository->getProductosPedidos($periodo_id, $setTipoVenta);
             }
             if($nuevo == 1){
-                $arrayPedidos = $this->ventasRepository->getProdutosPedidosNuevo($periodo_id, $tipoVenta);
+                $arrayPedidos = $this->ventasRepository->getProdutosPedidosNuevo($periodo_id, $setTipoVenta);
             }
             // Convertir a colección y asegurar formato
             $arrayPedidos = collect($arrayPedidos)->map(function ($item) {
