@@ -15,6 +15,7 @@ class AreaController extends Controller
      */
     public function index()
     {
+        
         // return csrf_token();
         $area = DB::SELECT("SELECT a.*, t.nombretipoarea
          FROM area a

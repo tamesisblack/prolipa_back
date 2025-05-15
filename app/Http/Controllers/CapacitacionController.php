@@ -275,7 +275,7 @@ class CapacitacionController extends Controller
     public function getCapacitadores()
     {
         $query = DB::SELECT("SELECT u.idusuario,
-        CONCAT(u.nombres, ' ',u.apellidos) AS capacitador
+        CONCAT(u.nombres, ' ',u.apellidos, ' - ', u.cedula) AS capacitador
         FROM usuario u
        WHERE u.capacitador = '1'
        AND u.estado_idEstado = '1'
