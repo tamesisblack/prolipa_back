@@ -7,6 +7,8 @@ use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\DB;
 use App\Models\CodigosLibros;
 use App\Models\HistoricoCodigos;
+use App\Models\Libro;
+use App\Models\LibroSerie;
 use DataTables;
 Use Exception;
 use Carbon\Carbon;
@@ -160,31 +162,80 @@ class CodigosLibrosController extends Controller
         //
     }
 
-    //CODIGO COMENTADO, SOLICITADO POR FERNANDO,
-    // public function codigos_libros_estudiante($id){
-    //     $libros = DB::SELECT("SELECT l. *, c.codigo FROM libro l, codigoslibros c WHERE l.idlibro = c.libro_idlibro AND c.idusuario = $id");
-    //     return $libros;
-    // }
-
     public function codigos_libros_estudiante($id,$institucion,$periodo,$region,$grupo){
         $auxlibros = [];
         $nivel = 0;
-        $auxlibros = $codigos_libros = DB::SELECT("SELECT libro.*,asignatura.*,
-        codigoslibros.serie as serieCodigo, codigoslibros.anio,codigoslibros.updated_at as fechaUpdate,
-        codigoslibros.codigo
-         from codigoslibros
-         join libro on libro.idlibro = codigoslibros.libro_idlibro
-         join asignatura on asignatura.idasignatura = libro.asignatura_idasignatura
-         WHERE codigoslibros.id_periodo = '$periodo'
-         AND codigoslibros.idusuario = ?
-        AND (
-			codigoslibros.estado_liquidacion <> 3
-			OR codigoslibros.quitar_de_reporte = '1'
-			)
-         AND codigoslibros.estado <> 2
-         ",[$id]);
-        if(!empty($codigos_libros)){
-            foreach ($codigos_libros as $key => $value) {
+        // $auxlibros = $codigos_libros = DB::SELECT("SELECT libro.*,asignatura.*,
+        // codigoslibros.serie as serieCodigo, codigoslibros.anio,codigoslibros.updated_at as fechaUpdate, codigoslibros.plus,
+        // codigoslibros.codigo
+        //  from codigoslibros
+        //  join libro on libro.idlibro = codigoslibros.libro_idlibro
+        //  join asignatura on asignatura.idasignatura = libro.asignatura_idasignatura
+        //  WHERE codigoslibros.id_periodo = '$periodo'
+        //  AND codigoslibros.idusuario = ?
+        // AND (
+		// 	codigoslibros.estado_liquidacion <> 3
+		// 	OR codigoslibros.quitar_de_reporte = '1'
+		// 	)
+        //  AND codigoslibros.estado <> 2
+        //  ",[$id]);
+        //  return $auxlibros;
+
+        $auxlibros = DB::SELECT("
+            -- Casos donde plus = 1
+            SELECT
+                lib_plus.*,
+                a_plus.*,
+                codigoslibros.serie AS serieCodigo,
+                codigoslibros.anio,
+                codigoslibros.updated_at AS fechaUpdate,
+                codigoslibros.plus,
+                codigoslibros.codigo
+            FROM codigoslibros
+            JOIN libro ON libro.idlibro = codigoslibros.libro_idlibro
+            JOIN asignatura ON asignatura.idasignatura = libro.asignatura_idasignatura
+            LEFT JOIN libros_series ls ON ls.idLibro = libro.idlibro
+            LEFT JOIN libros_series l_plus ON l_plus.idLibro = ls.id_libro_plus
+            LEFT JOIN libro lib_plus ON ls.id_libro_plus = lib_plus.idlibro
+            LEFT JOIN asignatura a_plus ON lib_plus.asignatura_idasignatura = a_plus.idasignatura
+            WHERE codigoslibros.id_periodo = '$periodo'
+            AND codigoslibros.idusuario = '$id'
+            AND (
+                    codigoslibros.estado_liquidacion <> 3
+                    OR codigoslibros.quitar_de_reporte = '1'
+                )
+            AND codigoslibros.estado <> 2
+            AND codigoslibros.plus = 1
+
+            UNION ALL
+
+            -- Casos donde plus ≠ 1
+            SELECT
+                libro.*,
+                asignatura.*,
+                codigoslibros.serie AS serieCodigo,
+                codigoslibros.anio,
+                codigoslibros.updated_at AS fechaUpdate,
+                codigoslibros.plus,
+                codigoslibros.codigo
+            FROM codigoslibros
+            JOIN libro ON libro.idlibro = codigoslibros.libro_idlibro
+            JOIN asignatura ON asignatura.idasignatura = libro.asignatura_idasignatura
+            LEFT JOIN libros_series ls ON ls.idLibro = libro.idlibro
+            LEFT JOIN libros_series l_plus ON l_plus.idLibro = ls.id_libro_plus
+            LEFT JOIN libro lib_plus ON ls.id_libro_plus = lib_plus.idlibro
+            LEFT JOIN asignatura a_plus ON lib_plus.asignatura_idasignatura = a_plus.idasignatura
+            WHERE codigoslibros.id_periodo = '$periodo'
+            AND codigoslibros.idusuario = '$id'
+            AND (
+                    codigoslibros.estado_liquidacion <> 3
+                    OR codigoslibros.quitar_de_reporte = '1'
+                )
+            AND codigoslibros.estado <> 2
+            AND (codigoslibros.plus IS NULL OR codigoslibros.plus <> 1);
+        ");
+        if(!empty($auxlibros)){
+            foreach ($auxlibros as $key => $value) {
                 $nivel = $value->nivel_idnivel;
                 $free = DB::SELECT("SELECT l.*, a.*,s.nombre_serie as serieCodigo,
                 ls.year as anio, ls.updated_at  as fechaUpdate
@@ -236,7 +287,7 @@ class CodigosLibrosController extends Controller
                 $mostratCode  = $item->codigo;
             }
             if($grupo == 10){
-                $datos[$key] =[
+                $datos[$key] = (Object)[
                     "idlibro"                   => $item->idlibro,
                     "nombrelibro"               => $item->nombrelibro,
                     "descripcionlibro"          => $item->descripcionlibro,
@@ -266,9 +317,11 @@ class CodigosLibrosController extends Controller
                     "estado"                    => $item->estado,
                     "created_at"                => $item->created_at,
                     "updated_at"                => $item->updated_at,
+                    "plus"                      => $item->plus ?? 0,
+                    "id_folleto"                => $item->id_folleto ?? null,
                 ];
             }else{
-                $datos[$key] =[
+                $datos[$key] =(Object)[
                     "idlibro"                   => $item->idlibro,
                     "nombrelibro"               => $item->nombrelibro,
                     "descripcionlibro"          => $item->descripcionlibro,
@@ -296,18 +349,56 @@ class CodigosLibrosController extends Controller
                     "nivel_idnivel"             => $item->nivel_idnivel,
                     "tipo_asignatura"           => $item->tipo_asignatura,
                     "estado"                    => $item->estado,
+                    "plus"                      => $item->plus ?? 0,
+                    "id_folleto"                => $item->id_folleto ?? null,
                     // "created_at"                => $item->created_at,
                     // "updated_at"                => $item->updated_at,
                 ];
             }
         }
-        $data=[
-            'libros'=>$auxlibrosf = array_values(array_unique($datos, SORT_REGULAR)),
-            // 'libros'=>$auxlibrosf = array_unique($auxlibros, SORT_REGULAR),
-            'nivel'=>$nivel,
-            'institucion'=>$institucion,
-         ];
+        $data = [];
+        $auxlibrosf = $datos; // libros iniciales
+
+        foreach ($auxlibrosf as $item) {
+            $idFolleto = $item->id_folleto ?? null;
+
+            if ($idFolleto) {
+                $folletoResult = DB::SELECT("
+                    SELECT l.*, a.*, s.nombre_serie AS serie
+                    FROM libro l
+                    LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+                    LEFT JOIN asignatura a ON a.idasignatura = l.asignatura_idasignatura
+                    LEFT JOIN series s ON s.id_serie = ls.id_serie
+                    WHERE l.idlibro = ?
+                ", [$idFolleto]);
+
+                if (!empty($folletoResult)) {
+                    $auxlibrosf[] = $folletoResult[0];
+                }
+            }
+        }
+
+        // ✅ Eliminar duplicados por idlibro
+        $librosUnicos = [];
+        foreach ($auxlibrosf as $libro) {
+            $librosUnicos[$libro->idlibro] = $libro; // usa el idlibro como clave
+        }
+        $auxlibrosf = array_values($librosUnicos); // reindexar
+
+        // ✅ Ordenar alfabéticamente por nombrelibro
+        usort($auxlibrosf, function($a, $b) {
+            return strcmp($a->nombrelibro, $b->nombrelibro);
+        });
+
+        $data = [
+            'libros' => $auxlibrosf,
+            'nivel' => $nivel,
+            'institucion' => $institucion,
+        ];
+
+
         return $data;
+
     }
 
     public function store(Request $request)

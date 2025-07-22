@@ -4,19 +4,21 @@ namespace App\Repositories\pedidos;
 use App\Models\Institucion;
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\PedidoConvenio;
+use App\Models\PedidoPagosDetalle;
 use App\Models\Pedidos;
 use App\Models\PedidosSolicitudesGerencia;
 use App\Repositories\BaseRepository;
+use App\Repositories\PedidosPagosRepository;
 use DB;
-use League\CommonMark\Block\Element\Document;
 
-use function Safe\json_encode;
 
 class  ConvenioRepository extends BaseRepository
 {
-    public function __construct(PedidoConvenio $convenioRepository)
+    protected $pagoRepository = null;
+    public function __construct(PedidoConvenio $convenioRepository ,PedidosPagosRepository $pagoRepository)
     {
         parent::__construct($convenioRepository);
+        $this->pagoRepository = $pagoRepository;
     }
     public function getConvenioInstitucion($institucion){
         $query = DB::SELECT("SELECT c.*, i.nombreInstitucion, p.periodoescolar as periodo
@@ -77,6 +79,37 @@ class  ConvenioRepository extends BaseRepository
             $hijoConvenio->forma_pago_id                = 1;
             $hijoConvenio->estado                       = 0;
             $hijoConvenio->save();
+            if($hijoConvenio){
+                // registrar un pago de detalle de pago
+                $nuevodocumento = PedidosDocumentosLiq::findOrFail($hijoConvenio->doc_codigo);
+                $doc_codigo     = $nuevodocumento->doc_codigo;
+                //ver si hay un pago
+                $validateExistsDetallePago = DB::SELECT("SELECT * FROM pedidos_pagos_detalles p
+                WHERE p.id_pago = '$doc_codigo'
+                LIMIT 1
+                ");
+                if(count($validateExistsDetallePago) > 0){
+                    $id = $validateExistsDetallePago[0]->id_pedido_pago_detalle;
+                }else{
+                    $id = 0;
+                }
+                $detalle = new PedidoPagosDetalle();
+
+                if($id == 0){
+                    $detalle                = new PedidoPagosDetalle();
+                    $detalle->id_pago       = $doc_codigo;
+                    $detalle->user_created  = null;
+                } else {
+                    $detalle                = PedidoPagosDetalle::findOrFail($id);
+                    return "Ya existe un detalle de pago";
+                }
+
+                // En ambos casos se actualizan estos campos si están presentes
+                $detalle->valor         = $valorConvenioHijo;
+                $detalle->descripcion   = 'Pago de Convenio';
+                $detalle->save();
+            }
+
         }
     }
     public function updatePedido($contrato,$anio,$idConvenio){

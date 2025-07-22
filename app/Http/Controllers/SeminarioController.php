@@ -8,6 +8,7 @@ use App\Models\SeminarioEncuesta;
 use App\Models\SeminarioHasUsuario;
 use App\Models\Seminarios;
 use Illuminate\Http\Request;
+use App\Repositories\pedidos\NotificacionRepository;
 // use DB;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
@@ -18,6 +19,12 @@ class SeminarioController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
+     public $NotificacionRepository;
+
+    public function __construct(NotificacionRepository $NotificacionRepository)
+    {
+        $this->NotificacionRepository   = $NotificacionRepository;
+    }
     public function index(Request $request)
     {
         //contar los webinars registrados asistentes
@@ -691,9 +698,16 @@ class SeminarioController extends Controller
            $capacitacion->asistencia_activa             = $request->asistencia_activa;
            $capacitacion->capacitador                   = $request->capacitador;
            $capacitacion->editor_id                     = $request->editor_id;
+           $capacitacion->notificado                    = $request->notificado;
            $capacitacion->save();
-           return $this->crearCapacitadores($request,$capacitacion);
+           $this->crearCapacitadores($request,$capacitacion);
            if($capacitacion){
+                $channel = 'capacitador.notificacionCapacitaciones';
+                $event = 'NewNotification';
+                $data = [
+                    'message' => 'Nueva notificación',
+                ];
+                $this->NotificacionRepository->notificacionVerificaciones($channel, $event, $data);
             return ["status" => "1","message" => "Se actualizo correctamente"];
            }else{
             return ["status" => "0","message" => "No se pudo actualizar"];

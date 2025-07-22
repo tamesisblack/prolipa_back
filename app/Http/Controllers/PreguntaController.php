@@ -176,7 +176,7 @@ class PreguntaController extends Controller
                 AND p.id_tema = te.id
                 AND p.estado = 1
                 AND u.idusuario = p.idusuario
-                AND u.id_group = '1'
+                AND p.grupo_user = '1'
                 ORDER BY p.descripcion
                 DESC
             ");
@@ -297,7 +297,7 @@ class PreguntaController extends Controller
                 AND p.id_tema = te.id
                 -- AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND (u.id_group = 1 OR p.idusuario = '$request->usuario')
+                AND (p.grupo_user = 1 OR p.idusuario = '$request->usuario')
                 ORDER BY p.id DESC
             ");
             break;
@@ -313,7 +313,7 @@ class PreguntaController extends Controller
                 AND p.id_tema = te.id
                 -- AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 ORDER BY p.id DESC
             ");
             break;
@@ -635,7 +635,7 @@ class PreguntaController extends Controller
                 AND te.unidad <= '$max'
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 AND t.id_tipo_pregunta = $value->id
                 AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
                 GROUP BY p.id_tipo_pregunta");
@@ -661,7 +661,7 @@ class PreguntaController extends Controller
                 AND te.unidad <= '$max'
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 AND t.id_tipo_pregunta = $value->id
                 GROUP BY p.id_tipo_pregunta");
                 if(count($tipos) == 0){
@@ -671,81 +671,9 @@ class PreguntaController extends Controller
                 }
             }
             return $getTipos;
-
-            // $tipos = DB::SELECT("SELECT t.id_tipo_pregunta as id, t.nombre_tipo as label,
-            // COUNT(p.id_tipo_pregunta) AS cantidad, t.puntaje
-            // FROM tipos_preguntas t, preguntas p, temas te,usuario u
-            // WHERE t.id_tipo_pregunta = p.id_tipo_pregunta
-            // AND p.id_tema = te.id
-            // AND te.id_asignatura = '$asignatura'
-            // AND te.unidad >= '$min'
-            // AND te.unidad <= '$max'
-            // AND p.estado = 1
-            // AND p.idusuario = u.idusuario
-            // AND u.id_group = 1
-            // GROUP BY p.id_tipo_pregunta");
-            // return $tipos;
          }
-        // $tipos = DB::SELECT("CALL tipospreguntas_cantidad($asignatura, $min, $max)");
 
     }
-
-    // public function tipospreguntas($asignatura, $unidades,$grupo,$institucion)
-    // {
-    //     $unidad_v = explode(",", $unidades);
-    //     sort($unidad_v, SORT_NUMERIC);
-    //     $max = $unidad_v[count($unidad_v)-1];
-    //     $min = $unidad_v[0];
-
-    //     if( !isset($max) ){
-    //         $max = $min;
-    //     }
-
-    //     $id_group                       = $grupo;
-    //     $institucion_id                 = $institucion;
-    //     $evaluacion_personalizada       = 0;
-    //     //si es profesor
-    //     if($id_group == 6){
-    //         $getInstitucion = Institucion::findOrfail($institucion_id);
-    //         $evaluacion_personalizada   = $getInstitucion->evaluacion_personalizada;
-    //     }
-    //     //si hay evaluacion personalizada esta activada en la institucion
-    //     if($evaluacion_personalizada == 1){
-    //         $tipos = DB::SELECT("SELECT t.id_tipo_pregunta as id, t.nombre_tipo as label,
-    //         COUNT(p.id_tipo_pregunta) AS cantidad, t.puntaje
-    //         FROM tipos_preguntas t, preguntas p, temas te,usuario u
-    //         WHERE t.id_tipo_pregunta = p.id_tipo_pregunta
-    //         AND p.id_tema = te.id
-    //         AND te.id_asignatura = '$asignatura'
-    //         AND te.unidad >= '$min'
-    //         AND te.unidad <= '$max'
-    //         AND p.estado = 1
-    //         AND p.idusuario = u.idusuario
-    //         AND u.id_group = 1
-    //         AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
-    //         GROUP BY p.id_tipo_pregunta");
-    //         return $tipos;
-    //     }
-    //     else
-    //     {
-    //         $tipos = DB::SELECT("SELECT t.id_tipo_pregunta as id, t.nombre_tipo as label,
-    //         COUNT(p.id_tipo_pregunta) AS cantidad, t.puntaje
-    //         FROM tipos_preguntas t, preguntas p, temas te,usuario u
-    //         WHERE t.id_tipo_pregunta = p.id_tipo_pregunta
-    //         AND p.id_tema = te.id
-    //         AND te.id_asignatura = '$asignatura'
-    //         AND te.unidad >= '$min'
-    //         AND te.unidad <= '$max'
-    //         AND p.estado = 1
-    //         AND p.idusuario = u.idusuario
-    //         AND u.id_group = 1
-    //         GROUP BY p.id_tipo_pregunta");
-    //         return $tipos;
-    //      }
-
-    //     // $tipos = DB::SELECT("CALL tipospreguntas_cantidad($asignatura, $min, $max)");
-
-    // }
 
     public function obtenerPreguntaAleatoria($tipo, $evaluacion, $unidad, $i, $intentos)
     {
@@ -759,8 +687,7 @@ class PreguntaController extends Controller
         AND t.unidad = ?
         AND p.id NOT IN (SELECT pr.id_pregunta FROM pre_evas pr WHERE pr.id_evaluacion = $evaluacion AND pr.grupo = $i)
         AND p.idusuario = u.idusuario
-        AND u.id_group = 1
-        -- AND u.institucion_idInstitucion = 66
+        AND p.grupo_user = 1
         ORDER BY RAND() LIMIT 1",[$tipo, $evaluacion, $unidad]);
 
         $this->guardarPreguntaRand($pregunta, $tipo, $evaluacion, $unidad, $i, $intentos);

@@ -45,6 +45,52 @@ class  PedidosRepository extends BaseRepository
         }
         return $precio;
     }
+    public function getLibroPedidosVal($plan_lector,$id_periodo,$id_serie,$id_area,$year){
+        if($plan_lector > 0 ){
+            $getPlanlector = DB::SELECT("SELECT l.nombrelibro,l.idlibro,l.asignatura_idasignatura,
+            (
+                SELECT f.pvp AS precio
+                FROM pedidos_formato f
+                WHERE f.id_serie = '6'
+                AND f.id_area = '69'
+                AND f.id_libro = '$plan_lector'
+                AND f.id_periodo = '$id_periodo'
+            )as precio, ls.codigo_liquidacion,ls.version,ls.year
+            FROM libro l
+            left join libros_series ls  on ls.idLibro = l.idlibro
+            WHERE l.idlibro = '$plan_lector'
+            ");
+            $valores = $getPlanlector;
+        }else{
+            $getLibros = DB::SELECT("SELECT ls.*, l.nombrelibro, l.idlibro,l.asignatura_idasignatura,
+            (
+                SELECT f.pvp AS precio
+                FROM pedidos_formato f
+                WHERE f.id_serie = ls.id_serie
+                AND f.id_area = a.area_idarea
+                AND f.id_periodo = '$id_periodo'
+            )as precio
+            FROM libros_series ls
+            LEFT JOIN libro l ON ls.idLibro = l.idlibro
+            LEFT JOIN asignatura a ON l.asignatura_idasignatura = a.idasignatura
+            WHERE ls.id_serie = '$id_serie'
+            AND a.area_idarea  = '$id_area'
+            AND l.Estado_idEstado = '1'
+            AND a.estado = '1'
+            AND ls.year = '$year'
+            LIMIT 1
+            ");
+            $valores = $getLibros;
+        }
+        $datos[0] = (Object)[
+            "idlibro"           => $valores[0]->idlibro,
+            "nombrelibro"       => $valores[0]->nombrelibro,
+            "precio"            => $valores[0]->precio,
+            "idasignatura"      => $valores[0]->asignatura_idasignatura,
+            "codigo_liquidacion"=> $valores[0]->codigo_liquidacion,
+        ];
+        return $datos;
+    }
     public function getLibrosNormalesFormato($periodo){
         $series = DB::SELECT("SELECT * FROM series s WHERE s.id_serie != 6"); // omitir plan lector
         $datos  = [];
@@ -296,7 +342,7 @@ class  PedidosRepository extends BaseRepository
         ls.codigo_liquidacion as codigo
         FROM libro l
         INNER JOIN libros_series ls ON l.idLibro = ls.idLibro
-        LEFT JOIN pedidos_formato_new p ON l.idlibro = p.idlibro 
+        LEFT JOIN pedidos_formato_new p ON l.idlibro = p.idlibro
         AND p.idperiodoescolar = $periodo
         WHERE ls.id_serie = 6
         AND p.pfn_estado = 1
@@ -306,11 +352,11 @@ class  PedidosRepository extends BaseRepository
     }
 
     public function obtenerLibroxPedidoTodo_new($pedido){
-        $val_pedido = DB::SELECT("SELECT DISTINCT pv.pvn_id AS id, pv.id_pedido, 
-        pv.pvn_cantidad AS valor, 
-        CASE 
-            WHEN s.id_serie = 6 THEN l.idlibro 
-            ELSE ar.idarea 
+        $val_pedido = DB::SELECT("SELECT DISTINCT pv.pvn_id AS id, pv.id_pedido,
+        pv.pvn_cantidad AS valor,
+        CASE
+            WHEN s.id_serie = 6 THEN l.idlibro
+            ELSE ar.idarea
         END as id_area,
         s.id_serie,
         CASE
@@ -318,16 +364,16 @@ class  PedidosRepository extends BaseRepository
             ELSE ls.year
         END as year,
         ls.year as anio,
-        CASE 
+        CASE
             WHEN s.id_serie = 6 THEN l.idlibro
-            ELSE 0 
+            ELSE 0
         END as plan_lector,
         pv.pvn_tipo AS alcance, pv.created_at, pv.updated_at,
         CASE
             WHEN s.id_serie = 6 THEN NULL
             ELSE CONCAT(s.nombre_serie, ' ', ar.nombrearea)
         END as serieArea,
-        l.idlibro, l.nombrelibro, p.descuento, p.id_periodo, p.anticipo, p.comision, s.nombre_serie, 
+        l.idlibro, l.nombrelibro, p.descuento, p.id_periodo, p.anticipo, p.comision, s.nombre_serie,
         ls.version, asi.idasignatura, ls.codigo_liquidacion, l.descripcionlibro
         FROM pedidos_val_area_new pv
         LEFT JOIN libro l ON  pv.idlibro = l.idlibro
@@ -468,21 +514,21 @@ class  PedidosRepository extends BaseRepository
         }
         return $result;
     }
-    
+
     public function getPrecioXLibro_new($id_serie, $libro_idlibro, $area_idarea, $periodo, $year) {
         $precio = 0;
-    
+
         // Obtén el valor del campo `pfn_pvp`
         $pfn_pvp_result = DB::table('pedidos_formato_new')
             ->where('idperiodoescolar', $periodo)
             ->where('idlibro', $libro_idlibro)
             ->value('pfn_pvp');
-    
+
         // Verifica si se obtuvo un resultado
         if (!is_null($pfn_pvp_result)) {
             $precio = (float) $pfn_pvp_result;
         }
-    
+
         return $precio;
     }
     //FIN METODO JEYSON

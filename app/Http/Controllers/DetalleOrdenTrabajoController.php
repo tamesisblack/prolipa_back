@@ -12,24 +12,34 @@ class DetalleOrdenTrabajoController extends Controller
 {
     //
      public function Get_Ordendetalle(Request $request){
-        $query = DB::SELECT("SELECT * FROM  1_1_detalle_orden_trabajo as dot
-        inner join 1_4_cal_producto as p on dot.pro_codigo=p.pro_codigo
-        where or_codigo='$request->or_codigo'
-        ORDER BY dot.pro_codigo ASC");
-        
-             return $query;
+        $query = DB::SELECT("
+            SELECT *
+            FROM 1_1_detalle_orden_trabajo AS dot
+            INNER JOIN 1_4_cal_producto AS p ON dot.pro_codigo = p.pro_codigo
+            WHERE dot.or_codigo = ?
+            ORDER BY
+                -- Extraer base del código (quita G si lo tiene)
+                CASE
+                    WHEN p.pro_codigo LIKE 'G%' THEN SUBSTRING(p.pro_codigo, 2)
+                    ELSE p.pro_codigo
+                END ASC,
+                -- Mostrar primero grupo 1, luego grupo 2
+                p.gru_pro_codigo ASC
+        ", [$request->or_codigo]);
+
+        return $query;
     }
     public function Get_empresaOrden(Request $request){
         $query = DB::SELECT("SELECT e.* FROM 1_1_orden_trabajo ot
         INNER JOIN empresas e ON e.id = ot.or_empresa
-        where ot.or_codigo ='$request->or_codigo'");        
+        where ot.or_codigo ='$request->or_codigo'");
              return $query;
     }
     public function get_detalleOrdenTrabajo(Request $request){
         $query = DB::SELECT("SELECT * FROM  1_1_detalle_orden_trabajo as dot
         inner join 1_4_cal_producto as p on dot.pro_codigo=p.pro_codigo
         where or_codigo='$request->or_codigo'");
-        
+
              return $query;
     }
     public function get_detalleOrdenTrabajoCantidades(Request $request){
@@ -42,7 +52,7 @@ class DetalleOrdenTrabajoController extends Controller
         AND dcd.com_codigo = cc.com_codigo
         AND dot.or_codigo = '$request->or_codigo'
         GROUP BY dot.or_codigo, p.pro_codigo;");
-        
+
              return $query;
     }
      public function PostOrdenDetalle_Registra(Request $request)
@@ -56,7 +66,7 @@ class DetalleOrdenTrabajoController extends Controller
         ini_set('max_execution_time', 6000000);
         $miarray=json_decode($request->data_detalleorden);
         foreach($miarray as $key => $item){
-            
+
                 DetalleOrdenTrabajo::create(array(
                 'or_codigo' => $request->or_codigo,
                 'pro_codigo' => $item->pro_codigo,
@@ -76,28 +86,28 @@ class DetalleOrdenTrabajoController extends Controller
     }
     public function PostOrdenDetalle_Editar(Request $request)
        {
-        
+
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         $miarray=json_decode($request->data_detalleorden);
         foreach($miarray as $key => $item){
-            
+
                 $orden = DetalleOrdenTrabajo::findOrFail($item->det_or_codigo);
                     $orden->det_or_cantidad = $item->det_or_cantidad;
                     $orden->det_or_posible_entrega = $item->det_or_posible_entrega;
                     $orden->det_or_observaciones = $item->det_or_observaciones;
-                    
-                    $orden->save();  
+
+                    $orden->save();
         }
-        if($orden){           
+        if($orden){
                         return $orden;
                     }else{
-                        return "No se pudo actualizar";       
+                        return "No se pudo actualizar";
                     }
-        
-    
 
-    
+
+
+
     }
      public function Eliminar_OrdenDetalle(Request $request)
     {
@@ -108,14 +118,14 @@ class DetalleOrdenTrabajoController extends Controller
                 return "El det_or_codigo no existe en la base de datos";
             }
 
-           
+
             $orden->delete();
 
             return $orden;
         } else {
             return "No está ingresando ningún det_or_codigo";
         }
-        
+
 
     }
 

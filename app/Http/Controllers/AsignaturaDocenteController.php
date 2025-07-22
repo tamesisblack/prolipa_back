@@ -227,4 +227,57 @@ class AsignaturaDocenteController extends Controller
         return $data;
 
     }
+    //INICIO METODOS JEYSON
+    public function asignar_asignatura_docentes_xarea_disponible(Request $request)
+    {
+        //INICIO VALIDACION PARA VERIFIAR SI EL AREA ESTA ACTIVA
+        $verificacion_antes_de_actualizar = DB::select("SELECT asi.*, ar.estado, ar.permiso_visible_asignacion_libros, ar.nombrearea
+            FROM asignatura asi
+            LEFT JOIN area ar ON asi.area_idarea = ar.idarea
+            WHERE asi.idasignatura = ?
+        ", [$request->asignatura_idasignatura]);
+
+        if (empty($verificacion_antes_de_actualizar)) {
+            return response()->json([
+                'status' => 0,
+                'mensaje' => 'Asignatura no encontrada o sin área asociada.'
+            ], 200);
+        }
+        $area = $verificacion_antes_de_actualizar[0];
+        if ($area->estado != 1 || $area->permiso_visible_asignacion_libros != 1) {
+            return response()->json([
+                'status' => 0,
+                'mensaje' => "El área '$area->nombrearea' se encuentra inactiva o sin permiso para asignación."
+            ], 200);
+        }
+        //FIN VALIDACION PARA VERIFIAR SI EL AREA ESTA ACTIVA
+        $dato = DB::table('asignaturausuario')
+        ->where('usuario_idusuario','=',$request->usuario_idusuario)
+        ->where('asignatura_idasignatura','=',$request->asignatura_idasignatura)
+        ->get();
+        if ($dato->count() > 0) {
+            return response()->json([
+                'status' => 2,
+                'mensaje' => 'Esta asignatura ya se encuentra asignada al docente',
+                'conteo' => $dato->count()
+            ], 200);
+        }else{
+            $docente = DB::SELECT("SELECT * FROM usuario WHERE idusuario = '$request->usuario_idusuario'");
+            $institucion = $docente[0]->institucion_idInstitucion;
+            $buscarPeriodo = $this->traerPeriodo($institucion);
+            $periodo = $buscarPeriodo["periodo"][0]->periodo;
+            $asignatura = new AsignaturaDocente();
+            $asignatura->usuario_idusuario       = $request->usuario_idusuario;
+            $asignatura->asignatura_idasignatura = $request->asignatura_idasignatura;
+            $asignatura->periodo_id              = $periodo;
+            $asignatura->save();
+            //$this->addCurso($request->asignatura_idasignatura,$request->usuario_idusuario);
+            return response()->json([
+                'status' => 1,
+                'mensaje' => 'Asignatura agregada con éxito',
+                'data' => $asignatura
+            ], 200);
+        }
+    }
+    //FIN METODOS JEYSON
 }

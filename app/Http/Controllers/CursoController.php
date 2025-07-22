@@ -65,7 +65,7 @@ class CursoController extends Controller
     public function cursos_evaluaciones_libro($id_usuario, $id_libro)
     {
         $cursos = DB::SELECT("
-            SELECT 
+            SELECT
                 c.idcurso, c.codigo, c.nombre, c.estado, c.seccion, c.aula,
                 a.idasignatura, a.nombreasignatura, a.area_idarea, a.nivel_idnivel, a.tipo_asignatura,
                 l.idlibro, l.nombrelibro,
@@ -79,21 +79,21 @@ class CursoController extends Controller
             INNER JOIN libro l ON l.asignatura_idasignatura = c.id_asignatura
             LEFT JOIN estudiante e ON e.codigo = c.codigo
             LEFT JOIN usuario us ON e.usuario_idusuario = us.idusuario AND us.estado_idEstado = '1' AND e.estado = '1'
-            WHERE 
-                c.idusuario = ? 
+            WHERE
+                c.idusuario = ?
                 AND c.estado = '1'
                 AND p.estado = '1'
                 AND l.idlibro = ?
-            GROUP BY c.idcurso, c.codigo, c.nombre, c.estado, 
+            GROUP BY c.idcurso, c.codigo, c.nombre, c.estado,
                      a.idasignatura, a.nombreasignatura, a.area_idarea, a.nivel_idnivel, a.tipo_asignatura,
                      l.idlibro, l.nombrelibro,
                      p.idperiodoescolar, p.periodoescolar
             ORDER BY c.idcurso DESC
         ", [$id_usuario, $id_libro]);
-    
+
         return $cursos;
     }
-    
+
 
     public function cursos_evaluaciones_asignatura_doc($id_usuario, $id_asignatura)
     {
@@ -128,7 +128,7 @@ class CursoController extends Controller
             return "se bloqueo el estudiante correctamente";
         }else{
             $estudiantes = DB::SELECT("SELECT e.*, CONCAT(u.nombres, ' ', u.apellidos) AS student, u.cedula, i.nombreInstitucion,
-            u.institucion_idInstitucion, c.nombre AS ciudad,u.idusuario
+            u.institucion_idInstitucion, c.nombre AS ciudad,u.idusuario, u.name_usuario
             FROM estudiante e
             LEFT JOIN usuario u ON e.usuario_idusuario = u.idusuario
             LEFT JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion

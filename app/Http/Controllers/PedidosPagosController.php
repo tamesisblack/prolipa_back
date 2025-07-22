@@ -12,6 +12,7 @@ use App\Models\Models\Verificacion\VerificacionDescuento;
 use App\Models\PedidoConvenio;
 use App\Models\PedidoConvenioDetalle;
 use App\Models\PedidoHistoricoCambios;
+use App\Models\PedidoPagosDetalle;
 use App\Models\Pedidos;
 use App\Models\Temporada;
 use App\Models\Verificacion;
@@ -20,9 +21,11 @@ use App\Repositories\pedidos\VerificacionRepository;
 use App\Repositories\PedidosPagosRepository;
 use App\Traits\Pedidos\TraitPagosGeneral;
 use App\Traits\Pedidos\TraitPedidosGeneral;
-use DB;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
 
 class PedidosPagosController extends Controller
 {
@@ -74,9 +77,9 @@ class PedidosPagosController extends Controller
         if($request->getTotalDocumentosLiq)         { return $this->pagoRepository->getTotalDocumentosLiq($request); }
         //actualizar venta real
         if($request->updateVentaReal)               { return $this->pagoRepository->updateVentaReal($request); }
-        //===ANTICIPO APROBADO====
-        //aprobar pago cuando tenga anticipo aprobado
-        // if($request->approveAnticipoPedidoPago)     { return $this->aprobarAnticipoPedidoPago($request->id_pedido,$request->valor); }
+        // obtener el detalle de sub pagos del pago
+        if($request->getSubPagos)                   { return $this->pagoRepository->getSubPagos($request->doc_codigo); }
+
     }
     public function ListadoListaPagos($request){
         $query = $this->pagoRepository->getPagosxContrato($request->contrato);
@@ -359,6 +362,8 @@ class PedidosPagosController extends Controller
         if($request->RegistroDeudaAutomatica){
             return $this->RegistroDeudaAutomatica($request);
         }
+        if($request->saveDetallePago) { return $this->saveDetallePago($request); }
+        if($request->eliminarDetallePago) { return $this->eliminarDetallePago($request); }
     }
     public function saveValorPago($request){
         $tipo_pago_id   = $request->tipo_pago_id;
@@ -393,6 +398,10 @@ class PedidosPagosController extends Controller
         if($request->id > 0){
             $mensaje = "Se edito el pago";
             $info = PedidosDocumentosLiq::findOrFail($request->id);
+            //si es anticipo del pedido solo se puede editar desde el boton para solicitar anticipo
+            if($request->ifAntAprobado == 1){
+                $request->doc_valor = $info->doc_valor;
+            }
             $Estado = $info->estado;
             if($request->permisoPago){
                 //si el root actualiza el pago de la deuda anterior
@@ -584,6 +593,91 @@ class PedidosPagosController extends Controller
         }
         return $valor;
     }
+    //API:POST/pedigo_Pagos?saveDetallePago=1
+    public function saveDetallePago($request){
+        DB::beginTransaction();
+         // Validación
+         $validator = Validator::make($request->all(), [
+            'id'          => 'required|integer|min:0',
+            'id_usuario'  => 'required|integer',
+            'id_pago'     => 'required|integer',
+            'valor'       => 'required|numeric|min:0',
+            'descripcion' => 'nullable|string|max:500',
+        ]);
+
+        // Si la validación falla, devolvemos un mensaje de error
+        if ($validator->fails()) {
+            return response()->json([
+                "status"  => "0",
+                "message" => "Error de validación",
+                "errors"  => $validator->errors(),
+            ]);
+        }
+        try {
+            $id                         = $request->id;
+            $id_usuario                 = $request->id_usuario;
+
+            // Verificar que el pago este abierto
+            $pago = PedidosDocumentosLiq::findOrFail($request->id_pago);
+            if ($pago->estado != 0) {
+                return [
+                    "status"            => "0",
+                    "message"           => "El pago no está abierto para agregar detalles.",
+                ];
+            }
+            if($id == 0){
+                $detalle                = new PedidoPagosDetalle();
+                $detalle->id_pago       = $request->id_pago;
+                $detalle->user_created  = $id_usuario;
+            } else {
+                $detalle                = PedidoPagosDetalle::findOrFail($id);
+                $detalle->user_edit     = $id_usuario;
+            }
+
+            // En ambos casos se actualizan estos campos si están presentes
+            $detalle->valor         = $request->valor;
+            $detalle->descripcion   = $request->descripcion;
+
+            $detalle->save();
+
+            DB::commit();
+
+            return ["status" => "1", "message" => "Se guardó correctamente"];
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return [
+                "status" => "0",
+                "message" => $e->getMessage() // Puedes quitar esto en producción si no deseas mostrar errores
+            ];
+        }
+    }
+    //api:post/pedigo_Pagos?eliminarDetallePago=1
+
+    public function eliminarDetallePago($request)
+    {
+        try {
+            $id = $request->id;
+            $detalle = PedidoPagosDetalle::find($id);
+
+            if (!$detalle) {
+                return ["status" => "0", "message" => "Detalle de pago no encontrado"];
+            }
+
+            $detalle->delete();
+
+            // Ajustar el auto_increment solo si aún hay registros
+            $maxId = DB::table('pedidos_pagos_detalles')->max('id_pedido_pago_detalle'); // Usando el nombre correcto de la columna
+            $nextId = $maxId ? $maxId + 1 : 1;
+            DB::statement("ALTER TABLE pedidos_pagos_detalles AUTO_INCREMENT = $nextId");
+
+            return ["status" => "1", "message" => "Se eliminó correctamente"];
+        } catch (\Exception $e) {
+            return ["status" => "0", "message" => "Error al eliminar el detalle de pago", "error" => $e->getMessage()];
+        }
+    }
+
+
     public function DescontarDistribuidor($request){
         $contrato               = $request->contrato;
         $user_created           = $request->user_created;
@@ -683,6 +777,9 @@ class PedidosPagosController extends Controller
         $id_pedido      = $request->id_pedido;
         $user_created   = $request->user_created;
         $mensaje        = "Eliminación de anticipo del pedido";
+        //eliminar detalle pagos
+        DB::table('pedidos_pagos_detalles')->where('id_pago',$request->doc_codigo)->delete();
+        // eliminar el pago
         $documento      = PedidosDocumentosLiq::findOrFail($request->doc_codigo);
         $documento->delete();
         ///Cuando elimino el anticipo del pedido dejo el anticipo aprobado en cero
@@ -699,6 +796,9 @@ class PedidosPagosController extends Controller
         $doc_valor      = $request->doc_valor;
         $user_created   = $request->user_created;
         $mensaje        = "Eliminación de deuda";
+        // eliminar detalle pagos
+        DB::table('pedidos_pagos_detalles')->where('id_pago',$request->doc_codigo)->delete();
+        // eliminar el pago
         $documento = PedidosDocumentosLiq::findOrFail($request->doc_codigo);
         $documento->delete();
         //update pedido

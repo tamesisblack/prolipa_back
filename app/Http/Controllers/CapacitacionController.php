@@ -562,4 +562,42 @@ class CapacitacionController extends Controller
         return $reporteMes;
     }
     //=====FIN DE FILTRO POR MESES=====
+  
+    public function TraerCapacionesAsesor(Request $request){
+        //prolipa
+        $institucionesProlipa       = $this->getCapacitaciones(0,$request->id_asesor);
+        //temporales
+        $institucionesTemporales    = $this->getCapacitaciones(1,$request->id_asesor);
+        $unirArrays                 = array_merge(array($institucionesProlipa),array($institucionesTemporales));
+        $coleccionUnir              = collect($unirArrays);
+        $resultado                  = $coleccionUnir->flatten(10);
+    
+        return response()->json($resultado);
+    }
+    public function getCapacitaciones($tipo,$asesor){
+        $query = DB::table('seminarios as s')
+        ->selectRaw("CONCAT(u.nombres, ' ', u.apellidos) AS asesor,
+            CONCAT(u_editor.nombres, ' ', u_editor.apellidos) AS editor_nombre,
+            s.*,
+            pe.descripcion AS cicloEscolar,
+            IF(s.estado_institucion_temporal = '1', 'Temporal', 'Prolipa') AS tipoInstitucion,
+            IF(s.estado_institucion_temporal = '1', s.nombre_institucion_temporal, i.nombreInstitucion) AS nombreInstitucion
+        ")
+        ->leftJoin('usuario as u', 's.id_usuario', '=', 'u.idusuario')
+        ->leftJoin('usuario as u_editor', 's.editor_id', '=', 'u_editor.idusuario') // Relación con el editor
+        ->leftJoin('institucion as i', 's.id_institucion', '=', 'i.idInstitucion')
+        ->leftJoin('periodoescolar as pe', 's.periodo_id', '=', 'pe.idperiodoescolar')
+        ->leftJoin('seminarios_capacitador as sc', 'sc.seminario_id', '=', 's.id_seminario')
+        ->whereIn('estado_capacitacion', [1, 2])
+        ->where('s.tipo_webinar', '=', '2')
+        ->where('s.estado',       '=', '1')
+        ->whereIn('estado_capacitacion', [1, 0])
+        ->where('s.notificado', '=', '1')
+        ->where('sc.idusuario', '=', $asesor)
+        ;
+        if($tipo == 0){ $resultado = $query->where('s.id_institucion', '>', 0); }
+        if($tipo == 1){ $resultado = $query->Where('s.institucion_id_temporal', '>', 0); }
+
+        return $resultado->get();
+    }
 }

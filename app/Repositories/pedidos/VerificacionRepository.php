@@ -74,23 +74,23 @@ class  VerificacionRepository extends BaseRepository
                 return ["status"=>"1","message"=>"Se guardo correctamente"];
             }else{
                 throw new \Exception("No se pudo guardar");
-            }   
+            }
         }catch(\Exception $e){
             throw new \Exception("No se pudo guardar" . $e->getMessage());
         }
     }
     public function cerrarNotificacion($idPadre,$tipo){
         try{
-            $notificacion = NotificacionGeneral::where('id_padre', $idPadre)->where('tipo', $tipo)->first();
+            $notificacion = NotificacionGeneral::where('id_padre', $idPadre)->where('tipo', $tipo)->where('estado', '0')->first();
             if($notificacion){
                 $notificacion->estado = 1;
                 $notificacion->save();
                 return $notificacion;
             }
-        }   
+        }
         catch(\Exception $e){
             throw new \Exception("No se pudo cerrar notificacion" . $e->getMessage());
         }
     }
-   
+
 }

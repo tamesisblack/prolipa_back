@@ -35,6 +35,10 @@ class LibroSerieController extends Controller
 
     }
 
+    public function todoLibroSerie(){
+        $librosSerie = LibroSerie::orderBy('id_libro_serie','desc')->get();
+        return $librosSerie;
+    }
     //para ver el libro serie especifico de un libro api:/verLibroSerie
     public function verLibroSerie(Request $request){
         $libro  = DB::select("SELECT ls.*, s.nombre_serie

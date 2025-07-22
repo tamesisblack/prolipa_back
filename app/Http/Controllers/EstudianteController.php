@@ -573,7 +573,7 @@ class EstudianteController extends Controller
             ");
             return ["codigos" => $traercodigos];
         }
-        
+
         if ($request->busquedaCurso) {
             // Primero obtenemos los datos básicos agrupados por docente
             $docentes = DB::table('estudiante as e')
@@ -594,7 +594,7 @@ class EstudianteController extends Controller
                     'c.idusuario'
                 )
                 ->get();
-        
+
             // Luego para cada docente, obtenemos sus cursos
             $resultados = $docentes->map(function ($docente) {
                 $cursos = DB::table('estudiante as e')
@@ -616,7 +616,7 @@ class EstudianteController extends Controller
                     )
                     ->orderBy('e.created_at', 'desc') // Orden descendente por fecha de asignación
                     ->get();
-        
+
                 return [
                     'docente_nombres' => $docente->docente_nombres,
                     'docente_apellidos' => $docente->docente_apellidos,
@@ -625,7 +625,7 @@ class EstudianteController extends Controller
                     'cursos' => $cursos->toArray()
                 ];
             });
-        
+
             return [
                 "data_cursos" => $resultados
             ];
@@ -636,7 +636,7 @@ class EstudianteController extends Controller
             if($request->asesor){
                 $estudiantes =  DB::SELECT("SELECT DISTINCT   u.idusuario, u.nombres,
                  u.apellidos, u.email, u.cedula, u.name_usuario,u.telefono,u.estado_idEstado, u.id_group, u.institucion_idInstitucion ,i.nombreInstitucion, gr.deskripsi as perfil, u.fecha_nacimiento, u.cargo_id, c.cargo, u.iniciales,
-                u.foto_user,u.change_password,u.fecha_change_password,u.capacitador,u.cli_ins_codigo
+                u.foto_user,u.change_password,u.fecha_change_password,u.capacitador,u.cli_ins_codigo, u.fecha_nacimiento
                 FROM usuario u
                 LEFT JOIN institucion i ON u.institucion_idInstitucion = i.idInstitucion
                 LEFT JOIN sys_group_users gr ON gr.id = u.id_group

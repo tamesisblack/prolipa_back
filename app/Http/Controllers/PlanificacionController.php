@@ -73,12 +73,22 @@ class PlanificacionController extends Controller
 
     public function planificacion_asignatura($id)
     {
+        $idLibro = 0;
+        //validar si no es un libro plus
+        $validatePlus = DB::SELECT("SELECT * FROM libros_series ls
+        WHERE ls.id_libro_plus = '$id'
+        ");
+        if(count($validatePlus) > 0){
+           $idLibro = $validatePlus[0]->idLibro;
+        }else{
+            $idLibro = $id;
+        }
         $planificaciones = DB::SELECT("SELECT p .*, l.nombrelibro, l.idlibro
          FROM planificacion p, libro l
          WHERE p.asignatura_idasignatura = l.asignatura_idasignatura
          AND l.Estado_idEstado = '1'
          AND p.Estado_idEstado = '1'
-         AND l.idlibro = $id
+         AND l.idlibro = '$idLibro'
          ORDER BY p.idplanificacion");
 
         return $planificaciones;

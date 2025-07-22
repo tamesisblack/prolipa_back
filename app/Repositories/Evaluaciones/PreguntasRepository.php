@@ -65,7 +65,7 @@ class  PreguntasRepository extends BaseRepository
                 AND temas.unidad = $request->unidad
                 AND u.idusuario = preguntas.idusuario
                 AND preguntas.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
-                AND u.id_group = '1'
+                AND preguntas.grupo_user = '1'
                 AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                 ORDER BY preguntas.descripcion DESC");
                 $preguntasProfesor = $this->preguntasOnlyDocentesSinTipo($request);
@@ -84,7 +84,7 @@ class  PreguntasRepository extends BaseRepository
                 AND evaluaciones.id = $request->evaluacion
                 AND temas.estado=1
                 AND u.idusuario = preguntas.idusuario
-                AND u.id_group = '1'
+                AND preguntas.grupo_user = '1'
                 AND temas.unidad = $request->unidad
                 AND preguntas.id_tipo_pregunta = $request->tipo
                 AND preguntas.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
@@ -111,7 +111,7 @@ class  PreguntasRepository extends BaseRepository
                     AND temas.estado=1
                     AND temas.unidad = $request->unidad
                     AND preguntas.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
-                    AND u.id_group = '1'
+                    AND preguntas.grupo_user = '1'
                     AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                     ORDER BY preguntas.descripcion DESC");
                 }else{
@@ -128,7 +128,7 @@ class  PreguntasRepository extends BaseRepository
                     AND evaluaciones.id = $request->evaluacion
                     AND preguntas.id_tipo_pregunta = $request->tipo
                     AND temas.estado=1 AND temas.unidad = $request->unidad
-                    AND u.id_group = '1'
+                    AND preguntas.grupo_user = '1'
                     AND preguntas.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
                     AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                     ORDER BY preguntas.descripcion DESC");
@@ -213,7 +213,7 @@ class  PreguntasRepository extends BaseRepository
                 AND temas.estado=1
                 AND temas.unidad = $request->unidad
                 AND u.idusuario = preguntas.idusuario
-                AND (u.id_group = 1 OR preguntas.idusuario  = '$request->idusuario')
+                AND (preguntas.grupo_user = 1 OR preguntas.idusuario  = '$request->idusuario')
                 AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                 ORDER BY preguntas.descripcion DESC");
             }
@@ -232,7 +232,7 @@ class  PreguntasRepository extends BaseRepository
                 AND temas.unidad = $request->unidad
                 AND u.idusuario = preguntas.idusuario
                 AND preguntas.id_tipo_pregunta = $request->tipo
-                AND (u.id_group = 1 OR preguntas.idusuario  = '$request->idusuario')
+                AND (preguntas.grupo_user = 1 OR preguntas.idusuario  = '$request->idusuario')
                 AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                 ORDER BY preguntas.descripcion DESC");
             }
@@ -253,7 +253,7 @@ class  PreguntasRepository extends BaseRepository
                     AND evaluaciones.id = $request->evaluacion
                     AND temas.estado=1
                     AND temas.unidad = $request->unidad
-                    AND u.id_group = '1'
+                    AND preguntas.grupo_user = '1'
                     AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                     ORDER BY preguntas.descripcion DESC");
                 }else{
@@ -270,7 +270,7 @@ class  PreguntasRepository extends BaseRepository
                     AND evaluaciones.id = $request->evaluacion
                     AND preguntas.id_tipo_pregunta = $request->tipo
                     AND temas.estado=1 AND temas.unidad = $request->unidad
-                    AND u.id_group = '1'
+                    AND preguntas.grupo_user = '1'
                     AND preguntas.id NOT IN (select id_pregunta from pre_evas where id_evaluacion = $request->evaluacion AND grupo = $request->grupo)
                     ORDER BY preguntas.descripcion DESC");
                 }
@@ -372,7 +372,7 @@ class  PreguntasRepository extends BaseRepository
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
                 AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = '$institucion_id' AND estado = '1')
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 ORDER BY p.descripcion DESC
             ");
             $preguntasProfesor = $this->preguntasOnlyDocentesBanco($request);
@@ -391,7 +391,7 @@ class  PreguntasRepository extends BaseRepository
                 AND p.id_tema = te.id
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
                 ORDER BY p.descripcion DESC
             ");
@@ -456,7 +456,7 @@ class  PreguntasRepository extends BaseRepository
                 AND p.id_tema = te.id
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND (u.id_group = 1 OR p.idusuario = '$request->usuario')
+                AND (p.grupo_user = 1 OR p.idusuario = '$request->usuario')
                 ORDER BY p.descripcion DESC
             ");
         }
@@ -473,7 +473,7 @@ class  PreguntasRepository extends BaseRepository
                 AND p.id_tema = te.id
                 AND p.estado = 1
                 AND p.idusuario = u.idusuario
-                AND u.id_group = 1
+                AND p.grupo_user = 1
                 ORDER BY p.descripcion DESC
             ");
         }
@@ -550,7 +550,7 @@ class  PreguntasRepository extends BaseRepository
             AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
             AND p.id_tipo_pregunta = $request->tipo
             AND u.idusuario = p.idusuario
-            AND u.id_group = 1
+            AND p.grupo_user = 1
             ORDER BY p.descripcion DESC");
             $preguntasProfesor = $this->preguntasOnlyTipo($request);
             $preguntas = array_merge($preguntasAdmin, $preguntasProfesor);
@@ -566,7 +566,7 @@ class  PreguntasRepository extends BaseRepository
             AND p.id_tema = te.id
             AND p.estado = 1
             AND u.idusuario = p.idusuario
-            AND u.id_group = 1
+            AND p.grupo_user = 1
             AND preguntas.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = $institucion_id AND estado = '1')
             AND p.id_tipo_pregunta = $request->tipo
             ORDER BY p.descripcion DESC");
@@ -618,7 +618,7 @@ class  PreguntasRepository extends BaseRepository
             AND p.id_tema = te.id
             AND p.estado = 1
             AND p.idusuario = u.idusuario
-            AND (u.id_group = 1 OR p.idusuario = '$request->usuario')
+            AND (p.grupo_user = 1 OR p.idusuario = '$request->usuario')
             AND p.id_tipo_pregunta = $request->tipo
             ORDER BY p.descripcion DESC");
         }
@@ -634,7 +634,7 @@ class  PreguntasRepository extends BaseRepository
             AND p.estado = 1
             AND p.id_tipo_pregunta = $request->tipo
             AND p.idusuario = u.idusuario
-            AND u.id_group = 1
+            AND p.grupo_user = 1
             ORDER BY p.descripcion DESC");
         }
         //docente
@@ -692,7 +692,7 @@ class  PreguntasRepository extends BaseRepository
         ->where('pa.institucion_id', $institucion_id)
         ->where('pa.estado', '1')
         ->where('p.estado', 1)
-        ->where('u.id_group', 1)
+        ->where('p.grupo_user', 1)
         ->where('te.id_asignatura', $id_asignatura)
         ->orderByDesc('p.descripcion')
         ->get();
@@ -715,7 +715,7 @@ class  PreguntasRepository extends BaseRepository
         ->where('pa.institucion_id', $institucion_id)
         ->where('pa.estado', '1')
         ->where('p.estado', 1)
-        ->where('u.id_group', 1)
+        ->where('p.grupo_user', 1)
         ->where('te.id_asignatura', $request->id_asignatura)
         ->orderBy('te.unidad', 'asc')
         ->get();
@@ -764,7 +764,7 @@ class  PreguntasRepository extends BaseRepository
         AND p.id NOT IN (SELECT pr.id_pregunta FROM pre_evas pr WHERE pr.id_evaluacion = $evaluacion AND pr.grupo = $i)
         AND p.id IN (select pregunta_id from institucion_evaluacion_asignada where institucion_id = '$institucion_id' AND estado = '1')
         AND p.idusuario = u.idusuario
-        AND u.id_group = 1
+        AND p.grupo_user = 1
         ORDER BY RAND() LIMIT 1",[$tipo, $evaluacion, $unidad]);
         $this->guardarPreguntaRand($pregunta, $tipo, $evaluacion, $unidad, $i, $intentos,$institucion_id);
       }
@@ -783,5 +783,17 @@ class  PreguntasRepository extends BaseRepository
           }
       }
       //fin de preguntas aleatorias personalizadas
+    public function getTemasXUnidad($unidad, $asignatura){
+        $query = DB::SELECT("SELECT t.nombre_tema, t.id AS id, t.nombre_tema AS label, t.id_asignatura,
+            t.unidad, a.nombreasignatura, t.clasificacion,t.tipo_tema
+            FROM temas t, asignatura a
+            WHERE t.id_asignatura = a.idasignatura
+            AND t.unidad        = ?
+            AND t.id_asignatura = ?
+            AND t.estado=1
+            ORDER BY CAST(SUBSTRING_INDEX(t.nombre_tema, ' ', 1) AS SIGNED)
+        ",[$unidad, $asignatura]);
+        return $query;
+    }
 }
 ?>

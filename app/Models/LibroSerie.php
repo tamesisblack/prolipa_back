@@ -25,4 +25,19 @@ class LibroSerie extends Model
         $producto = self::where('codigo_liquidacion', $codigo)->first();
         return $producto;
     }
+    public static function obtenerTipoValGuias($year){
+        $arrayTipoVal = [
+            "1" => "0",
+            "2" => "2",
+            "3" => "4",
+            "4" => "6",
+            "5" => "8",
+            "6" => "10",
+            "7" => "12",
+            "8" => "14",
+            "9" => "16",
+            "10" => "18",
+        ];
+        return $arrayTipoVal[$year] ?? null;
+    }
 }

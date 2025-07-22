@@ -407,6 +407,11 @@ class UsuarioController extends Controller
 
        //para eliminar
        if($request->eliminar){
+            // validar si el usuario ya tiene asignado el cargo
+            $validateUsuario = Usuario::where('cargo_id', $request->id)->first();
+            if($validateUsuario){
+                return ["status" => "0", "message" => "Ya tiene asignado el cargo a otro usuario"];
+            }
             $cargo = Cargo::findOrFail($request->id);
             $cargo->estado = $request->estado;
             $cargo->usuario_editor = $request->usuario_id;
@@ -439,9 +444,7 @@ class UsuarioController extends Controller
         if(!empty($request->idusuario)){
 
             $usuario = Usuario::findOrFail($request->idusuario);
-            $change_password = $usuario->change_password;
-            // $user = $request->all();
-            // $usuario->fill($user)->save();
+            // $change_password = $usuario->change_password;
             $usuario->cedula = $request->cedula;
             $usuario->nombres = $request->nombres;
             $usuario->apellidos = $request->apellidos;
@@ -449,9 +452,9 @@ class UsuarioController extends Controller
             $usuario->name_usuario = $request->name_usuario;
             $usuario->email = $request->email;
             $usuario->id_group = $request->id_group;
-            if($change_password == 1){
-                $usuario->password=sha1(md5($request->cedula));
-            }
+            // if($change_password == 1){
+            //     $usuario->password=sha1(md5($request->cedula));
+            // }
             $usuario->p_ingreso=0;
             $usuario->institucion_idInstitucion = $request->institucion_idInstitucion;
             $usuario->estado_idEstado = $request->estado_idEstado;
@@ -460,7 +463,8 @@ class UsuarioController extends Controller
             $usuario->iniciales = $request->iniciales;
             $usuario->capacitador = $request->capacitador;
             $usuario->cli_ins_codigo = $request->cli_ins_codigo == null || $request->cli_ins_codigo == "null" ? null : $request->cli_ins_codigo;
-            $email = $request->email;
+            $usuario->fecha_nacimiento = $request->fecha_nacimiento;
+            $usuario->cargo_id = $request->cargo_id;
             $usuario->save();
         }else{
             $datosValidados=$request->validate([
@@ -486,23 +490,12 @@ class UsuarioController extends Controller
             $usuario->curso = $request->curso;
             $usuario->iniciales = $request->iniciales;
             $usuario->capacitador = $request->capacitador;
-            $email = $request->email;
+            //fecha de nacimiento
+            $usuario->fecha_nacimiento = $request->fecha_nacimiento;
+            //cargo
+            $usuario->cargo_id = $request->cargo_id;
             $usuario->save();
-            $to_name = "Prolipa";
-            $to_email = $request->email;
-            // $data = array(
-            //     'name'=>"Prolipa",
-            //     'email' => $request->email,
-            //     'codigo' => $request->cedula,
-            //     'nombres' => $request->nombres,
-            //     'apellidos' => $request->apellidos,
-            //     'cedula' => $request->cedula
-            // );
-			// Mail::send('plantilla.registro',$data, function($message) use ($to_name, $to_email) {
-            //     $message->to($to_email, $to_name)
-            //     ->subject('Datos de registro');
-            //     $message->from($to_email, 'Prolipa');
-            // });
+
         }
         return $usuario;
 
@@ -820,8 +813,8 @@ class UsuarioController extends Controller
     public function usuarioSalle(Request $request)
     {
         if($request->tipoUsuario == "admin"){
-            $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad 
-            FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad 
+            $admins = DB::select("SELECT u.*, i.nombreInstitucion, concat(i.nombreInstitucion,' - ',c.nombre) AS institucion_ciudad
+            FROM usuario u, institucion i INNER JOIN ciudad c ON i.ciudad_id = c.idciudad
             WHERE u.id_group = 12 and u.institucion_idInstitucion = i.idInstitucion ");
             return array('admins'=>$admins,);
         }
@@ -851,9 +844,9 @@ class UsuarioController extends Controller
                     (SELECT COUNT(*) FROM salle_areas) AS contarAreas,
                     (SELECT COUNT(*) FROM salle_asignaturas) AS contarAsignaturas
             ")[0];
-        
+
             return (array) $counts;
-        }      
+        }
     }
     //API:GET/usuarioSalle/{n_evaluacion}
     public function usuarioSallexEvaluacion($n_evaluacion){
@@ -914,7 +907,7 @@ class UsuarioController extends Controller
                 'max:13',
                 Rule::unique('usuario')->ignore($request->idusuario, 'idusuario')
             ];
-            
+
             $rules['email'] = [
                 'required',
                 'email',
@@ -1755,8 +1748,8 @@ class UsuarioController extends Controller
     public function busquedaUsuarioxCedula_Nombre_Apellido($request)
     {
         $busquedarepresentante  = $request->filtrorepresentante;
-        $usuarios = DB::SELECT("SELECT us.*, sg.level 
-        FROM usuario us 
+        $usuarios = DB::SELECT("SELECT us.*, sg.level
+        FROM usuario us
         INNER JOIN sys_group_users sg on us.id_group = sg.id
         WHERE us.nombres LIKE '%$busquedarepresentante%' OR us.cedula LIKE '%$busquedarepresentante%' OR us.apellidos LIKE '%$busquedarepresentante%' ");
         return $usuarios;
@@ -1765,7 +1758,7 @@ class UsuarioController extends Controller
     {
         $busquedaxid  = $request->idusuario;
         $usuarios = DB::SELECT("SELECT us.*
-        FROM usuario us 
+        FROM usuario us
         WHERE us.idusuario = '$busquedaxid'");
         return $usuarios;
     }
@@ -1773,7 +1766,7 @@ class UsuarioController extends Controller
 
     public function usuarioConVentas($cedula)
     {
-        $usuarios = DB::SELECT("SELECT fv.ven_codigo,fv.id_empresa, fv.ruc_cliente, u.cedula 
+        $usuarios = DB::SELECT("SELECT fv.ven_codigo,fv.id_empresa, fv.ruc_cliente, u.cedula
         FROM f_venta fv
         INNER JOIN usuario u ON fv.ven_cliente = u.idusuario
         WHERE fv.est_ven_codigo <> 3

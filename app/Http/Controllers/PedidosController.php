@@ -46,6 +46,7 @@ use App\Models\Pedidos_val_area_new;
 use App\Models\PedidoValArea;
 use App\Models\PermisoSuper;
 use App\Models\_14ProductoStockHistorico;
+use App\Models\LibroSerie;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\PedidosPagosRepository;
 use App\Repositories\pedidos\ConvenioRepository;
@@ -703,6 +704,7 @@ class PedidosController extends Controller
         try{
             $valor          = $request->valor;
             $valorReserva   = 0;
+            $valorReservaNueva   = 0;
             $totalAReservar = 0;
             //VALIDACION CONTANDO LOS QUE HAN RESERVADO LAS GUIAS EXCEPTO DEL PEDIDO MAS LUEGO SE VA A SUMAR
             $getReserva = $this->getReservaCodigosStock($request);
@@ -711,7 +713,28 @@ class PedidosController extends Controller
                     $valorReserva = $valorReserva + $item2->valor;
                 }
             }
-            $totalAReservar = $valorReserva + $valor;
+            //========= VALIDACION RESERVA NUEVA==================
+            $pedido = Pedidos::findOrFail($request->id_pedido);
+            if(!$pedido){
+                return ["status" => "0", "message" => "No existe el pedido"];
+            }
+            $getLibro = $this->pedidosRepository->getLibroPedidosVal($request->plan_lector,$pedido->id_periodo,$request->id_serie,$request->id_area,$request->libro);
+            $id_libro = $getLibro[0]->idlibro ?? null;
+            if(!$id_libro){
+                return ["status" => "0", "message" => "No existe el libro"];
+            }
+            $datosEnviar = (Object) [
+                "idlibro"           => $id_libro,
+                "id_pedido"         => $request->id_pedido,
+            ];
+            $getReservaNueva     = $this->getReservaCodigosStock_new($datosEnviar);
+            if(count($getReservaNueva) > 0){
+                foreach($getReservaNueva as $key2 => $item2){
+                    $valorReservaNueva = $valorReservaNueva + $item2->pvn_cantidad;
+                }
+            }
+            // == FIN VALIDACION RESERVA NUEVA=============
+            $totalAReservar = $valorReserva + $valor + $valorReservaNueva;
             ///PROCESO
             $query = [];
            //plan lector
@@ -734,8 +757,8 @@ class PedidosController extends Controller
                //post stock
                //MENOS 1 ES PORQUE es el minimo que se puede pedir
                $nuevoStock     = $stockAnterior - $totalAReservar;
-               $stockDisponible = $stockAnterior - $valorReserva -1;
-              if($nuevoStock < 1){
+               $stockDisponible = $stockAnterior - ($valorReserva + $valorReservaNueva);
+              if($nuevoStock < 0){
                return ["status" => "0", "message" => "No existe stock del libro ".$nombreLibro." cantidad disponible: ".$stockDisponible ];
               }
            } catch (\Exception $e) {
@@ -2004,6 +2027,7 @@ class PedidosController extends Controller
                 'contadorHijosDocentesAbiertosEnviados' => $item->contadorHijosDocentesAbiertosEnviados,
                 'contadorObsequiosAbiertosEnviados'    => $item->contadorObsequiosAbiertosEnviados,
                 'contadorPendientesConvenio'     => $item->contadorPendientesConvenio,
+                'contadorAprobadosConvenio'     => $item->contadorAprobadosConvenio,
                 'contadorPendientesAnticipos'    => $item->contadorPendientesAnticipos,
                 'periodo'                        => $item->periodo,
                 'facturador'                     => $item->facturador,
@@ -2016,6 +2040,14 @@ class PedidosController extends Controller
                 'permitir_editar_despues_contrato' => $item->permitir_editar_despues_contrato,
                 'ca_codigo_agrupado'             => $item->ca_codigo_agrupado,
                 'anticipo_global'                => $item->anticipo_global,
+                'regaladosReporteNuevo'          => $item->regaladosReporteNuevo,
+
+                'contadorConvenioPendientes'       => $item->contadorConvenioPendientes,
+                'contadorConvenioSolicitadoGerencia' => $item->contadorConvenioSolicitadoGerencia,
+                'contadorConvenioAprobadoGerencia' => $item->contadorConvenioAprobadoGerencia,
+                'contadorConvenioAprobadoFacturador' => $item->contadorConvenioAprobadoFacturador,
+                'convenioAnulado'                => $item->convenioAnulado,
+                'convenioFinalizados'             => $item->convenioFinalizados
             ];
         }
         return $response;
@@ -2109,6 +2141,14 @@ class PedidosController extends Controller
                     'permitir_editar_despues_contrato' => $item->permitir_editar_despues_contrato,
                     'ca_codigo_agrupado'             => $item->ca_codigo_agrupado,
                     'anticipo_global'                => $item->anticipo_global,
+                    'regaladosReporteNuevo'          => $item->regaladosReporteNuevo,
+
+                    'contadorConvenioPendientes'       => $item->contadorConvenioPendientes,
+                    'contadorConvenioSolicitadoGerencia' => $item->contadorConvenioSolicitadoGerencia,
+                    'contadorConvenioAprobadoGerencia' => $item->contadorConvenioAprobadoGerencia,
+                    'contadorConvenioAprobadoFacturador' => $item->contadorConvenioAprobadoFacturador,
+                    'convenioAnulado'                => $item->convenioAnulado,
+                    'convenioFinalizados'            => $item->convenioFinalizados,
                 ];
             }
             return $datosMostrar;
@@ -2175,6 +2215,8 @@ class PedidosController extends Controller
         WHERE contrato_generado = '$contrato'
         LIMIT 1
         ");
+
+
         return $pedidos;
     }
     //api:get/getConvenio?pedido=1540
@@ -4373,6 +4415,7 @@ class PedidosController extends Controller
                     //CERRAR ALCANCE
                     $alcance = PedidoAlcance::findOrFail($id_alcance);
                     $alcance->estado_alcance = 1;
+                    $alcance->fecha_aprobacion = date('Y-m-d H:i:s');
                     $alcance->save();
                     return $alcance;
                 }else{
@@ -4436,6 +4479,7 @@ class PedidosController extends Controller
                     //CERRAR ALCANCE
                     $alcance = PedidoAlcance::findOrFail($id_alcance);
                     $alcance->estado_alcance = 1;
+                    $alcance->fecha_aprobacion = date('Y-m-d H:i:s');
                     $alcance->save();
                     return $alcance;
                 }else{
@@ -4496,20 +4540,20 @@ class PedidosController extends Controller
         $contador   = 0;
         foreach($query as $key => $item){
             //estado alcance => 0 = abierto; 1 = cerrado; 2 = rechazado;
-            $estado_alcance = $item->estado_alcance;
+            // $estado_alcance = $item->estado_alcance;
             //si el alcance esta cerrado o aprobado
-            $fecha_aprobacion = "";
-            if($estado_alcance == 1){
-                $historico = DB::SELECT("SELECT * FROM pedidos_alcance_historico ha
-                WHERE ha.id_pedido = '$id_pedido'
-                AND ha.alcance_id = '$item->id'
-                ");
-                if(!empty($historico)){
-                    $fecha_aprobacion = $historico[0]->created_at;
-                }else{
-                    $fecha_aprobacion  ="";
-                }
-            }
+            $fecha_aprobacion = $item->fecha_aprobacion;
+            // if($estado_alcance == 1){
+            //     $historico = DB::SELECT("SELECT * FROM pedidos_alcance_historico ha
+            //     WHERE ha.id_pedido = '$id_pedido'
+            //     AND ha.alcance_id = '$item->id'
+            //     ");
+            //     if(!empty($historico)){
+            //         $fecha_aprobacion = $historico[0]->created_at;
+            //     }else{
+            //         $fecha_aprobacion  ="";
+            //     }
+            // }
             $datos[$key] = [
                 "id"                    => $item->id,
                 "id_periodo"            => $item->id_periodo,
@@ -5727,7 +5771,102 @@ class PedidosController extends Controller
     //         return ["status" => "0", "message" => "No se pudo anular"];
     //     }
     // }
-    public function AnularLibrosObsequios(Request $request) {
+    // public function AnularLibrosObsequios(Request $request) {
+    //     // Iniciar transacción
+    //     DB::beginTransaction();
+
+    //     try {
+    //         // Encontrar el pedido de libro obsequio
+    //         $pedidoLibroObsequio = PedidosLibroObsequio::findOrFail($request->id);
+
+    //         // Actualizar el estado del pedido de libro obsequio
+    //         $pedidoLibroObsequio->estado_libros_obsequios = $request->estado_libros_obsequios;
+    //         $pedidoLibroObsequio->save();
+
+    //         // Buscar todas las ventas asociadas en la tabla F_venta
+    //         $ventas = DB::table('f_venta')
+    //                     ->where('ven_p_libros_obsequios', $request->id)
+    //                     ->get();
+
+    //         // Validar que se encontraron ventas
+    //         if ($ventas->isEmpty()) {
+    //             throw new \Exception('No se encontraron ventas asociadas');
+    //         }
+
+    //         // Iterar sobre todas las ventas encontradas
+    //         foreach ($ventas as $venta) {
+    //             // Validar que el estado de la venta sea 2 o diferente de 3
+    //             if ($venta->est_ven_codigo != 2 && $venta->est_ven_codigo != 3) {
+    //                 // Deshacer la transacción si encontramos un estado incorrecto
+    //                 DB::rollBack();
+    //                 return ["status" => "0", "message" => "El documento " . $venta->ven_codigo . " ya no se encuentra pendiente de despacho. No se puede anular."];
+    //             }
+
+    //             // Actualizar el estado de la venta
+    //             DB::table('f_venta')
+    //                 ->where('ven_codigo', $venta->ven_codigo)
+    //                 ->where('id_empresa', $venta->id_empresa)
+    //                 ->update([
+    //                     'est_ven_codigo' => 3,
+    //                     'user_anulado' => $request->usuario,
+    //                     'observacionAnulacion' => $request->observacion,
+    //                     'fecha_anulacion' => now()]
+    //                 );
+
+    //             // Obtener detalles de la venta
+    //             $detalles = DB::table('f_detalle_venta')
+    //                           ->where('ven_codigo', $venta->ven_codigo)
+    //                           ->where('id_empresa', $venta->id_empresa)
+    //                           ->get();
+
+    //             // Iterar sobre los detalles y actualizar los productos
+    //             foreach ($detalles as $detalle) {
+    //                 $producto = DB::table('1_4_cal_producto')
+    //                               ->where('pro_codigo', $detalle->pro_codigo)
+    //                               ->first();
+
+    //                 if (!$producto) {
+    //                     // Deshacer la transacción en caso de error con un producto
+    //                     DB::rollBack();
+    //                     return ["status" => "0", "message" => "Producto no encontrado"];
+    //                 }
+
+    //                 // Ajustar el stock según la empresa
+    //                 if ($venta->id_empresa == 1) {
+    //                     DB::table('1_4_cal_producto')
+    //                         ->where('pro_codigo', $detalle->pro_codigo)
+    //                         ->update([
+    //                             'pro_deposito' => $producto->pro_deposito + (int)$detalle->det_ven_cantidad,
+    //                             'pro_reservar' => $producto->pro_reservar + (int)$detalle->det_ven_cantidad
+    //                         ]);
+    //                 } else if ($venta->id_empresa == 3) {
+    //                     DB::table('1_4_cal_producto')
+    //                         ->where('pro_codigo', $detalle->pro_codigo)
+    //                         ->update([
+    //                             'pro_depositoCalmed' => $producto->pro_depositoCalmed + (int)$detalle->det_ven_cantidad,
+    //                             'pro_reservar' => $producto->pro_reservar + (int)$detalle->det_ven_cantidad
+    //                         ]);
+    //                 }
+    //             }
+    //         }
+
+    //         // Confirmar la transacción
+    //         DB::commit();
+
+    //         return ["status" => "1", "message" => "Se anuló correctamente"];
+    //     } catch (\Exception $e) {
+    //         // Deshacer la transacción en caso de error
+    //         DB::rollBack();
+
+    //         // Opcional: Loguear el error
+    //         // Log::error('Error al anular libros obsequios: ' . $e->getMessage());
+
+    //         return ["status" => "0", "message" => "No se pudo anular"];
+    //     }
+    // }
+
+    public function AnularLibrosObsequios(Request $request)
+    {
         // Iniciar transacción
         DB::beginTransaction();
 
@@ -5739,7 +5878,7 @@ class PedidosController extends Controller
             $pedidoLibroObsequio->estado_libros_obsequios = $request->estado_libros_obsequios;
             $pedidoLibroObsequio->save();
 
-            // Buscar todas las ventas asociadas en la tabla F_venta
+            // Buscar todas las ventas asociadas en la tabla f_venta
             $ventas = DB::table('f_venta')
                         ->where('ven_p_libros_obsequios', $request->id)
                         ->get();
@@ -5753,7 +5892,6 @@ class PedidosController extends Controller
             foreach ($ventas as $venta) {
                 // Validar que el estado de la venta sea 2 o diferente de 3
                 if ($venta->est_ven_codigo != 2 && $venta->est_ven_codigo != 3) {
-                    // Deshacer la transacción si encontramos un estado incorrecto
                     DB::rollBack();
                     return ["status" => "0", "message" => "El documento " . $venta->ven_codigo . " ya no se encuentra pendiente de despacho. No se puede anular."];
                 }
@@ -5766,8 +5904,8 @@ class PedidosController extends Controller
                         'est_ven_codigo' => 3,
                         'user_anulado' => $request->usuario,
                         'observacionAnulacion' => $request->observacion,
-                        'fecha_anulacion' => now()]
-                    );
+                        'fecha_anulacion' => now()
+                    ]);
 
                 // Obtener detalles de la venta
                 $detalles = DB::table('f_detalle_venta')
@@ -5775,34 +5913,76 @@ class PedidosController extends Controller
                               ->where('id_empresa', $venta->id_empresa)
                               ->get();
 
+                // Array para almacenar los cambios en el historial de stock para esta venta
+                $HistoricoStock = [];
+
                 // Iterar sobre los detalles y actualizar los productos
                 foreach ($detalles as $detalle) {
-                    $producto = DB::table('1_4_cal_producto')
-                                  ->where('pro_codigo', $detalle->pro_codigo)
-                                  ->first();
+                    $producto = _14Producto::findOrFail($detalle->pro_codigo);
 
-                    if (!$producto) {
-                        // Deshacer la transacción en caso de error con un producto
-                        DB::rollBack();
-                        return ["status" => "0", "message" => "Producto no encontrado"];
-                    }
+                    // Guardar valores antes de actualizar (old_values)
+                    $old_values = [
+                        'pro_codigo' => $producto->pro_codigo,
+                        'pro_reservar' => $producto->pro_reservar,
+                        'pro_stock' => $producto->pro_stock,
+                        'pro_stockCalmed' => $producto->pro_stockCalmed,
+                        'pro_deposito' => $producto->pro_deposito,
+                        'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+                    ];
 
                     // Ajustar el stock según la empresa
                     if ($venta->id_empresa == 1) {
-                        DB::table('1_4_cal_producto')
-                            ->where('pro_codigo', $detalle->pro_codigo)
-                            ->update([
-                                'pro_deposito' => $producto->pro_deposito + (int)$detalle->det_ven_cantidad,
-                                'pro_reservar' => $producto->pro_reservar + (int)$detalle->det_ven_cantidad
-                            ]);
+                        $producto->pro_deposito += (int)$detalle->det_ven_cantidad;
+                        $producto->pro_reservar += (int)$detalle->det_ven_cantidad;
                     } else if ($venta->id_empresa == 3) {
-                        DB::table('1_4_cal_producto')
-                            ->where('pro_codigo', $detalle->pro_codigo)
-                            ->update([
-                                'pro_depositoCalmed' => $producto->pro_depositoCalmed + (int)$detalle->det_ven_cantidad,
-                                'pro_reservar' => $producto->pro_reservar + (int)$detalle->det_ven_cantidad
-                            ]);
+                        $producto->pro_depositoCalmed += (int)$detalle->det_ven_cantidad;
+                        $producto->pro_reservar += (int)$detalle->det_ven_cantidad;
                     }
+                    $producto->save();
+
+                    // Guardar valores después de actualizar (new_values)
+                    $new_values = [
+                        'pro_codigo' => $producto->pro_codigo,
+                        'pro_reservar' => $producto->pro_reservar,
+                        'pro_stock' => $producto->pro_stock,
+                        'pro_stockCalmed' => $producto->pro_stockCalmed,
+                        'pro_deposito' => $producto->pro_deposito,
+                        'pro_depositoCalmed' => $producto->pro_depositoCalmed,
+                    ];
+
+                    // Verificar si hubo cambios
+                    $cambios = false;
+                    foreach (['pro_reservar', 'pro_stock', 'pro_stockCalmed', 'pro_deposito', 'pro_depositoCalmed'] as $campo) {
+                        if ($old_values[$campo] != $new_values[$campo]) {
+                            $cambios = true;
+                            break;
+                        }
+                    }
+
+                    // Solo agregar al historial si hubo cambios
+                    if ($cambios) {
+                        $HistoricoStock[] = [
+                            'pro_codigo' => $detalle->pro_codigo,
+                            'psh_old_values' => json_encode($old_values),
+                            'psh_new_values' => json_encode($new_values),
+                        ];
+                    }
+                }
+
+                // Guardar el historial de stock para esta venta si hay cambios
+                if (!empty($HistoricoStock)) {
+                    $registroHistorial = [
+                        'psh_old_values' => json_encode(array_column($HistoricoStock, 'psh_old_values', 'pro_codigo')),
+                        'psh_new_values' => json_encode(array_column($HistoricoStock, 'psh_new_values', 'pro_codigo')),
+                        'psh_tipo' => 11, // Tipo de histórico para anulación de libros obsequios
+                        'psh_proforma' => null, // No hay proforma
+                        'id_pedido_obsequios' => $request->id, // Asociar al pedido de libros obsequios
+                        'psh_id_ven_codigo' => $venta->ven_codigo, // Asociar a la venta específica
+                        'user_created' =>  $request->usuario,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                    _14ProductoStockHistorico::insert($registroHistorial);
                 }
             }
 
@@ -5814,10 +5994,10 @@ class PedidosController extends Controller
             // Deshacer la transacción en caso de error
             DB::rollBack();
 
-            // Opcional: Loguear el error
-            // Log::error('Error al anular libros obsequios: ' . $e->getMessage());
+            // Loguear el error
+            // \Log::error('Error al anular libros obsequios: ' . $e->getMessage());
 
-            return ["status" => "0", "message" => "No se pudo anular"];
+            return ["status" => "0", "message" => "No se pudo anular: " . $e->getMessage()];
         }
     }
 
@@ -6814,7 +6994,6 @@ class PedidosController extends Controller
                     if ($pedidosvalarea_new) {
                         if ($request->guias) {
                             $this->procesoGuias_new($request);
-                            // return $this->procesoGuias_new($request);
                             if(isset($this->procesoGuias_new($request)["status"])){
                                 $estatus = $this->procesoGuias_new($request)["status"];
                                 if($estatus == 0){
@@ -6831,9 +7010,7 @@ class PedidosController extends Controller
                         return response()->json(["status" => "1", 'message' => 'Datos actualizados correctamente'], 200);
                     }else {
                         if ($request->guias) {
-                            // return "elseeee";
                             $this->procesoGuias_new($request);
-                            // return $this->procesoGuias_new($request);
                             if(isset($this->procesoGuias_new($request)["status"])){
                                 $estatus = $this->procesoGuias_new($request)["status"];
                                 if($estatus == 0){
@@ -7416,15 +7593,38 @@ class PedidosController extends Controller
         try{
             $valor          = $request->valor;
             $valorReserva   = 0;
+            $valorReservaAnterior = 0;
             $totalAReservar = 0;
             //VALIDACION CONTANDO LOS QUE HAN RESERVADO LAS GUIAS EXCEPTO DEL PEDIDO MAS LUEGO SE VA A SUMAR
-            $getReserva = $this->getReservaCodigosStock_new($request);
+            $getReserva     = $this->getReservaCodigosStock_new($request);
+            // VALIDACION DE RESERVA ANTERIOR
+            $libroSerie     = LibroSerie::where('idLibro', $request->idlibro)->first();
+            if(empty($libroSerie)){
+                return ["status" => "0", "message" => "No existe el libro con id ".$request->idlibro];
+            }
+            $yearAnterior           = $libroSerie->year;
+            $tipoValor              = LibroSerie::obtenerTipoValGuias($yearAnterior);
+            if($tipoValor == null || $tipoValor == ""){
+                return ["status" => "0", "message" => "No existe el tipo de valor para las guias"];
+            }
+            $datosEnviar = (Object) [
+                "tipo_val"          => $tipoValor,
+                "id_area"           => $request->id_area,
+                'id_serie'          => $request->id_serie,
+                'id_pedido'         => $request->id_pedido,
+            ];
+            $getReservaAnterior = $this->getReservaCodigosStock($datosEnviar);
+            if(count($getReservaAnterior) > 0){
+                foreach($getReservaAnterior as $key2 => $item2){
+                    $valorReservaAnterior = $valorReservaAnterior + $item2->valor;
+                }
+            }
             if(count($getReserva) > 0){
                 foreach($getReserva as $key2 => $item2){
                     $valorReserva = $valorReserva + $item2->pvn_cantidad;
                 }
             }
-            $totalAReservar = $valorReserva + $valor;
+            $totalAReservar = $valorReserva + $valor + $valorReservaAnterior;
             ///PROCESO
             $query = [];
            //plan lector
@@ -7447,8 +7647,8 @@ class PedidosController extends Controller
                //post stock
                //MENOS 1 ES PORQUE es el minimo que se puede pedir
                $nuevoStock     = $stockAnterior - $totalAReservar;
-               $stockDisponible = $stockAnterior - $valorReserva -1;
-              if($nuevoStock < 1){
+               $stockDisponible = $stockAnterior - ($valorReserva + $valorReservaAnterior);
+              if($nuevoStock < 0){
                return ["status" => "0", "message" => "No existe stock del libro ".$nombreLibro." cantidad disponible: ".$stockDisponible ];
               }
            } catch (\Exception $e) {
@@ -7457,7 +7657,7 @@ class PedidosController extends Controller
            }
 
        } catch (\Exception  $ex) {
-           return ["status" => "0","message" => "Hubo problemas al ingresar la guia"];
+           return ["status" => "0","message" => "Hubo problemas al ingresar la guia" , "error" => $ex->getMessage()];
        }
     }
 
@@ -8295,5 +8495,38 @@ class PedidosController extends Controller
             ]
         ]);
     }
-
+    //api:post/metodosPostPedidos
+    public function metodosPostPedidos(Request $request){
+        if($request->guardarTabAnticipo == 1){ return $this->guardarTabAnticipo($request); }
+    }
+    //api:post/metodosPostPedidos?guardarTabAnticipo=1
+    public function guardarTabAnticipo(Request $request){
+        $id_pedido          = $request->id_pedido;
+        $ifanticipo         = $request->ifanticipo;
+        $anticipoAsesor     = $request->anticipoAsesor ?? 0;
+        $setPedido          = Pedidos::find($id_pedido);
+        if(!$setPedido){
+            return response()->json([
+                'status' => 0,
+                'message' => 'No se encontro el pedido: ',
+                'pedido' => $setPedido
+            ]);
+        }
+        $setPedido->ifanticipo      = $ifanticipo;
+        $setPedido->anticipoAsesor  = $anticipoAsesor;
+        $setPedido->save();
+        if($setPedido){
+            return response()->json([
+                'status' => 1,
+                'message' => 'Se guardo correctamente el anticipo del pedido: ',
+                'pedido' => $setPedido
+            ]);
+        }else{
+            return response()->json([
+                'status' => 0,
+                'message' => 'No se pudo guardar el anticipo del pedido: ',
+                'pedido' => $setPedido
+            ]);
+        }
+    }
 }

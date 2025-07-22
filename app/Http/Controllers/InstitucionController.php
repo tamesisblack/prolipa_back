@@ -9,6 +9,9 @@ use Illuminate\Http\Request;
 use DB;
 use App\Quotation;
 use App\Models\Configuracion_salle;
+use App\Models\InstitucionTipo;
+use App\Models\Usuario;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class InstitucionController extends Controller
@@ -204,7 +207,7 @@ class InstitucionController extends Controller
         $cambio->ifcodigoEvaluacion             = $request->ifcodigoEvaluacion;
         $cambio->tipo_evaluacion                = $request->tipo_evaluacion;
         $cambio->mensaje_tipo_evaluacion       = $request->mensaje_tipo_evaluacion;
-        $cambio->ruc                            = $request->ruc;
+        $cambio->ruc                            = $request->ruc?? null;
         $cambio->save();
         return $cambio;
     }
@@ -493,7 +496,7 @@ class InstitucionController extends Controller
         // return $configuracion;
         return $configuracion;
     }
-  
+
 
     public function listaInsitucion(Request $request)
     {
@@ -504,13 +507,13 @@ class InstitucionController extends Controller
             ->leftJoin('ciudad as c', 'i.ciudad_id', '=', 'c.idciudad')
             ->leftJoin('region as r', 'i.region_idregion', '=', 'r.idregion')
             ->leftJoin('usuario as u', 'i.vendedorInstitucion', '=', 'u.cedula')
-            
+            ->leftJoin('institucion_tipo_institucion as tp','tp.id','i.tipo_institucion')
             // Último periodo configurado por región
             ->leftJoin('institucion_configuracion_periodo as ic', function ($join) {
                 $join->on('i.region_idregion', '=', 'ic.region')
-                    ->whereRaw('ic.id = (SELECT id FROM institucion_configuracion_periodo 
-                                    WHERE region = i.region_idregion 
-                                    AND estado = 1 
+                    ->whereRaw('ic.id = (SELECT id FROM institucion_configuracion_periodo
+                                    WHERE region = i.region_idregion
+                                    AND estado = 1
                                     ORDER BY id DESC LIMIT 1)');
             })
             ->leftJoin('periodoescolar as pec', 'ic.periodo_configurado', '=', 'pec.idperiodoescolar')
@@ -519,7 +522,7 @@ class InstitucionController extends Controller
             ->leftJoinSub(
                 DB::table('periodoescolar_has_institucion as phi')
                     ->selectRaw('phi.institucion_idInstitucion, phi.periodoescolar_idperiodoescolar as periodo_id')
-                    ->whereRaw('phi.id = (SELECT MAX(id) FROM periodoescolar_has_institucion 
+                    ->whereRaw('phi.id = (SELECT MAX(id) FROM periodoescolar_has_institucion
                                         WHERE institucion_idInstitucion = phi.institucion_idInstitucion)')
                 , 'last_periodo', 'i.idInstitucion', '=', 'last_periodo.institucion_idInstitucion'
             )
@@ -532,7 +535,7 @@ class InstitucionController extends Controller
                 'u.nombres AS nombre_asesor', 'u.apellidos AS apellido_asesor', 'i.fecha_registro',
                 'r.nombreregion', 'i.codigo_institucion_milton', 'i.vendedorInstitucion', 'u.iniciales',
                 'i.cantidad_cambio_ventana_evaluacion', 'i.punto_venta', 'i.maximo_porcentaje_autorizado',
-                'i.ruc', 'i.ifcodigoEvaluacion',
+                'i.ruc', 'i.ifcodigoEvaluacion', 'tp.descripcion as tipoInstitucion',
 
                 // Último periodo activo por región
                 'ic.periodo_configurado',
@@ -594,6 +597,8 @@ class InstitucionController extends Controller
                 "periodo_configurado" => $item->periodo_configurado,
                 "periodoNombreConfigurado" => $item->periodoNombreConfigurado,
                 "EstadoConfiguracion" => $item->EstadoConfiguracion,
+
+                'tipoInstitucion' => $item->tipoInstitucion,
             ];
         });
         // Si el parámetro "todas" está presente, retornar todos los datos
@@ -603,9 +608,9 @@ class InstitucionController extends Controller
         return $datos->where('estadoInstitucion', '1')->values();
     }
 
-    
-    
-    
+
+
+
     public function listaInsitucionAsesor(Request $request)
     {
         if($request->porCedula){
@@ -779,24 +784,50 @@ class InstitucionController extends Controller
         ->delete();
         return $dato;
     }
+    // public function institucion_conf_periodo(Request $request)
+    // {
+    //     $valores = [
+    //         'id' => $request->id,
+    //         'region' => $request->region,
+    //         'periodo_configurado' => $request->periodo_configurado,
+    //         'estado' => $request->estado
+    //     ];
+    //     if ($request->id > 0) {
+    //         $dato = DB::table('institucion_configuracion_periodo')
+    //         ->where('id',$request->id)
+    //         ->update($valores);
+    //         return [ 'dato'=>$dato, 'mensaje'=>'Datos actualizados'];
+    //     }else {
+    //         $dato = DB::table('institucion_configuracion_periodo')->insert($valores);
+    //         return [ 'dato'=>$dato, 'mensaje'=>'Datos registrados'];
+    //     }
+    // }
+
     public function institucion_conf_periodo(Request $request)
     {
+        $ahora = Carbon::now();
+
         $valores = [
-            'id' => $request->id,
             'region' => $request->region,
             'periodo_configurado' => $request->periodo_configurado,
             'estado' => $request->estado
         ];
+
         if ($request->id > 0) {
+            $valores['updated_at'] = $ahora;
+
             $dato = DB::table('institucion_configuracion_periodo')
-            ->where('id',$request->id)
-            ->update($valores);
-            return [ 'dato'=>$dato, 'mensaje'=>'Datos actualizados'];
-        }else {
+                ->where('id', $request->id)
+                ->update($valores);
+
+            return ['dato' => $dato, 'mensaje' => 'Datos actualizados'];
+        } else {
             $dato = DB::table('institucion_configuracion_periodo')->insert($valores);
-            return [ 'dato'=>$dato, 'mensaje'=>'Datos registrados'];
+
+            return ['dato' => $dato, 'mensaje' => 'Datos registrados'];
         }
     }
+
     public function InstitucionesXCobranzas(Request $request)
     {
         // $lista = DB::SELECT("SELECT i.idInstitucion, i.nombreInstitucion,i.punto_venta
@@ -1033,7 +1064,7 @@ class InstitucionController extends Controller
             'message' => 'Novedad creada exitosamente'
         ], 201);
     }
-    public function cod_evaluacion_institucion($id){ 
+    public function cod_evaluacion_institucion($id){
         $dato = DB::table('institucion')
         ->where('idInstitucion','=',$id)
         ->select([
@@ -1044,4 +1075,269 @@ class InstitucionController extends Controller
         ->get();
         return $dato;
     }
+    //API:GET/metodosGetInstitucion
+    public function metodosGetInstitucion(Request $request){
+        $action = $request->input('action');
+
+        switch ($action) {
+            case 'Get_Autorizades_Institucion':
+                return $this->Get_Autorizades_Institucion($request);
+            case 'Get_ListarTiposInstitucion':
+                return $this->Get_ListarTiposInstitucion($request);
+            default:
+                return response()->json(['error' => 'Acción no válida','message' => 'Acción no válida'], 400);
+        }
+    }
+
+    // API:GET/metodosGetInstitucion?action=Get_Autorizades_Institucion&institucion_id=379
+    public function Get_Autorizades_Institucion($request)
+    {
+        // $id_asesor = $request->id_asesor;
+        $institucion_id = $request->institucion_id;
+        $usuarios = \App\Models\Usuario::select(
+                'institucion.idInstitucion',
+                'institucion.nombreInstitucion',
+                'usuario.idusuario',
+                'usuario.nombres',
+                'usuario.apellidos',
+                'usuario.id_group',
+                'usuario.fecha_nacimiento',
+                'usuario.cedula',
+                'usuario.email',
+                'institucion_cargos.cargo'
+            )
+            ->leftJoin('institucion_cargos', 'institucion_cargos.id', '=', 'usuario.cargo_id')
+            ->leftJoin('institucion', 'institucion.idInstitucion', '=', 'usuario.institucion_idInstitucion')
+            ->whereNotNull('usuario.cargo_id')
+            ->where('usuario.cargo_id', '<>', 0)
+            ->where('usuario.estado_idEstado', '1')
+            // ->where('institucion.asesor_id', '=', $id_asesor)
+            ->where('institucion.estado_idEstado', '1')
+            ->where('institucion.idInstitucion', $institucion_id)
+            ->get();
+
+        // 1. Array plano
+        $usuariosNormales = $usuarios;
+
+        // 2. Array agrupado con estructura personalizada
+        $usuariosAgrupados = $usuarios->groupBy('idInstitucion')->map(function ($items, $idInstitucion) {
+            return [
+                'idInstitucion' => $idInstitucion,
+                'nombreInstitucion' => $items->first()->nombreInstitucion,
+                'usuarios' => $items->map(function ($usuario) {
+                    return [
+                        'idusuario' => $usuario->idusuario,
+                        'nombres' => $usuario->nombres,
+                        'apellidos' => $usuario->apellidos,
+                        'id_group' => $usuario->id_group,
+                        'cargo' => $usuario->cargo,
+                        'fecha_nacimiento' => $usuario->fecha_nacimiento,
+                        'email' => $usuario->email,
+                        'cedula' => $usuario->cedula,
+                    ];
+                })->values()
+            ];
+        })->values();
+
+        return response()->json([
+            'todos' => $usuariosNormales,
+            'agrupados' => $usuariosAgrupados,
+        ]);
+    }
+
+
+    //API:POST/metodosPostInstitucion
+    public function metodosPostInstitucion(Request $request){
+        $action = $request->input('action');
+
+        switch ($action) {
+            case 'Post_TrarAgrupadoVisitas':
+                return $this->Post_TrarAgrupadoVisitas($request);
+            case 'Post_GuardarTipoInstitucion':
+                return $this->Post_GuardarTipoInstitucion($request);
+            case 'Delete_TipoInstitucion':
+                return $this->Delete_TipoInstitucion($request);
+            default:
+                return response()->json(['error' => 'Acción no válida','message' => 'Acción no válida'], 400);
+        }
+    }
+    // @action: Post_TrarAgrupadoVisitas
+    // @arraySendPeriodos: [{ id: '24', descripcion: '2024' }, ...]
+    // @institucion_id: 12
+    // API:POST/metodosGetInstitucion?action=Post_TrarAgrupadoVisitas
+    public function Post_TrarAgrupadoVisitas($request) {
+        $periodos = json_decode($request->arraySendPeriodos); // Ej: [{ idperiodoescolar: '24', periodoescolar: '2024' }, ...]
+
+        $institucion_id = $request->institucion_id;
+
+        // Validación
+        if (!is_array($periodos) || empty($periodos)) {
+            return response()->json(['error' => 'Datos de periodos inválidos','message'=> 'No se pudieron obtener los datos del periodo'], 400);
+        }
+
+        $selectParts = [];
+        $ids = [];
+
+        foreach ($periodos as $p) {
+            $id = $p->idperiodoescolar;
+            $desc = preg_replace('/\W+/', '_', $p->periodoescolar); // limpiar descripción para alias
+            $ids[] = $id;
+            $selectParts[] = "COUNT(CASE WHEN h.periodo_id = '$id' THEN h.id END) AS visitas_$desc";
+        }
+
+        $selectString = implode(",\n", $selectParts);
+        $inClause = implode("','", $ids);
+
+        // Profesores
+        $queryProfesores = DB::select("
+            SELECT
+                $selectString
+            FROM historico_visitas h
+            WHERE h.periodo_id IN ('$inClause')
+            AND h.institucion_id = ?
+            AND h.recurso = '15'
+            AND h.id_group = '6'
+        ", [$institucion_id]);
+
+        // Estudiantes
+        $queryEstudiantes = DB::select("
+            SELECT
+                $selectString
+            FROM historico_visitas h
+            WHERE h.periodo_id IN ('$inClause')
+            AND h.institucion_id = ?
+            AND h.recurso = '15'
+            AND h.id_group = '4'
+        ", [$institucion_id]);
+
+        return [
+            'profesores' => $queryProfesores[0] ?? [],
+            'estudiantes' => $queryEstudiantes[0] ?? []
+        ];
+    }
+    //api:post>>metodosPostInstitucion?action=Post_GuardarTipoInstitucion
+    public function Post_GuardarTipoInstitucion($request)
+    {
+        try {
+            // Validar datos requeridos
+            if (empty($request->descripcion)) {
+                return response()->json([
+                    'status' => 0,
+                    'message' => 'La descripción es requerida'
+                ], 400);
+            }
+
+            // Si viene ID, es edición; si no, es creación
+            if (!empty($request->id)) {
+                // Editar tipo de institución existente
+                $tipoInstitucion = InstitucionTipo::find($request->id);
+
+                if (!$tipoInstitucion) {
+                    return response()->json([
+                        'status' => 0,
+                        'message' => 'Tipo de institución no encontrado'
+                    ], 404);
+                }
+
+                $tipoInstitucion->descripcion = $request->descripcion;
+                $tipoInstitucion->user_edited = $request->user_edited ?? null;
+                $tipoInstitucion->updated_at = now();
+                $tipoInstitucion->save();
+
+                return response()->json([
+                    'status' => 1,
+                    'message' => 'Tipo de institución actualizado correctamente',
+                    'data' => $tipoInstitucion
+                ]);
+            } else {
+                // Crear nuevo tipo de institución
+                $tipoInstitucion = new InstitucionTipo();
+                $tipoInstitucion->descripcion = $request->descripcion;
+                $tipoInstitucion->user_created = $request->user_created ?? null;
+                $tipoInstitucion->created_at = now();
+                $tipoInstitucion->save();
+
+                return response()->json([
+                    'status' => 1,
+                    'message' => 'Tipo de institución creado correctamente',
+                    'data' => $tipoInstitucion
+                ]);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al procesar la solicitud: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    //api:get>>metodosGetInstitucion?action=Get_ListarTiposInstitucion
+    public function Get_ListarTiposInstitucion($request) {
+        try {
+            // Obtener todos los tipos de institución ordenados por fecha de creación descendente
+            $tiposInstitucion = InstitucionTipo::orderBy('created_at', 'desc')->get();
+
+            return response()->json([
+                'status' => 1,
+                'message' => 'Tipos de institución obtenidos correctamente',
+                'data' => $tiposInstitucion,
+                'total' => $tiposInstitucion->count()
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Error al obtener los tipos de institución: ' . $e->getMessage(),
+                'data' => []
+            ], 500);
+        }
+    }
+
+    //api:delete>>metodosPostInstitucion?action=Delete_TipoInstitucion
+public function Delete_TipoInstitucion($request) {
+    try {
+        // Validar que venga el ID
+        if (empty($request->id)) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'El ID del tipo de institución es requerido'
+            ], 400);
+        }
+
+        // Buscar el tipo de institución
+        $tipoInstitucion = InstitucionTipo::find($request->id);
+
+        if (!$tipoInstitucion) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Tipo de institución no encontrado'
+            ], 404);
+        }
+
+        // Verificar si está siendo usado por alguna institución (opcional)
+        $instituciones = Institucion::where('tipo_institucion', $request->id)->count();
+        if ($instituciones > 0) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'No se puede eliminar el tipo de institución porque está siendo usado por ' . $instituciones . ' institución(es)'
+            ], 400);
+        }
+
+        // Eliminar el tipo de institución
+        $tipoInstitucion->delete();
+        // Reajustar el AUTO_INCREMENT correctamente
+        $ultimoId = InstitucionTipo::max('id') + 1;
+        DB::statement('ALTER TABLE institucion_tipo_institucion AUTO_INCREMENT = ' . $ultimoId);
+        return response()->json([
+            'status' => 1,
+            'message' => 'Tipo de institución eliminado correctamente'
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'status' => 0,
+            'message' => 'Error al eliminar el tipo de institución: ' . $e->getMessage()
+        ], 500);
+    }
+}
+
 }

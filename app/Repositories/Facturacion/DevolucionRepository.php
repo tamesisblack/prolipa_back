@@ -5,18 +5,19 @@ use App\Models\CodigosLibros;
 use App\Models\CodigosLibrosDevolucionHeader;
 use App\Models\CodigosLibrosDevolucionSon;
 use App\Models\CodigosLibrosDevolucionSonFacturador;
+use App\Models\LibroSerie;
 use App\Repositories\BaseRepository;
 use App\Traits\Codigos\TraitCodigosGeneral;
 use Illuminate\Support\Facades\DB;
 class  DevolucionRepository extends BaseRepository
 {
     use TraitCodigosGeneral;
- 
+
     public function __construct(CodigosLibrosDevolucionHeader $devolucionHeader)
     {
         parent::__construct($devolucionHeader);
     }
-  
+
     public function getFacturaAvailable($request, $cantidadNecesaria, $idtipodoc=[1], $documentoEspecifico=null, $codigo=null) {
         $pro_codigo     = $request->pro_codigo;
         $id_institucion = $request->id_institucion;
@@ -48,15 +49,15 @@ class  DevolucionRepository extends BaseRepository
                 $query->whereNotIn('dv.idtipodoc', [3, 4])  // Excluye idtipodoc 3 o 4
                       ->orWhereNull('dv.doc_intercambio');  // O donde doc_intercambio sea nulo
             })
-            ->selectRaw('COALESCE(SUM(dg.det_ven_cantidad - dg.det_ven_dev), 0) as cantidad, dv.ven_codigo, dg.pro_codigo, dv.idtipodoc')
+            ->selectRaw('COALESCE(SUM(dg.det_ven_cantidad - dg.det_ven_dev), 0) as cantidad, dv.ven_codigo, dg.pro_codigo, dv.idtipodoc, dg.det_ven_valor_u')
             ->groupBy('dv.ven_codigo') // Agrupar por ven_codigo para obtener los totales
             ->havingRaw('COALESCE(SUM(dg.det_ven_cantidad - dg.det_ven_dev), 0) >= ?', [$cantidadNecesaria])
             ->get(); // Obtener todas las facturas disponibles
-        
+
         if ($disponiblePrefactura->isEmpty()) {
             return null; // Si no hay prefactura disponible que cumpla con la cantidad necesaria
         }
-    
+
         // Iterar sobre las facturas disponibles para calcular la cantidad disponible
         foreach ($disponiblePrefactura as $factura) {
             // Obtener la cantidad reservada (creada o en reserva) para cada factura
@@ -66,17 +67,17 @@ class  DevolucionRepository extends BaseRepository
                 ->where('cs.id_periodo', $id_periodo)
                 ->where('cs.pro_codigo', $pro_codigo)
                 ->where('documento', $factura->ven_codigo)
-                ->whereNull('cs.combo') 
-                ->where('cs.tipo_codigo', '0') 
-                ->where('cs.estado', 0) 
+                ->whereNull('cs.combo')
+                ->where('cs.tipo_codigo', '0')
+                ->where('cs.estado', 0)
                 ->when($codigo, function($query) use ($codigo) {
                     $query->where('cs.codigo', '<>', $codigo); // Excluir el código si se pasa como parámetro
                 })
                 ->count();
-    
+
             // Calcular la cantidad disponible restando la cantidad reservada
             $cantidadDisponible = $factura->cantidad - $cantidadReservadaCreada;
-    
+
             // Verificar si la cantidad disponible es suficiente
             if ($cantidadDisponible >= $cantidadNecesaria) {
                 // Si hay suficiente cantidad, asignamos la cantidad disponible
@@ -84,10 +85,77 @@ class  DevolucionRepository extends BaseRepository
                 return $factura; // Devolver solo esta factura disponible
             }
         }
-    
+
         return null; // Si no se encuentra ninguna prefactura con suficiente cantidad
     }
-    
+
+    public function getFacturaAvailableCombo($request, $cantidadNecesaria, $idtipodoc=[1], $documentoEspecifico=null, $codigo=null) {
+        $pro_codigo     = $request->pro_codigo;
+        $id_institucion = $request->id_institucion;
+        $id_periodo     = $request->id_periodo;
+        $id_empresa     = $request->id_empresa;
+        // Obtener todas las facturas disponibles que cumplen con los criterios
+        $disponiblePrefactura = \DB::table('f_detalle_venta as dg')
+            ->join('f_venta as dv', function ($join) use ($id_empresa) {
+                $join->on('dg.ven_codigo', '=', 'dv.ven_codigo')
+                    ->where('dg.id_empresa', '=', $id_empresa)
+                    ->where('dv.id_empresa', '=', $id_empresa);
+            })
+            ->where('dg.pro_codigo', $pro_codigo)
+            ->where('dv.id_empresa', $id_empresa)
+            ->where('dg.id_empresa', $id_empresa)
+            ->where('dv.institucion_id', $id_institucion)
+            ->where('dv.periodo_id', $id_periodo)
+            ->where('dv.est_ven_codigo', '<>', 3)
+            ->when($documentoEspecifico, function ($query) use ($documentoEspecifico) {
+                // Si se proporciona un documento específico, filtrar solo por ese documento
+                $query->where('dv.ven_codigo', $documentoEspecifico);
+            })
+            ->when(is_null($documentoEspecifico), function ($query) use ($idtipodoc) {
+                // Si no se proporciona un documento específico, filtrar por el tipo de documento
+                $query->whereIn('dv.idtipodoc', $idtipodoc);
+            })
+            ->where(function ($query) {
+                // Validamos que no se cumpla la condición: idtipodoc es 3 o 4 y doc_intercambio no es nulo
+                $query->whereNotIn('dv.idtipodoc', [3, 4])  // Excluye idtipodoc 3 o 4
+                      ->orWhereNull('dv.doc_intercambio');  // O donde doc_intercambio sea nulo
+            })
+            ->selectRaw('COALESCE(SUM(dg.det_ven_cantidad - dg.det_ven_dev), 0) as cantidad, dv.ven_codigo, dg.pro_codigo, dv.idtipodoc, dg.det_ven_valor_u')
+            ->groupBy('dv.ven_codigo') // Agrupar por ven_codigo para obtener los totales
+            ->havingRaw('COALESCE(SUM(dg.det_ven_cantidad - dg.det_ven_dev), 0) >= ?', [$cantidadNecesaria])
+            ->get(); // Obtener todas las facturas disponibles
+        if ($disponiblePrefactura->isEmpty()) {
+            return null; // Si no hay prefactura disponible que cumpla con la cantidad necesaria
+        }
+        // Iterar sobre las facturas disponibles para calcular la cantidad disponible
+        foreach ($disponiblePrefactura as $factura) {
+            // Obtener la cantidad reservada (creada o en reserva) para cada factura
+            $cantidadReservadaCreada = \DB::table('codigoslibros_devolucion_son as cs')
+            ->where('cs.id_empresa', $id_empresa)
+            ->where('cs.id_cliente', $id_institucion)
+            ->where('cs.id_periodo', $id_periodo)
+            ->where('cs.pro_codigo', $pro_codigo)
+            ->where('cs.documento', $factura->ven_codigo)
+            ->where('cs.tipo_codigo', '1')
+            ->where('cs.estado', 0)
+            ->when($codigo, function($query) use ($codigo) {
+                $query->where('cs.pro_codigo', '<>', $codigo); // Excluir el código si se pasa como parámetro
+            })
+            ->sum('cs.combo_cantidad'); // SUMAR combo_cantidad
+            // Calcular la cantidad disponible restando la cantidad reservada
+            $cantidadDisponible = $factura->cantidad - $cantidadReservadaCreada;
+
+            // Verificar si la cantidad disponible es suficiente
+            if ($cantidadDisponible >= $cantidadNecesaria) {
+                // Si hay suficiente cantidad, asignamos la cantidad disponible
+                $factura->cantidadDisponible = $cantidadDisponible;
+                return $factura; // Devolver solo esta factura disponible
+            }
+        }
+
+        return null; // Si no se encuentra ninguna prefactura con suficiente cantidad
+    }
+
     public function actualizarCodigo($codigo, $codigo_proforma, $nuevo_codigo, $id_institucion, $id_periodo, $id_usuario) {
         $codigoUpdate = CodigosLibros::find($codigo);
         if ($codigoUpdate) {
@@ -96,19 +164,19 @@ class  DevolucionRepository extends BaseRepository
                 CodigosLibros::where('codigo', $codigo_union)
                     ->update(['codigo_proforma' => $nuevo_codigo]);
             }
-    
+
             // Actualizar la pre factura en el código
             CodigosLibros::where('codigo', $codigo)
                 ->update(['codigo_proforma' => $nuevo_codigo]);
-    
+
             // Guardar en histórico
             $mensajeHistorico = 'Se intercambió del documento ' . $codigo_proforma . ' al documento ' . $nuevo_codigo;
             $this->GuardarEnHistorico(0,$id_institucion,$id_periodo,$codigo,$id_usuario,$mensajeHistorico,null,null,null,null);
         }
     }
-       
-    
-    
+
+
+
     public function detallePrefactura($ven_codigo,$id_empresa,$id_institucion,$combos = 0)
     {
         $disponiblePrefactura = \DB::table('f_detalle_venta as dg')
@@ -181,6 +249,30 @@ class  DevolucionRepository extends BaseRepository
         $devolucionH->save();
         return $devolucionH;
     }
+     public function prefacturaLibreXCodigoDocumentoActual($id_empresa, $id_institucion, $id_periodo, $pro_codigo,$cantidadNecesaria=0,$ven_codigo)
+    {
+        $query = DB::table('f_venta as v')
+            ->leftJoin('f_detalle_venta as dv', function ($join) {
+                $join->on('dv.ven_codigo', '=', 'v.ven_codigo')
+                    ->on('dv.id_empresa', '=', 'v.id_empresa');
+            })
+            ->select(
+                'dv.*',
+                DB::raw('(COALESCE(dv.det_ven_cantidad, 0) - COALESCE(dv.det_ven_dev, 0)) AS disponible')
+            )
+            ->where('v.institucion_id', $id_institucion)
+            ->where('v.id_empresa', $id_empresa)
+            ->where('v.periodo_id', $id_periodo)
+            ->where('v.est_ven_codigo', '<>', '3')
+            ->where('v.ven_codigo', '=', $ven_codigo) // Excluir el documento actual
+            // ->whereNull('v.doc_intercambio')
+            // ->where('v.idtipodoc', '1')
+            ->where('dv.pro_codigo', $pro_codigo)
+            ->having('disponible', '>=', $cantidadNecesaria)
+            ->get();
+
+        return $query;
+    }
     public function prefacturaLibreXCodigo($id_empresa, $id_institucion, $id_periodo, $pro_codigo,$cantidadNecesaria=0)
     {
         $query = DB::table('f_venta as v')
@@ -199,7 +291,7 @@ class  DevolucionRepository extends BaseRepository
             // ->whereNull('v.doc_intercambio')
             ->where('v.idtipodoc', '1')
             ->where('dv.pro_codigo', $pro_codigo)
-            ->having('disponible', '>', $cantidadNecesaria)
+            ->having('disponible', '>=', $cantidadNecesaria)
             ->get();
 
         return $query;
@@ -207,6 +299,11 @@ class  DevolucionRepository extends BaseRepository
     public function validateComboCreado($combo,$id_empresa,$id_devolucion)
     {
         $query = CodigosLibrosDevolucionSon::where('pro_codigo', $combo)->where('id_empresa', $id_empresa)->where('codigoslibros_devolucion_id', $id_devolucion)->get();
+        return $query;
+    }
+    public function validateComboCreadoXDocumento($combo,$id_empresa,$id_devolucion,$documento)
+    {
+        $query = CodigosLibrosDevolucionSon::where('pro_codigo', $combo)->where('id_empresa', $id_empresa)->where('documento', $documento)->where('codigoslibros_devolucion_id', $id_devolucion)->get();
         return $query;
     }
     //actualizar valores de un documento f_venta
@@ -302,5 +399,59 @@ class  DevolucionRepository extends BaseRepository
             throw new \Exception("No se pudo actualizar los valores del documento f_vent2a.");
         }
     }
+    public function guardarComboSon($combo, $cantidad, $precio, $id_cliente, $id_periodo, $id_empresa, $id_devolucion, $ven_codigo)
+    {
+        try {
+            $getLibro = LibroSerie::where('codigo_liquidacion', $combo)->first();
+            if (!$getLibro) {
+                throw new \Exception('No se pudo obtener el combo ' . $combo);
+            }
+
+            $id_libro = $getLibro->idLibro;
+
+            // Validar si ya se ha devuelto en el módulo anterior
+            $existeComboAnterior = $this->validateComboCreado($combo, $id_empresa, $id_devolucion);
+            if ($existeComboAnterior->count() > 0) {
+                $getcombo_anterior = $existeComboAnterior[0]->combo_anterior;
+                // si anterior y esta devuelto no devolver
+                if($getcombo_anterior == 1){
+                    $getcombo_cantidad_devuelta = (int) $existeComboAnterior[0]->combo_cantidad_devuelta;
+                    if ($getcombo_cantidad_devuelta > 0) {
+                        return 2; // Ya devuelto, no guardar
+                    }
+                }
+            }
+
+            $existeCombo = $this->validateComboCreadoXDocumento($combo, $id_empresa, $id_devolucion, $ven_codigo);
+            if ($existeCombo->count() > 0) {
+                $guardarCombo = CodigosLibrosDevolucionSon::find($existeCombo[0]->id);
+                // $getcombo_cantidad_devuelta = (int) $guardarCombo->combo_cantidad_devuelta;
+                // if ($getcombo_cantidad_devuelta > 0) {
+                //     return 2; // Ya devuelto, no guardar
+                // }
+                $guardarCombo->combo_cantidad = $cantidad + $guardarCombo->combo_cantidad;
+            } else {
+                $guardarCombo = new CodigosLibrosDevolucionSon();
+                $guardarCombo->combo_cantidad = $cantidad;
+            }
+
+            $guardarCombo->codigoslibros_devolucion_id = $id_devolucion;
+            $guardarCombo->id_empresa = $id_empresa;
+            $guardarCombo->pro_codigo = $combo;
+            $guardarCombo->tipo_codigo = 1;
+            $guardarCombo->id_cliente = $id_cliente;
+            $guardarCombo->id_periodo = $id_periodo;
+            $guardarCombo->id_libro = $id_libro;
+            $guardarCombo->precio = $precio;
+            $guardarCombo->documento = $ven_codigo;
+            $guardarCombo->save();
+
+            return 1;
+
+        } catch (\Exception $e) {
+            throw new \Exception("Error al guardar el combo {$combo}: " . $e->getMessage(), 500);
+        }
+    }
+
 
 }

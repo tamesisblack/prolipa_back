@@ -1,18 +1,22 @@
 <?php
 namespace App\Repositories;
-use DB;
+use Illuminate\Support\Facades\DB;
 use App\Models\Models\Pagos\VerificacionPago;
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
+use App\Models\PedidoPagosDetalle;
 use App\Models\Pedidos;
 use App\Models\Verificacion;
+use App\Repositories\pedidos\PedidosRepository;
 use App\Traits\Pedidos\TraitPedidosGeneral;
 
 class  PedidosPagosRepository extends BaseRepository
 {
     use TraitPedidosGeneral;
-    public function __construct(VerificacionPago $modelo)
+    protected $pedidosRepository = null;
+    public function __construct(VerificacionPago $modelo, PedidosRepository $pedidosRepository)
     {
         parent::__construct($modelo);
+        $this->pedidosRepository = $pedidosRepository;
     }
     public function getPagosXID($verificacion_pago_id){
         $query = DB::SELECT("SELECT pd.* ,
@@ -31,7 +35,8 @@ class  PedidosPagosRepository extends BaseRepository
             'tipoPagos',
             'formaPagos',
             'pedidoPagosHijo',
-            'userCierre:idusuario,nombres,apellidos'
+            'userCierre:idusuario,nombres,apellidos',
+            'detallePago',
         ])
         ->where('ven_codigo',$contrato)
         ->where('forma_pago_id','>','0')
@@ -43,7 +48,8 @@ class  PedidosPagosRepository extends BaseRepository
         $pagos = PedidosDocumentosLiq::with([
             'tipoPagos',
             'formaPagos',
-            'pedidoPagosHijo'
+            'pedidoPagosHijo',
+            'detallePago',
         ])
         ->where('forma_pago_id','>','0')
         ->where('1_4_documento_liq.institucion_id','=',$institucion)
@@ -119,7 +125,53 @@ class  PedidosPagosRepository extends BaseRepository
         }
         //deuda proxima
         if($request->tipo_pago_id == 3 || $tipoPago == 3) { $this->updateDeudaProxima($request->id_pedido); }
+        // guardar en detalle de pedido si el pago es de tipo anticipo, anticipo pedido, convenio
+        if($request->tipo_pago_id == 1 || $request->tipo_pago_id == 2 || $request->tipo_pago_id == 4){
+            $this->saveDetallePago($request,$nuevodocumento);
+        }
         return $nuevodocumento;
+    }
+
+    public function saveDetallePago($request,$documentoLiq){
+        $doc_codigo     = $documentoLiq->doc_codigo;
+        $user_created   = $request->user_created;
+        $id             = 0;
+        $descripcion    = null;
+        // anticipo del pedido
+        if($request->tipo_pago_id == 1 && $request->ifAntAprobado == 1){ $descripcion = "Anticipo del pedido"; }
+        // pago anticipo
+        if($request->tipo_pago_id == 1 && $request->ifAntAprobado == 0){ $descripcion = "Pago anticipo"; }
+        // pago tipo liquidacion
+        if($request->tipo_pago_id == 2){ $descripcion = "Pago de liquidacion"; }
+        // pago de convenio
+        if($request->tipo_pago_id == 4){ $descripcion = "Pago de convenio"; }
+        //ver si hay un pago
+        $validateExistsDetallePago = DB::SELECT("SELECT * FROM pedidos_pagos_detalles p
+        WHERE p.id_pago = '$doc_codigo'
+        LIMIT 1
+        ");
+        if(count($validateExistsDetallePago) > 0){
+            $id = $validateExistsDetallePago[0]->id_pedido_pago_detalle;
+        }else{
+            $id = 0;
+        }
+        $detalle = new PedidoPagosDetalle();
+
+        if($id == 0){
+            $detalle                = new PedidoPagosDetalle();
+            $detalle->id_pago       = $doc_codigo;
+            $detalle->user_created  = $user_created;
+        } else {
+            $detalle                = PedidoPagosDetalle::findOrFail($id);
+            return "Ya existe un detalle de pago";
+        }
+
+        // En ambos casos se actualizan estos campos si están presentes
+        $detalle->valor         = $request->doc_valor;
+        $detalle->descripcion   = $descripcion;
+
+        $detalle->save();
+
     }
 
     public function updateDeudaMetodoAnterior($id_pedido)
@@ -167,25 +219,135 @@ class  PedidosPagosRepository extends BaseRepository
     }
     //api:get>>/pedigo_Pagos?getVentaRealXAsesor=1&idAsesor=1&idPeriodo=1
     public function getVentaRealXAsesor($idusuario,$periodo){
-        $query = DB::SELECT("SELECT p.id_pedido, p.id_institucion, p.tipo_venta, p.id_periodo, p.contrato_generado, p.TotalVentaReal,p.total_venta
-        FROM pedidos p
-        WHERE p.id_asesor = ?
-        AND p.tipo ='0'
-        AND p.estado = '1'
-        AND p.id_periodo = ?
-        AND p.contrato_generado IS NOT NULL
+        $query = DB::SELECT("SELECT
+            p.id_pedido,
+            p.id_institucion,
+            p.tipo_venta,
+            p.id_periodo,
+            p.contrato_generado,
+            p.TotalVentaReal,
+            p.total_venta,
+
+            -- Total Venta Alcance por pedido
+            (
+                SELECT SUM(pp.venta_bruta)
+                FROM pedidos_alcance pp
+                WHERE pp.estado_alcance = '1'
+                AND pp.id_pedido = p.id_pedido
+            ) AS totalVentaAlcance,
+
+            -- total_venta + totalVentaAlcance
+            (
+                p.total_venta +
+                COALESCE((
+                SELECT SUM(pp.venta_bruta)
+                FROM pedidos_alcance pp
+                WHERE pp.estado_alcance = '1'
+                    AND pp.id_pedido = p.id_pedido
+                ), 0)
+            ) AS total_venta_con_alcance
+
+            FROM pedidos p
+            WHERE p.id_asesor = ?
+            AND p.tipo = '0'
+            AND p.estado = '1'
+            AND p.id_periodo = ?
+            AND p.contrato_generado IS NOT NULL;
+
         ",[$idusuario,$periodo]);
         return $query;
     }
+
+    public function getVentaPedido($periodo_id,$tipo_venta=null){
+         $getPedidos = Pedidos::where('id_periodo', $periodo_id)
+        ->where('estado', '1')
+        ->where('tipo', '0')
+        ->whereNotNull('contrato_generado')
+        ->when($tipo_venta == 1, function ($query) {
+            $query->where('tipo_venta', '1');
+        })
+        ->when($tipo_venta == 2, function ($query) {
+            $query->where('tipo_venta', '2');
+        })
+        ->get();
+
+        $arrayDetalles = [];
+
+        // 3. Recorrer los pedidos y obtener los detalles de cada uno
+        foreach ($getPedidos as $key => $item10) {
+            $pedido = $item10->id_pedido;
+            if($periodo_id <= $this->tr_periodoPedido){
+              $libroSolicitados = $this->pedidosRepository->obtenerLibroxPedidoTodo($pedido);
+            }else{
+              $libroSolicitados = $this->pedidosRepository->obtenerLibroxPedidoTodo_new($pedido);
+            }
+            $arrayDetalles[$key] = $libroSolicitados;
+        }
+
+        $agrupado = [];
+        $arrayDetalles = collect($arrayDetalles)->flatten(10);
+
+        // 4. Agrupar los datos por código de liquidación
+        foreach ($arrayDetalles as $detalle) {
+            $codigo_liquidacion = $detalle->codigo_liquidacion;
+
+            if (isset($agrupado[$codigo_liquidacion])) {
+                $agrupado[$codigo_liquidacion]['valor'] += $detalle->valor;
+                $agrupado[$codigo_liquidacion]['total'] += $detalle->valor * $detalle->precio;
+
+                if (empty($agrupado[$codigo_liquidacion]['nombrelibro'])) {
+                    $agrupado[$codigo_liquidacion]['nombrelibro'] = $detalle->nombrelibro;
+                }
+            } else {
+                $agrupado[$codigo_liquidacion] = [
+                    'codigo_liquidacion' => $codigo_liquidacion,
+                    'valor' => $detalle->valor,
+                    'nombrelibro' => $detalle->nombrelibro,
+                    'precio' => $detalle->precio,
+                    'total' => $detalle->valor * $detalle->precio,
+                ];
+            }
+        }
+
+        // 5. Calcular el totalPedido
+        $totalPedido = 0;
+        foreach ($agrupado as $item) {
+            $totalPedido += $item['total'];
+        }
+
+        // 6. Retornar los datos agrupados con el total general
+        return [
+            'data' => array_values($agrupado),
+            'totalPedido' => number_format($totalPedido, 2, '.', '')
+        ];
+    }
     //api:get/pedigo_Pagos?getVentaTotalListaDirecta=1&idPeriodo=22
-    public function getVentaTotalListaDirecta($request){
-        $query = DB::SELECT("SELECT
+   public function getVentaTotalListaDirecta($request)
+    {
+         // 1. Validar que el periodo_id esté presente
+        $periodo_id = $request->idPeriodo;
+
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "Falta el periodo_id"];
+        }
+
+        $totalVentaPedidos = (float) $this->getVentaPedido($periodo_id, null)['totalPedido'];
+        $ventaDirectaPedidos = (float) $this->getVentaPedido($periodo_id, 1)['totalPedido'];
+        $ventaListaPedidos = (float) $this->getVentaPedido($periodo_id, 2)['totalPedido'];
+
+
+
+        // Consulta para pedidos
+        $ventas = DB::select("SELECT
                 ROUND(SUM(TotalVentaDirecta), 2) AS TotalVentaDirecta,
                 ROUND(SUM(TotalVentaLista), 2) AS TotalVentaLista,
                 ROUND(SUM(SinVerificacionesDirecta), 2) AS SinVerificacionesDirecta,
                 ROUND(SUM(SinVerificacionesLista), 2) AS SinVerificacionesLista,
                 ROUND(SUM(totalVentaBruta), 2) AS TotalVentaBruta,
                 ROUND(SUM(total_ventaSinVerificaciones), 2) AS TotalVentaSinVerificaciones
+                -- ROUND(SUM(totalVentaPedidos), 2) AS TotalVentaPedidos,
+                -- ROUND(SUM(totalVentaPedidosVentaDirecta), 2) AS TotalVentaPedidosVentaDirecta,
+                -- ROUND(SUM(totalVentaPedidosVentaLista), 2) AS TotalVentaPedidosVentaLista
             FROM (
                 SELECT
                     p.id_pedido,
@@ -214,19 +376,77 @@ class  PedidosPagosRepository extends BaseRepository
                         WHEN p.TotalVentaReal = 0 AND p.tipo_venta = 2 THEN p.total_venta
                         ELSE 0
                     END AS SinVerificacionesLista
-                FROM
-                    pedidos p
-                LEFT JOIN
-                    usuario u ON u.idusuario = p.id_asesor
-                WHERE
-                    p.tipo = '0'
-                    AND p.estado = '1'
-                    AND p.id_periodo = ?
-                    AND p.contrato_generado IS NOT NULL
-            ) AS subquery;
-        ",[$request->idPeriodo]);
-        return $query;
+                    -- CASE
+                    --     WHEN p.total_venta > 0 THEN p.total_venta
+                    --     ELSE 0
+                    -- END AS totalVentaPedidos,
+                    -- CASE
+                    --     WHEN p.total_venta > 0 AND p.tipo_venta = 1 THEN p.total_venta
+                    --     ELSE 0
+                    -- END AS totalVentaPedidosVentaDirecta,
+                    -- CASE
+                    --     WHEN p.total_venta > 0 AND p.tipo_venta = 2 THEN p.total_venta
+                    --     ELSE 0
+                    -- END AS totalVentaPedidosVentaLista
+                FROM pedidos p
+                LEFT JOIN usuario u ON u.idusuario = p.id_asesor
+                WHERE p.tipo = '0'
+                AND p.estado = '1'
+                AND p.id_periodo = ?
+                AND p.contrato_generado IS NOT NULL
+            ) AS subquery
+        ", [$request->idPeriodo]);
+
+        $ventas = collect($ventas)->first();
+
+        // Consulta para alcances
+        // $alcances = DB::select("
+        //     SELECT
+        //         ROUND(SUM(totalVentaPedidos), 2) AS TotalVentaPedidos,
+        //         ROUND(SUM(totalVentaPedidosVentaDirecta), 2) AS TotalVentaPedidosVentaDirecta,
+        //         ROUND(SUM(totalVentaPedidosVentaLista), 2) AS TotalVentaPedidosVentaLista
+        //     FROM (
+        //         SELECT
+        //             CASE
+        //                 WHEN a.venta_bruta > 0 THEN a.venta_bruta
+        //                 ELSE 0
+        //             END AS totalVentaPedidos,
+        //             CASE
+        //                 WHEN a.venta_bruta > 0 AND p.tipo_venta = 1 THEN a.venta_bruta
+        //                 ELSE 0
+        //             END AS totalVentaPedidosVentaDirecta,
+        //             CASE
+        //                 WHEN a.venta_bruta > 0 AND p.tipo_venta = 2 THEN a.venta_bruta
+        //                 ELSE 0
+        //             END AS totalVentaPedidosVentaLista
+        //         FROM pedidos_alcance a
+        //         LEFT JOIN pedidos p ON p.id_pedido = a.id_pedido
+        //         WHERE p.id_periodo = ?
+        //         AND p.contrato_generado IS NOT NULL
+        //         AND p.estado = '1'
+        //         AND p.tipo = '0'
+        //         AND a.estado_alcance = '1'
+        //     ) AS subquery
+        // ", [$request->idPeriodo]);
+
+        // $alcances = collect($alcances)->first();
+
+        // Suma de los totales pedidos (ventas + alcances)
+        $totalCombinado = [
+            'TotalVentaPedidos' => $totalVentaPedidos,
+            'TotalVentaPedidosVentaDirecta' => $ventaDirectaPedidos,
+            'TotalVentaPedidosVentaLista' => $ventaListaPedidos,
+        ];
+
+        return [
+            "ventas" => $ventas,
+            "totalCombinado" => $totalCombinado,
+        ];
     }
+
+
+
+
     //api:get/pedigo_Pagos?getVentaTotalListaDirectaAsesor=1&idPeriodo=22
     public function getVentaTotalListaDirectaAsesor($request){
         $query = DB::select("
@@ -301,6 +521,19 @@ class  PedidosPagosRepository extends BaseRepository
         // $valor      = 0;
         // foreach ($deudas as $deuda) { $valor += abs($deuda->doc_valor); }
         // return $valor;
+    }
+    public function getSubPagos($doc_codigo){
+        $query = DB::SELECT("SELECT d.*,
+        CONCAT(u.nombres , ' ', u.apellidos) AS usuario_creador,
+        CONCAT(ue.nombres , ' ', ue.apellidos) AS usuario_editor
+        FROM pedidos_pagos_detalles d
+        LEFT JOIN usuario u ON u.idusuario = d.user_created
+        LEFT JOIN usuario ue ON ue.idusuario = d.user_edit
+        WHERE d.id_pago = ?
+        ORDER BY d.id_pedido_pago_detalle DESC
+        ",
+        [$doc_codigo]);
+        return $query;
     }
 }
 ?>

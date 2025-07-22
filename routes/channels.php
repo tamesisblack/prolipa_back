@@ -29,3 +29,7 @@ Broadcast::channel('asesor.notificacionVerificacion', function ($user) {
     return $user->idgroup === 11;
 });
 
+Broadcast::channel('capacitador.notificacionCapacitaciones', function ($user) {
+    return $user->capacitador == 1 && $user->estado_idEstado == 1;
+});
+

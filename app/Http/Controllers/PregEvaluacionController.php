@@ -90,11 +90,12 @@ class PregEvaluacionController extends Controller
     {
         $preguntas = DB::SELECT("SELECT p.id as id, p.id_tema, p.descripcion, p.puntaje_pregunta,
         p.img_pregunta, pe.id as 'id_pre_evas', p.id_tipo_pregunta, pe.id_evaluacion, ti.nombre_tipo, ti.indicaciones, t.clasificacion,
-        t.nombre_tema
-        FROM preguntas p, pre_evas pe, tipos_preguntas ti, temas t
+        t.nombre_tema, a.nombreasignatura, t.id_asignatura
+        FROM preguntas p, pre_evas pe, tipos_preguntas ti, temas t, asignatura a
         WHERE t.id = p.id_tema
         AND pe.id_pregunta = p.id
         AND ti.id_tipo_pregunta = p.id_tipo_pregunta
+        AND t.id_asignatura = a.idasignatura
         AND pe.id_evaluacion = $request->evaluacion
         AND p.estado=1
         AND pe.grupo = $request->grupo
@@ -117,6 +118,8 @@ class PregEvaluacionController extends Controller
                     'nombre_tema' => $value->nombre_tema,
                     'puntaje_pregunta' => $value->puntaje_pregunta,
                     'clasificacion' => $value->clasificacion,
+                    'nombreasignatura' => $value->nombreasignatura,
+                    'id_asignatura' => $value->id_asignatura,
                     'opciones'=>$opciones,
                 ];
             }
@@ -125,7 +128,6 @@ class PregEvaluacionController extends Controller
         }
         return $data;
     }
-
 
 
     public function pregEvaluacionEstudiante(Request $request)

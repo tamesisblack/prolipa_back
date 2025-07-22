@@ -13,6 +13,7 @@ use App\Repositories\Facturacion\ProformaRepository;
 use App\Traits\Codigos\TraitCodigosGeneral;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\_14ProductoController;
 use Validator;
 
 class PrefacturaController extends Controller
@@ -43,12 +44,12 @@ class PrefacturaController extends Controller
             $tipoVenta          = $request->get('tipoVenta');
             $empresa            = 1; // O el valor que necesites
             $tipoInstitucion    = $tipoVenta == 1 ? 0 : 1; // 0 para directa, 1 para punto de venta
-            
+
             // Valida que se envíe el periodo_id
             if (!$periodo_id) {
                 return $this->response()->setStatusCode(200)->json(['error' => 'Falta el periodo_id']);
             }
-            
+
             // Obtén las instituciones
             $getInstituciones = $this->proformaRepository->listadoInstitucionesXVenta($periodo_id, $empresa, $tipoInstitucion);
             if (count($getInstituciones) == 0) {
@@ -62,7 +63,7 @@ class PrefacturaController extends Controller
             foreach ($getInstituciones as $key => $item) {
                 // Obtener los datos de venta PREFACTURAS
                 $getDatosVenta = $this->proformaRepository->listadoDocumentosVenta($periodo_id, $empresa, $tipoInstitucion, $item->institucion_id, [1]);
-                
+
                 // Obtener los contratos de la institucion
                 $getContratos = $this->proformaRepository->listadoContratosAgrupadoInstitucion($getDatosVenta );
 
@@ -105,7 +106,7 @@ class PrefacturaController extends Controller
                             'det_ven_dev' => $detVenDev
                         ];
                     }
-                    
+
                     // Agrupamos por precio (det_ven_valor_u) y nombre_serie para cantidad real
                     $clave = $detVenValorU . '|' . $nombreSerie;
 
@@ -140,7 +141,7 @@ class PrefacturaController extends Controller
                         ];
                     }
 
-                   
+
                     // Agrupamos por precio (det_ven_valor_u) y nombre_serie para cantidad perseo
                     $clave = $detVenValorU . '|' . $nombreSerie;
 
@@ -543,9 +544,13 @@ class PrefacturaController extends Controller
                 ];
                 //NOTA EL disminuir NO SE CAMBIA PORQUE SOLO SE INTERCAMBIA LOS VALORES DE NOTAS SE DESCUENTA Y SE MUEVAN A LA PREFACTURA
                 //metodo aumentar stock en notas
-                $this->proformaRepository->restaStock($datosStockNota,1);
-                //metodo aumentar stock en prefacturas
-                $this->proformaRepository->sumaStock($datosStockPrefactura,1);
+                // $this->proformaRepository->restaStock($datosStockNota,1);
+                // //metodo aumentar stock en prefacturas
+                // $this->proformaRepository->sumaStock($datosStockPrefactura,1);
+                  // SECCION PARA ACTUALIZAR STOCK
+                $productoController = new _14ProductoController();
+                // Llamar al método Mover_Stock_SoloTxt_Todo_A_DepositoCALMED
+                $productoController->Mover_Stock_SoloTxt_Todo_A_DepositoCALMED();
             }
             //SUMAR SECUENCIA
             // ACTUALIZAR SECUENCIAL

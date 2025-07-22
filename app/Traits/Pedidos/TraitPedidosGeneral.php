@@ -21,6 +21,7 @@ trait TraitPedidosGeneral
     //=====END SOLINFA======
     public $ipProlipa                   = "http://186.4.218.168:9095/api/";
     public $ipPerseo                    = "http://45.184.225.106:8181/api/";
+    public $tr_periodoPedido            = 26;
     public $gl_perseoProduccion         = 1;
     // public $ipLocal        = "http://localhost:5000/api/";
     public function FacturacionGet($endpoint)
@@ -132,6 +133,13 @@ trait TraitPedidosGeneral
             AND l.id_pedido = p.id_pedido
         ) AS contadorPendientesConvenio,
         (
+            SELECT COUNT(l.doc_codigo) AS contadorPendientesConvenio
+            FROM 1_4_documento_liq l
+            WHERE l.tipo_pago_id = "4"
+            AND l.estado ="1"
+            AND l.id_pedido = p.id_pedido
+        ) AS contadorAprobadosConvenio,
+        (
             SELECT COUNT(l.doc_codigo) AS contadorPendientesAnticipos
             FROM 1_4_documento_liq l
             WHERE l.tipo_pago_id = "1"
@@ -140,10 +148,45 @@ trait TraitPedidosGeneral
             AND l.id_pedido = p.id_pedido
         ) AS contadorPendientesAnticipos,
         (
+        SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 0
+         ) AS contadorConvenioPendientes,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 1
+        ) AS contadorConvenioSolicitadoGerencia,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 3
+        ) AS contadorConvenioAprobadoGerencia,
+        (
+           SELECT COUNT(c.id) FROM  pedidos_convenios  c
+            where  c.id = p.pedidos_convenios_id
+            AND c.estado <> 2
+            AND c.convenio_aprobado = 4
+        ) AS contadorConvenioAprobadoFacturador,
+        (
+            SELECT COUNT(p.id) AS convenioAnulado FROM pedidos_convenios p
+            WHERE p.id = p.pedidos_convenios_id
+            AND p.estado = 2
+        ) AS convenioAnulado,
+         (
+            SELECT COUNT(p.id) AS convenioFinalizados FROM pedidos_convenios p
+            WHERE p.id = p.pedidos_convenios_id
+            AND p.estado = 0
+        ) AS convenioFinalizados,
+        (
             SELECT con.anticipo_global FROM pedidos_convenios con
             WHERE con.id = p.pedidos_convenios_id
         ) AS anticipo_global,
-        pe.periodoescolar as periodo,pe.codigo_contrato,
+
+        pe.periodoescolar as periodo,pe.codigo_contrato, pe.regaladosReporteNuevo,
         CONCAT(uf.apellidos, " ",uf.nombres) as facturador,
         i.region_idregion as region,uf.iniciales as iniciales_facturador,
         ph.fecha_generar_contrato,
@@ -420,7 +463,22 @@ trait TraitPedidosGeneral
        return $query;
     }
     public function tr_getInstitucionesVentaXTipoVentaAsesor($id_periodo,$tipo_venta,$asesor){
-        if($tipo_venta == 1 || $tipo_venta == 2){
+        if($tipo_venta == 3){
+            $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,p.id_asesor,
+            CONCAT(u.nombres,' ',u.apellidos) as asesor, i.nombreInstitucion,c.nombre as ciudad
+            FROM pedidos p
+            LEFT JOIN usuario u ON p.id_asesor = u.idusuario
+            LEFT JOIN institucion i ON p.id_institucion = i.idInstitucion
+            LEFT JOIN ciudad c ON i.ciudad_id = c.idciudad
+            WHERE p.tipo_venta IN ('1','2')
+            AND p.estado = '1'
+            AND p.id_periodo = '$id_periodo'
+            AND p.contrato_generado IS NOT NULL
+            AND p.id_asesor = '$asesor'
+            ORDER BY p.id_pedido DESC
+            ");
+        }
+        else if($tipo_venta == 1 || $tipo_venta == 2){
             $query = DB::SELECT("SELECT p.id_pedido,p.contrato_generado,p.id_asesor,
             CONCAT(u.nombres,' ',u.apellidos) as asesor, i.nombreInstitucion,c.nombre as ciudad
             FROM pedidos p

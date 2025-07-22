@@ -20,6 +20,339 @@ class _14ProductoController extends Controller {
         return $query;
     }
 
+    public function GetProducto_Reportes(Request $request) {
+        $grupoCodigos = $request->input('grupo_codigo_selected');
+        $tipoReporte = $request->input('tipoReporte');
+        // return $tipoReporte;
+        if ($tipoReporte == 1) {
+            $query = DB::select("SELECT pr.*, gp.gru_pro_nombre FROM 1_4_cal_producto pr
+                LEFT JOIN 1_4_grupo_productos gp ON pr.gru_pro_codigo = gp.gru_pro_codigo
+                ORDER BY pr.pro_nombre ASC");
+            return $query;
+        }
+        // Verifica que haya elementos
+        if (is_array($grupoCodigos) && count($grupoCodigos) > 0) {
+            $placeholders = implode(',', array_fill(0, count($grupoCodigos), '?'));
+
+            $query = DB::select("SELECT pr.*, gp.gru_pro_nombre FROM 1_4_cal_producto pr
+                LEFT JOIN 1_4_grupo_productos gp ON pr.gru_pro_codigo = gp.gru_pro_codigo
+                WHERE pr.gru_pro_codigo IN ($placeholders)
+                ORDER BY pr.pro_nombre ASC", $grupoCodigos);
+
+            return $query;
+        }
+        // Si no hay grupos seleccionados, devuelve todos
+        return DB::select("SELECT * FROM 1_4_cal_producto ORDER BY pro_nombre ASC");
+    }
+    //INICIO SECCION OBETENER LISTADO COMBOS X TEMPORADA
+    public function GetListaCombosXTemporada(Request $request)
+    {
+        try {
+            $request->validate([
+                'idperiodoescolar_selected' => 'required|integer',
+                'verificar_periodo_busqueda' => 'required|string',
+            ]);
+            $idPeriodo = $request->input('idperiodoescolar_selected');
+            $tipoBusqueda = $request->input('verificar_periodo_busqueda');
+            $pedidos = DB::table('pedidos')
+                ->where('estado', '<>', 2)
+                ->where('tipo', 0)
+                ->where('id_periodo', $idPeriodo)
+                ->whereNotNull('contrato_generado')
+                ->pluck('id_pedido');
+            if ($pedidos->isEmpty()) {
+                return response()->json([
+                    'status' => 0,
+                    'mensaje' => 'No hay pedidos ni alcances de combos para esta temporada.'
+                    ], 200);
+            }
+            if ($tipoBusqueda === 'es_menor_o_igual') {
+                $productos = $this->obtenerProductosPedidosNormales($pedidos);
+                $productosAlcance = $this->obtenerProductosPedidosAlcance($idPeriodo);
+                $idsAlcance = collect($productosAlcance)
+                    ->pluck('pedidos_alcance')
+                    ->filter()
+                    ->flatMap(fn($alcances) => explode(',', $alcances))
+                    ->unique()
+                    ->values()
+                    ->all();
+                $mapaAlcancePedido = DB::table('pedidos_alcance')
+                    ->whereIn('id', $idsAlcance)
+                    ->pluck('id_pedido', 'id')
+                    ->toArray();
+                $productosFinal = $this->unificarProductosConAlcance($productos, $productosAlcance, $mapaAlcancePedido);
+                return response()->json([
+                    'status' => 1,
+                    'productos_pedidos_agrupados' => $productos,
+                    'productos_alcance_agrupados' => $productosAlcance,
+                    'productos_final_agrupados' => $productosFinal->values(),
+                ], 200);
+            } elseif ($tipoBusqueda === 'es_mayor') {
+                $productosNew = $this->obtenerProductosPedidosNormalesNuevo($pedidos);
+                $productosAlcanceNew = $this->obtenerProductosPedidosAlcanceNuevo($idPeriodo);
+                $idsAlcance = $productosAlcanceNew
+                    ->pluck('pedidos_alcance')
+                    ->filter()
+                    ->flatMap(fn($alcances) => explode(',', $alcances))
+                    ->unique()
+                    ->values()
+                    ->all();
+                $mapaAlcancePedido = DB::table('pedidos_alcance')
+                    ->whereIn('id', $idsAlcance)
+                    ->pluck('id_pedido', 'id')
+                    ->toArray();
+                $productosFinalNew = $productosNew
+                    ->merge($productosAlcanceNew)
+                    ->groupBy('pro_codigo')
+                    ->map(function ($items) use ($mapaAlcancePedido) {
+                        $pedidos = $items->pluck('pedidos')
+                            ->filter()
+                            ->flatMap(fn($p) => explode(',', $p))
+                            ->unique()
+                            ->values()
+                            ->all();
+                        $alcancesRaw = $items->pluck('pedidos_alcance')
+                            ->filter()
+                            ->flatMap(fn($a) => explode(',', $a))
+                            ->unique()
+                            ->values()
+                            ->all();
+                        $pedidos_alcance = [];
+                        foreach ($alcancesRaw as $idAlcance) {
+                            $idAlcance = trim($idAlcance);
+                            if (isset($mapaAlcancePedido[$idAlcance])) {
+                                $pedidos_alcance[] = [
+                                    $idAlcance => [
+                                        'id_pedido' => [$mapaAlcancePedido[$idAlcance]]
+                                    ]
+                                ];
+                            }
+                        }
+                        return (object)[
+                            'pro_codigo' => $items[0]->pro_codigo,
+                            'total_valor' => $items->sum('total_valor'),
+                            'pedidos' => $pedidos,
+                            'pedidos_alcance' => $pedidos_alcance,
+                            'nombre_serie' => optional($items->first(fn($i) => !empty($i->nombre_serie)))->nombre_serie,
+                            'nombrearea' => optional($items->first(fn($i) => !empty($i->nombrearea)))->nombrearea,
+                            'nombreasignatura' => optional($items->first(fn($i) => !empty($i->nombreasignatura)))->nombreasignatura,
+                        ];
+                    })->values();
+                return response()->json([
+                    'status' => 1,
+                    'productos_pedidos_agrupados' => $productosNew,
+                    'productos_alcance_agrupados' => $productosAlcanceNew,
+                    'productos_final_agrupados' => $productosFinalNew,
+                ], 200);
+            }
+            return response()->json(['mensaje' => 'Tipo de búsqueda inválido'], 400);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Parámetros inválidos',
+                'detalles' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error al obtener los combos',
+                'detalles' => $e->getMessage()
+            ], 500);
+        }
+    }
+    // Métodos auxiliares
+    private function obtenerProductosPedidosNormales($pedidos)
+    {
+        return DB::select("SELECT p.pro_codigo,
+                SUM(pva.valor) AS total_valor,
+                GROUP_CONCAT(DISTINCT pva.id_pedido) AS pedidos,
+                MAX(s.nombre_serie) AS nombre_serie,
+                MAX(ar.nombrearea) AS nombrearea,
+                MAX(asi.nombreasignatura) AS nombreasignatura
+            FROM pedidos_val_area pva
+            LEFT JOIN series s ON pva.id_serie = s.id_serie
+            LEFT JOIN area ar ON pva.id_area = ar.idarea
+            LEFT JOIN asignatura asi ON asi.area_idarea = pva.id_area
+            LEFT JOIN libro l ON l.asignatura_idasignatura = asi.idasignatura
+            LEFT JOIN libros_series ls
+                ON ls.idLibro = l.idlibro
+                AND ls.id_serie = pva.id_serie
+                AND ls.year = pva.year
+            LEFT JOIN 1_4_cal_producto p ON p.pro_codigo = ls.codigo_liquidacion
+            WHERE pva.id_pedido IN (" . $pedidos->implode(',') . ")
+            AND p.pro_codigo IS NOT NULL
+            AND pva.id_serie = 19
+            AND pva.alcance = 0
+            GROUP BY p.pro_codigo, ls.codigo_liquidacion");
+    }
+    private function obtenerProductosPedidosAlcance($idPeriodo)
+    {
+        return DB::select("SELECT p.pro_codigo,
+                SUM(pva.valor) AS total_valor,
+                GROUP_CONCAT(DISTINCT pa.id) AS pedidos_alcance,
+                MAX(s.nombre_serie) AS nombre_serie,
+                MAX(ar.nombrearea) AS nombrearea,
+                MAX(asi.nombreasignatura) AS nombreasignatura
+            FROM pedidos_alcance pa
+            JOIN pedidos_val_area pva ON pa.id = pva.alcance
+            LEFT JOIN series s ON pva.id_serie = s.id_serie
+            LEFT JOIN area ar ON pva.id_area = ar.idarea
+            LEFT JOIN asignatura asi ON asi.area_idarea = pva.id_area
+            LEFT JOIN libro l ON l.asignatura_idasignatura = asi.idasignatura
+            LEFT JOIN libros_series ls
+                ON ls.idLibro = l.idlibro
+                AND ls.id_serie = pva.id_serie
+                AND ls.year = pva.year
+            LEFT JOIN 1_4_cal_producto p ON p.pro_codigo = ls.codigo_liquidacion
+            WHERE pa.estado_alcance = 1
+            AND pa.id_periodo = ?
+            AND pva.id_serie = 19
+            AND p.pro_codigo IS NOT NULL
+            GROUP BY p.pro_codigo, ls.codigo_liquidacion", [$idPeriodo]);
+    }
+    private function unificarProductosConAlcance($productos, $productosAlcance, $mapaAlcancePedido)
+    {
+        $productosFinal = collect($productos)->mapWithKeys(function ($item) {
+            return [$item->pro_codigo => [
+                'pro_codigo' => $item->pro_codigo,
+                'total_valor' => $item->total_valor,
+                'pedidos' => $item->pedidos ? explode(',', $item->pedidos) : [],
+                'pedidos_alcance' => [],
+                'nombre_serie' => $item->nombre_serie,
+                'nombrearea' => $item->nombrearea,
+                'nombreasignatura' => $item->nombreasignatura,
+            ]];
+        })->toArray();
+
+        foreach ($productosAlcance as $alcance) {
+            $pedidosAlcanceArray = [];
+            $idsAlcance = $alcance->pedidos_alcance ? explode(',', $alcance->pedidos_alcance) : [];
+            foreach ($idsAlcance as $idAlcance) {
+                $idAlcance = trim($idAlcance);
+                $idPedido = $mapaAlcancePedido[$idAlcance] ?? null;
+                if ($idPedido) {
+                    $pedidosAlcanceArray[] = [
+                        $idAlcance => [
+                            'id_pedido' => [$idPedido]
+                        ]
+                    ];
+                }
+            }
+            if (isset($productosFinal[$alcance->pro_codigo])) {
+                $productosFinal[$alcance->pro_codigo]['total_valor'] += $alcance->total_valor;
+                $productosFinal[$alcance->pro_codigo]['pedidos_alcance'] = array_merge(
+                    $productosFinal[$alcance->pro_codigo]['pedidos_alcance'],
+                    $pedidosAlcanceArray
+                );
+            } else {
+                $productosFinal[$alcance->pro_codigo] = [
+                    'pro_codigo' => $alcance->pro_codigo,
+                    'total_valor' => $alcance->total_valor,
+                    'pedidos' => [],
+                    'pedidos_alcance' => $pedidosAlcanceArray,
+                    'nombre_serie' => $alcance->nombre_serie,
+                    'nombrearea' => $alcance->nombrearea,
+                    'nombreasignatura' => $alcance->nombreasignatura,
+                ];
+            }
+        }
+        return collect($productosFinal);
+    }
+    private function obtenerProductosPedidosNormalesNuevo($pedidos)
+    {
+        return collect(DB::select("SELECT pro.pro_codigo,
+                SUM(pvn.pvn_cantidad) AS total_valor,
+                GROUP_CONCAT(DISTINCT pvn.id_pedido) AS pedidos,
+                MAX(se.nombre_serie) AS nombre_serie,
+                MAX(a.nombrearea) AS nombrearea,
+                MAX(asi.nombreasignatura) AS nombreasignatura
+            FROM pedidos_val_area_new pvn
+            LEFT JOIN libros_series ls ON pvn.idlibro = ls.idLibro
+            LEFT JOIN series se ON ls.id_serie = se.id_serie
+            LEFT JOIN libro li ON ls.idLibro = li.idlibro
+            LEFT JOIN asignatura asi ON li.asignatura_idasignatura = asi.idasignatura
+            LEFT JOIN area a ON asi.area_idarea = a.idarea
+            LEFT JOIN 1_4_cal_producto pro ON ls.codigo_liquidacion = pro.pro_codigo
+            WHERE
+                pvn.id_pedido IN (" . $pedidos->implode(',') . ")
+                AND pvn.pvn_tipo = 0
+                AND ls.id_serie = 19
+                AND pro.pro_codigo IS NOT NULL
+            GROUP BY pro.pro_codigo, ls.codigo_liquidacion
+        "))
+        ->map(function ($item) {
+            $item->total_valor = (int) $item->total_valor;
+            return $item;
+        });
+    }
+    private function obtenerProductosPedidosAlcanceNuevo($idPeriodo)
+    {
+        return collect(DB::select("SELECT pro.pro_codigo,
+                SUM(pvn.pvn_cantidad) AS total_valor,
+                GROUP_CONCAT(DISTINCT pa.id) AS pedidos_alcance,
+                MAX(se.nombre_serie) AS nombre_serie,
+                MAX(a.nombrearea) AS nombrearea,
+                MAX(asi.nombreasignatura) AS nombreasignatura
+            FROM pedidos_alcance pa
+            JOIN pedidos_val_area_new pvn ON pa.id = pvn.pvn_tipo
+            LEFT JOIN libros_series ls ON pvn.idlibro = ls.idLibro
+            LEFT JOIN series se ON ls.id_serie = se.id_serie
+            LEFT JOIN libro li ON ls.idLibro = li.idlibro
+            LEFT JOIN asignatura asi ON li.asignatura_idasignatura = asi.idasignatura
+            LEFT JOIN area a ON asi.area_idarea = a.idarea
+            LEFT JOIN 1_4_cal_producto pro ON ls.codigo_liquidacion = pro.pro_codigo
+            WHERE
+                pa.estado_alcance = 1
+                AND pa.id_periodo = ?
+                AND ls.id_serie = 19
+                AND pro.pro_codigo IS NOT NULL
+            GROUP BY pro.pro_codigo, ls.codigo_liquidacion
+        ", [$idPeriodo]))
+        ->map(function ($item) {
+            $item->total_valor = (int) $item->total_valor;
+            return $item;
+        });
+    }
+    public function Recorrer_Listado_Combos_X_Temporada(Request $request)
+    {
+        $productos = $request->all();
+        foreach ($productos as &$producto) {
+            $codigo_combo = $producto['pro_codigo'] ?? null;
+            $producto['pro_codigos_desglose'] = [];
+            if ($codigo_combo) {
+                // Consultar el campo codigos_combos desde la tabla 1_4_cal_producto
+                $comboData = DB::select("
+                    SELECT codigos_combos
+                    FROM 1_4_cal_producto
+                    WHERE pro_codigo = ?
+                    LIMIT 1
+                ", [$codigo_combo]);
+                if (!empty($comboData) && !empty($comboData[0]->codigos_combos)) {
+                    $codigos_combos = $comboData[0]->codigos_combos;
+                    $codigos_array = explode(',', $codigos_combos);
+                    foreach ($codigos_array as $codigo) {
+                        $desglose = DB::select("
+                            SELECT ls.codigo_liquidacion, l.nombrelibro
+                            FROM libros_series ls
+                            LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                            WHERE ls.codigo_liquidacion = ?
+                        ", [$codigo]);
+                        if (empty($desglose)) {
+                            // ⚠️ Si no se encuentra el código, lanzar error
+                            throw new \Exception("⚠️ Código '$codigo' asociado al combo '$codigo_combo' no fue encontrado. Verifica los códigos del combo.");
+                        }
+                        $producto['pro_codigos_desglose'][] = [
+                            "codigo_liquidacion" => $desglose[0]->codigo_liquidacion,
+                            "nombrelibro" => $desglose[0]->nombrelibro,
+                        ];
+                    }
+                }
+            }
+        }
+        return response()->json([
+            'productos_agrupados_mas_cod_desglose' => $productos,
+            'status' => 1,
+        ]);
+    }
+    //FIN SECCION OBETENER LISTADO COMBOS X TEMPORADA
     public function Mover_Stock_SoloTxt_Todo_A_DepositoCALMED() {
         // 1. Obtener productos antes del cambio
         $productosAntes = DB::table('1_4_cal_producto')
@@ -155,6 +488,16 @@ class _14ProductoController extends Controller {
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
             LEFT JOIN series s ON s.id_serie = ls.id_serie
             WHERE p.pro_codigo LIKE '%$request->razonbusqueda%' AND p.pro_estado = 1");
+            foreach($query as $key => $item){
+                $ifcombo = $item->ifcombo;
+                if($ifcombo == 1){
+                    $codigos_combos = explode(",", $item->codigos_combos);
+                    $productosCombo = _14Producto::wherein('pro_codigo', $codigos_combos)->select('pro_codigo','pro_nombre')->get();
+                    $query[$key]->productosCombo = $productosCombo;
+                }else{
+                    $query[$key]->productosCombo = [];
+                }
+            }
             return $query;
         }
         if ($request -> busqueda == 'undefined' || $request -> busqueda == '' || $request -> busqueda == null) {
@@ -165,6 +508,16 @@ class _14ProductoController extends Controller {
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
             LEFT JOIN series s ON s.id_serie = ls.id_serie
             WHERE p.pro_codigo LIKE '%$request->razonbusqueda%' AND p.pro_estado = 1");
+            foreach($query as $key => $item){
+                $ifcombo = $item->ifcombo;
+                if($ifcombo == 1){
+                    $codigos_combos = explode(",", $item->codigos_combos);
+                    $productosCombo = _14Producto::wherein('pro_codigo', $codigos_combos)->select('pro_codigo','pro_nombre')->get();
+                    $query[$key]->productosCombo = $productosCombo;
+                }else{
+                    $query[$key]->productosCombo = [];
+                }
+            }
             return $query;
         }
         if ($request -> busqueda == 'nombres') {
@@ -175,6 +528,16 @@ class _14ProductoController extends Controller {
             LEFT JOIN libro l ON ls.idLibro = l.idlibro
             LEFT JOIN series s ON s.id_serie = ls.id_serie
             WHERE pro_nombre LIKE '%$request->razonbusqueda%' AND pro_estado = 1");
+            foreach($query as $key => $item){
+                $ifcombo = $item->ifcombo;
+                if($ifcombo == 1){
+                    $codigos_combos = explode(",", $item->codigos_combos);
+                    $productosCombo = _14Producto::wherein('pro_codigo', $codigos_combos)->select('pro_codigo','pro_nombre')->get();
+                    $query[$key]->productosCombo = $productosCombo;
+                }else{
+                    $query[$key]->productosCombo = [];
+                }
+            }
             return $query;
         }
     }

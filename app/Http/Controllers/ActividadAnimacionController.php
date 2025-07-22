@@ -21,11 +21,15 @@ class ActividadAnimacionController extends Controller
     }
     //api:post/conteoActividad
     public function conteoActividad(Request $request){
+
         if($request->tipo){
             DB::INSERT("INSERT INTO  actividad_historico(asignatura_id,idusuario,url,actividad,pagina,periodo_id,tipo) VALUES(?,?,?,?,?,?,?)",
             [$request->asignatura_id,$request->idusuario,$request->url,$request->actividad,$request->pagina,$request->periodo_id,$request->tipo]);
             return "se guardo correctamente";
         }else{
+            if($request->usuario == null || $request->usuario == '' || $request->usuario == 'null'){
+                return "no existe usuario";
+            }
             DB::INSERT("INSERT INTO  actividad_historico(asignatura_id,idusuario,url,actividad,pagina,periodo_id,tipo) VALUES(?,?,?,?,?,?,?)",
             [$request->asignatura_id,$request->usuario,$request->url,$request->actividad,$request->pagina,$request->periodo_id,'1']);
             return "se guardo correctamente";

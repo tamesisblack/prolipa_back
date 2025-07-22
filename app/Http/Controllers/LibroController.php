@@ -401,7 +401,8 @@ class LibroController extends Controller
                 "nivel_idnivel"             => $item->nivel_idnivel,
                 "tipo_asignatura"           => $item->tipo_asignatura,
                 "estado"                    => $item->estado,
-                "id_serie"                  => $item->id_serie
+                "id_serie"                  => $item->id_serie,
+                "id_folleto"                => $item->id_folleto
             ];
         }
         return $datos;

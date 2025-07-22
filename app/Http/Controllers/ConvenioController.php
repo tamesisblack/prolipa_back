@@ -276,6 +276,7 @@ class ConvenioController extends Controller
         $valor4 = $request->valor4;
         $user_created   = $request->user_created;
         $tipoAccion     = $request->tipoAccion;
+        $convenio_gerencia = $request->convenio_gerencia;
         $infoUsuario  = User::findOrFail($user_created);
         $id_group     = $infoUsuario->id_group;
         if($request->unCampo)   { $datos = [ $campo1 => $valor1]; }
@@ -285,6 +286,13 @@ class ConvenioController extends Controller
         $old_values         = PedidoConvenio::findOrFail($request->id);
         if ($id_group == 22 || $id_group == 23 || $id_group == 1 && $tipoAccion == 1) {
             $datos['convenio_aprobado'] = 4; // ← Aquí estaba el problema
+            $datos['usuario_aprueba'] = $user_created;
+            $datos['fecha_aprobacion'] = date('Y-m-d H:i:s');
+        }
+        // gerencia aprueba convenio
+        if($convenio_gerencia == 1){
+            $datos['usuario_aprueba'] = $user_created;
+            $datos['fecha_aprobacion'] = date('Y-m-d H:i:s');
         }
         DB::table('pedidos_convenios')
         ->where('id',$request->id)

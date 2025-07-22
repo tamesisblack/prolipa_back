@@ -13,7 +13,7 @@ class OrdenTrabajoController extends Controller
     //
      public function Get_OrdenTrabajo(){
         $query = DB::SELECT("SELECT * FROM 1_1_orden_trabajo ORDER BY or_fecha desc limit 10");
-        
+
              return $query;
     }
      public function Get_Codigo(){
@@ -57,17 +57,17 @@ ORDER BY or_fecha DESC LIMIT 1");
     }
 
      public function GetProd(){
-        
+
             $query = DB::SELECT("SELECT pro_codigo, pro_nombre FROM 1_4_cal_producto p
             INNER JOIN 1_4_grupo_productos g ON p.gru_pro_codigo = g.gru_pro_codigo
             inner join 1_4_cal_producto_caracteristica c on p.pro_codigo=pro_car_codigo");
             return $query;
-        
+
     }
 
     public function GetProvxfiltro(Request $request){
         if($request->prov_codigo){
-            $query = DB::SELECT("SELECT pro_codigo, pro_nombre FROM 1_4_cal_producto 
+            $query = DB::SELECT("SELECT pro_codigo, pro_nombre FROM 1_4_cal_producto
             WHERE prov_codigo='$request->prov_codigo'");
             return $query;
         }else{
@@ -88,21 +88,21 @@ ORDER BY or_fecha DESC LIMIT 1");
 
     public function GetOrden_xfiltro(Request $request){
         if ($request->busqueda == 'codigo') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
             WHERE or_codigo LIKE '%$request->razonbusqueda%'");
             return $query;
         }
         if ($request->busqueda == 'undefined') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
             WHERE or_codigo LIKE '%$request->razonbusqueda%'");
             return $query;
         }
         if ($request->busqueda == 'temporada') {
-            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
                      INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
                      LEFT JOIN empresas e ON e.id = o.or_empresa
                      WHERE or_codigo LIKE '%$request->razonbusqueda%'");
@@ -110,23 +110,23 @@ ORDER BY or_fecha DESC LIMIT 1");
             return $query;
         }
         if ($request->busqueda == 'pendiente') {
-            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.prov_nombre, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
             LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
-            WHERE or_estado =1 ORDER BY or_fecha DESC limit 100");
+            WHERE or_estado =1 ORDER BY or_fecha DESC");
             return $query;
         }
         if ($request->busqueda == 'finalizado') {
-            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.prov_nombre, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
             INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
             LEFT JOIN empresas e ON e.id = o.or_empresa
             LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
-            WHERE or_estado =2 ORDER BY or_fecha DESC limit 100");
+            WHERE or_estado =2 ORDER BY or_fecha DESC");
             return $query;
         }
         if ($request->busqueda == 'orden') {
-            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o 
+            $query = DB::SELECT("SELECT o.*, us.nombres, us.apellidos, pro.*, e.descripcion_corta AS nombreEmpresa FROM 1_1_orden_trabajo o
                      INNER JOIN 1_4_proveedor pro ON o.prov_codigo= pro.prov_codigo
                      LEFT JOIN empresas e ON e.id = o.or_empresa
                      LEFT JOIN usuario us ON o.usu_codigo = us.iniciales
@@ -174,7 +174,7 @@ ORDER BY or_fecha DESC LIMIT 1");
                             'det_or_acabados' => $item->det_or_acabados,
                             'det_or_recubrimiento' => $item->det_or_recubrimiento,
                         ]);
-                
+
                         // Actualiza las características del producto
                         $productocaracteristica = _14ProductoCaracteristica::where('pro_car_codigo', $item->pro_codigo)->first();
                         if ($productocaracteristica) {
@@ -249,7 +249,7 @@ ORDER BY or_fecha DESC LIMIT 1");
             ], 500);
         }
     }
-    
+
      public function Desactivar_Orden(Request $request)
     {
         if ($request->or_codigo) {
@@ -262,7 +262,7 @@ ORDER BY or_fecha DESC LIMIT 1");
             $orden->or_estado = $request->or_estado;
             $orden->save();
 
-            return $orden;       
+            return $orden;
          } else {
             return "No está ingresando ningún or_codigo";
         }
@@ -272,17 +272,17 @@ ORDER BY or_fecha DESC LIMIT 1");
         if ($request->or_codigo) {
             $orden = DetalleOrdenTrabajo::Where('or_codigo',$request->or_codigo)->get();
             $cont=count($orden);
-            
+
                 if (!$orden) {
                     return "El or_codigo no existe en la base de datos11";
                 }else{
                     $orden = DetalleOrdenTrabajo::Where('or_codigo',$request->or_codigo)->delete();
-                    
+
                 }
             $orden = DetalleOrdenTrabajo::Where('or_codigo',$request->or_codigo)->get();
             if(count($orden)==0){
                 $ordent = OrdenTrabajo::find($request->or_codigo);
-                
+
             if (!$ordent) {
                 return "El or_codigo no existe en la base de datos";
             } else {
@@ -290,12 +290,12 @@ ORDER BY or_fecha DESC LIMIT 1");
                 return $ordent;
             }
             }
-            
-        
+
+
 
         }
-    
-        
+
+
 
     }
 

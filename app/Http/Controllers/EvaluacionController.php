@@ -465,9 +465,9 @@ class EvaluacionController extends Controller
 
         return response()->json($resultados);
     }
-    public function getEvaluacionesUltimoPeriodo(Request $request) 
+    public function getEvaluacionesUltimoPeriodo(Request $request)
     {
-        
+
         $institucionId = $request->input('institucion_idInstitucion');
         $docenteId = $request->input('idusuario');
 
@@ -478,16 +478,16 @@ class EvaluacionController extends Controller
                 ->where('institucion_idInstitucion', $institucionId)
                 ->orderBy('periodoescolar_idperiodoescolar', 'desc')
                 ->first();
-    
+
             if (!$ultimoPeriodo) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No se encontró un período escolar para la institución.'
                 ], 404);
             }
-    
+
             $periodoId = $ultimoPeriodo->periodoescolar_idperiodoescolar;
-    
+
             // Obtener el nombre del período escolar
             $nombrePeriodo = DB::table('periodoescolar')
                 ->where('idperiodoescolar', $periodoId)
@@ -500,7 +500,7 @@ class EvaluacionController extends Controller
             ->first();
 
             $mostrarCodigoEvaluacion = $institucion->ifcodigoEvaluacion == 1;
-    
+
             // Obtener todas las asignaturas del docente en el período
             $asignaturas = DB::table('asignaturausuario as au')
                 ->join('asignatura as a', 'au.asignatura_idasignatura', '=', 'a.idasignatura')
@@ -508,7 +508,7 @@ class EvaluacionController extends Controller
                 ->where('au.usuario_idusuario', $docenteId)
                 ->select('a.idasignatura', 'a.nombreasignatura')
                 ->get();
-    
+
             // Obtener todos los cursos del docente en el período
             $cursos = DB::table('curso as c')
                 ->where('c.idusuario', $docenteId)
@@ -516,22 +516,22 @@ class EvaluacionController extends Controller
                 ->where('c.estado', '1')
                 ->select('c.idcurso', 'c.nombre', 'c.seccion', 'c.materia', 'c.codigo', 'c.id_asignatura','c.aula')
                 ->get();
-    
+
             // Obtener todas las evaluaciones de los cursos del docente
             $evaluaciones = DB::table('evaluaciones as e')
                 ->where('e.id_docente', $docenteId)
                 ->where('e.estado', '1')
-                ->select('e.id', 'e.nombre_evaluacion', 'e.id_asignatura', 'e.codigo_curso', 
+                ->select('e.id', 'e.nombre_evaluacion', 'e.id_asignatura', 'e.codigo_curso',
                          'e.descripcion', 'e.puntos', 'e.duracion', 'e.fecha_inicio', 'e.fecha_fin','e.codigo_evaluacion')
                 ->get();
-    
+
             // Estructurar los datos jerárquicamente
             $resultado = $asignaturas->map(function ($asignatura) use ($cursos, $evaluaciones) {
                 $cursosAsignatura = $cursos->where('id_asignatura', $asignatura->idasignatura);
-                
+
                 $cursosConEvaluaciones = $cursosAsignatura->map(function ($curso) use ($evaluaciones) {
                     $evals = $evaluaciones->where('codigo_curso', $curso->codigo);
-                    
+
                     return [
                         'idcurso' => $curso->idcurso,
                         'nombre' => $curso->nombre,
@@ -554,21 +554,21 @@ class EvaluacionController extends Controller
                         })->values()->toArray()
                     ];
                 })->values()->toArray();
-    
+
                 return [
                     'idasignatura' => $asignatura->idasignatura,
                     'nombreasignatura' => $asignatura->nombreasignatura,
                     'cursos' => $cursosConEvaluaciones
                 ];
             });
-    
+
             return response()->json([
                 'success' => true,
                 'periodo_escolar' => $nombrePeriodo,
                 'data' => $resultado,
                 'mostrar_codigo_evaluacion' => $mostrarCodigoEvaluacion, // Opcional: informar al frontend
             ]);
-    
+
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -585,5 +585,112 @@ class EvaluacionController extends Controller
         return response()->json($evaluacion); // Retorna toda la evaluación actualizada
     }
 
+    //api:Get/metodoGetEvaluacion
+    public function metodoGetEvaluacion(Request $request){
+        $action = $request->query('action');
+        switch ($action) {
+            case 'Get_Reporte_General':
+                return $this->Get_Reporte_General($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+    //API:GET/metodoGetEvaluacion?action=Get_Reporte_General&id_docente=89379&institucion_idInstitucion=1838
+    public function Get_Reporte_General($request) {
+        $id_docente                 = $request->query('id_docente');
+        $id_asignatura              = $request->query('id_asignatura');
+        $id_nivel                   = $request->query('id_nivel');
+        $id_periodo                 = $request->query('periodoSelected');
 
+        // Validaciones
+        if (empty($id_docente) || !is_numeric($id_docente)) {
+            return response()->json(['error' => 'Falta el ID del docente o no es un número'], 400);
+        }
+
+        // Preparar consulta principal
+        $params = [$id_docente, $id_periodo];
+        $additionalFilters = "";
+
+        // Filtro por asignatura
+        if (!empty($id_asignatura) && is_numeric($id_asignatura)) {
+            $additionalFilters .= " AND c.id_asignatura = ? ";
+            $params[] = $id_asignatura;
+        }
+
+        // Filtro por nivel
+        if (!empty($id_nivel) && is_numeric($id_nivel)) {
+            $additionalFilters .= " AND a.nivel_idnivel = ? ";
+            $params[] = $id_nivel;
+        }
+
+        // Consulta principal
+        $resultados = DB::select("
+            SELECT
+                u.idusuario AS id_estudiante,
+                CONCAT(u.nombres, ' ', u.apellidos) AS estudiante,
+                u.cedula as cedulaEstudiante,
+                u.name_usuario as emailEstudiante,
+                a.nombreasignatura,
+                c.nombre AS nombre_curso,
+                e.descripcion AS nombre_evaluacion,
+                IFNULL(cal.calificacion, 0) AS calificacion,
+                c.id_asignatura,
+                a.nivel_idnivel
+            FROM evaluaciones e
+            JOIN curso c ON e.codigo_curso = c.codigo
+            JOIN asignatura a ON e.id_asignatura = a.idasignatura
+            JOIN estudiante est ON est.codigo = c.codigo
+            JOIN usuario u ON est.usuario_idusuario = u.idusuario
+            LEFT JOIN calificaciones cal
+                ON cal.id_evaluacion = e.id
+                AND cal.id_estudiante = u.idusuario
+            WHERE e.id_docente = ?
+            AND c.id_periodo = ?
+            AND e.estado = '1'
+            $additionalFilters
+            ORDER BY estudiante, c.nombre
+        ", $params);
+
+        // Agrupar por estudiante
+        $arrayReporte = [];
+        foreach ($resultados as $fila) {
+            $id = $fila->id_estudiante;
+            if (!isset($arrayReporte[$id])) {
+                $arrayReporte[$id] = [
+                    'id_estudiante' => $fila->id_estudiante,
+                    'estudiante' => $fila->estudiante,
+                    'cedulaEstudiante' => $fila->cedulaEstudiante,
+                    'emailEstudiante' => $fila->emailEstudiante,
+                    'evaluaciones' => []
+                ];
+            }
+
+            $arrayReporte[$id]['evaluaciones'][] = [
+                'nombre_curso' => $fila->nombre_curso,
+                'nombre_evaluacion' => $fila->nombre_evaluacion,
+                'nombreasignatura' => $fila->nombreasignatura,
+                'calificacion' => $fila->calificacion
+            ];
+        }
+
+        // Consulta de asignaturas del docente (sin filtro por nivel)
+        $asignaturasDocente = DB::select("
+            SELECT DISTINCT
+                a.idasignatura AS id_asignatura,
+                a.nombreasignatura
+            FROM evaluaciones e
+            JOIN curso c ON e.codigo_curso = c.codigo
+            JOIN asignatura a ON e.id_asignatura = a.idasignatura
+            WHERE e.id_docente = ?
+            AND c.id_periodo = ?
+            AND e.estado = '1'
+            ORDER BY a.nombreasignatura
+        ", [$id_docente, $id_periodo]);
+
+        return [
+            'arrayReporte' => array_values($arrayReporte),
+            'arrayAsignaturasDocentes' => $asignaturasDocente
+        ];
+    }
 }
+

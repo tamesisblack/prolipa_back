@@ -15,7 +15,6 @@ class AreaController extends Controller
      */
     public function index()
     {
-        
         // return csrf_token();
         $area = DB::SELECT("SELECT a.*, t.nombretipoarea
          FROM area a
@@ -77,11 +76,13 @@ class AreaController extends Controller
         $area = Area::findOrFail($request->idarea);
         $area->nombrearea = $request->nombrearea;
         $area->tipoareas_idtipoarea = $request->idtipoarea;
+        $area->permiso_visible_asignacion_libros = $request->permiso_visible_asignacion_libros;
 
        }else{
            $area = new Area;
            $area->nombrearea = $request->nombrearea;
            $area->tipoareas_idtipoarea = $request->idtipoarea;
+           $area->permiso_visible_asignacion_libros = $request->permiso_visible_asignacion_libros;
        }
        $area->save();
        if($area){
@@ -138,4 +139,33 @@ class AreaController extends Controller
         ->update(['estado' => $request->estado]);
 
     }
+    //INICIO METODOS JEYSON
+    public function AreaDisponibles_Asignacion()
+    {
+        $area = DB::SELECT("SELECT * FROM area ar WHERE ar.estado = '1' AND ar.permiso_visible_asignacion_libros = '1'");
+        foreach ($area as $key => $post) {
+            // $respuesta = DB::SELECT("SELECT asignatura.idasignatura as id, asignatura.nombreasignatura as name
+            // FROM asignatura
+            // join area on area.idarea = asignatura.area_idarea
+            // WHERE asignatura.area_idarea = ?
+            // AND asignatura.estado = '1'
+            // ",[$post->idarea]);
+            $respuesta = DB::SELECT("SELECT DISTINCT a.idasignatura as id, a.nombreasignatura as name
+            FROM asignatura  a
+            join area on area.idarea = a.area_idarea
+            LEFT JOIN libro l ON l.asignatura_idasignatura = a.idasignatura
+            LEFT JOIN libros_series ls ON l.idlibro = ls.idLibro
+            WHERE a.area_idarea = ?
+            AND a.estado = '1'
+            AND (ls.version <> 'PLUS' OR ls.version IS NULL)
+            ",[$post->idarea]);
+            $data['items'][$key] = [
+                'id' => "a".$post->idarea,
+                'name' => $post->nombrearea,
+                'children'=>$respuesta,
+            ];
+        }
+        return $data;
+    }
+    //FIN METODOS JEYSON
 }
