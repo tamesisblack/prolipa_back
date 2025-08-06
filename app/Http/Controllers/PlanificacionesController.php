@@ -69,6 +69,38 @@ class PlanificacionesController extends Controller
         );
     }
 
+    public function transferenciaPlanificaciones(Request $request)
+    {
+        // Validar los datos recibidos
+        $request->validate([
+            'libro_a_transferir' => 'required|integer', // ID del libro origen (asignatura)
+            'libro_recibir_transferencia' => 'required|integer', // ID del libro destino (asignatura)
+            'user_created' => 'required|integer',
+        ]);
+
+        // Eliminar planificaciones existentes del libro receptor
+        Planificacion::where('asignatura_idasignatura', $request->libro_recibir_transferencia)->delete();
+
+        // Buscar planificaciones del libro origen
+        $planificaciones = Planificacion::where('asignatura_idasignatura', $request->libro_a_transferir)->get();
+
+        // Clonar cada planificación al libro receptor
+        foreach ($planificaciones as $plan) {
+            Planificacion::create([
+                'nombreplanificacion'     => $plan->nombreplanificacion,
+                'descripcionplanificacion'=> $plan->descripcionplanificacion,
+                'webplanificacion'        => $plan->webplanificacion,
+                'asignatura_idasignatura' => $request->libro_recibir_transferencia,
+                'user_created'            => $request->user_created, // puedes usar el actual si deseas
+                'Estado_idEstado'         => $plan->Estado_idEstado,
+                'created_at'              => now(),
+                'updated_at'              => now(),
+            ]);
+        }
+
+        return response()->json(['message' => 'Transferencia de planificaciones completada exitosamente.'], 200);
+    }
+
     /**
      * Display the specified resource.
      *

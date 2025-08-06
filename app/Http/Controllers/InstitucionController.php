@@ -1340,4 +1340,17 @@ public function Delete_TipoInstitucion($request) {
     }
 }
 
+    public function validarTipoInstitucion($id)
+    {
+        $institucion = Institucion::where('idInstitucion', $id)
+                                ->select('tipo_institucion')
+                                ->first();
+        
+        if (!$institucion) {
+            return "false";
+        }
+
+        return in_array($institucion->tipo_institucion, [3, 4, 5]) ? "true" : "false";
+    }
+
 }

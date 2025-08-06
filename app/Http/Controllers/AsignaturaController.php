@@ -24,7 +24,7 @@ class AsignaturaController extends Controller
 
         $nivel = DB::SELECT("SELECT nivel.* FROM nivel ORDER BY idnivel DESC");
         $area = DB::SELECT("SELECT area.* FROM area WHERE estado = '1' ORDER BY idarea DESC");
-        return["asignatura" => $asignatura,"nivel"=>$nivel,"area" => $area]; 
+        return["asignatura" => $asignatura,"nivel"=>$nivel,"area" => $area];
     }
 
     public function cambiarEstadoAsignatura(Request $request){
@@ -40,10 +40,10 @@ class AsignaturaController extends Controller
 
     public function asignatura(Request $request)
     {
-        $asignatura = DB::select('SELECT * FROM asignatura 
+        $asignatura = DB::select('SELECT * FROM asignatura
         left join nivel on nivel.idnivel = asignatura.nivel_idnivel
         left join area on area.idarea = asignatura.area_idarea
-        WHERE asignatura.estado = "1" 
+        WHERE asignatura.estado = "1"
         AND asignatura.tipo_asignatura = 1
         AND asignatura.nombreasignatura  NOT LIKE "%PLUS%"
         order by asignatura.idasignatura desc');
@@ -89,23 +89,23 @@ class AsignaturaController extends Controller
             $asignatura->nombreasignatura = $request->nombreasignatura;
             $asignatura->area_idarea  = $request->area_idarea;
             $asignatura->nivel_idnivel   = $request->nivel_idnivel;
-            $asignatura->tipo_asignatura  = $request->tipo_asignatura; 
+            $asignatura->tipo_asignatura  = $request->tipo_asignatura;
             $asignatura->save();
             return $asignatura;
         }
         if($request->idasignatura){
-    
+
         $asignatura = Asignatura::findOrFail($request->idasignatura);
         $asignatura->nombreasignatura = $request->nombreasignatura;
         $asignatura->area_idarea  = $request->area_idarea;
         $asignatura->nivel_idnivel   = $request->nivel_idnivel;
-        $asignatura->tipo_asignatura  = $request->tipo_asignatura;    
+        $asignatura->tipo_asignatura  = $request->tipo_asignatura;
         }else{
             $asignatura = new Asignatura;
             $asignatura->nombreasignatura = $request->nombreasignatura;
             $asignatura->area_idarea  = $request->area_idarea;
             $asignatura->nivel_idnivel   = $request->nivel_idnivel;
-            $asignatura->tipo_asignatura  = $request->tipo_asignatura;    
+            $asignatura->tipo_asignatura  = $request->tipo_asignatura;
         }
         $asignatura->save();
         if($asignatura){
@@ -136,20 +136,66 @@ class AsignaturaController extends Controller
         return $asignatura;
     }
 
-    
+
     public function asignaturasDoc($id)
-    {   
+    {
         if($id == 0){
-            $asignatura = DB::SELECT("SELECT a.idasignatura as id, a.idasignatura, a.nombreasignatura as label, a.tipo_asignatura FROM asignatura a WHERE a.estado = '1' AND a.tipo_asignatura = 1 ORDER BY a.nombreasignatura");
+            // $asignatura = DB::SELECT("SELECT a.idasignatura as id, a.idasignatura, a.nombreasignatura as label, a.tipo_asignatura
+            // FROM asignatura a
+            // WHERE a.estado = '1'
+            // AND a.tipo_asignatura = 1
+            // ORDER BY a.nombreasignatura");
+            $asignatura = Asignatura::select([
+                'asignatura.idasignatura as id',
+                'asignatura.idasignatura',
+                'asignatura.nombreasignatura as label',
+                'asignatura.tipo_asignatura',
+                'libros_series.idLibro',
+                'libros_series.id_serie',
+                'asignatura.area_idarea',
+            ])
+            ->leftJoin('libro', 'libro.asignatura_idasignatura', '=', 'asignatura.idasignatura')
+            ->leftJoin('libros_series', 'libros_series.idLibro', '=', 'libro.idlibro')
+            ->where('asignatura.estado', '1')
+            ->where('asignatura.tipo_asignatura', '1')
+            ->where('libro.Estado_idEstado', '1')
+            ->where('libros_series.id_serie', '<>', '19')
+            ->orderBy('asignatura.nombreasignatura')
+            ->get();
+
         }else{
-            $asignatura = DB::SELECT("SELECT a.idasignatura as id, a.idasignatura, a.nombreasignatura as label, a.tipo_asignatura FROM asignaturausuario au, asignatura a WHERE au.asignatura_idasignatura = a.idasignatura AND au.usuario_idusuario = $id AND a.estado = '1' ORDER BY a.nombreasignatura");
+            $asignatura = Asignatura::select([
+                'asignatura.idasignatura as id',
+                'asignatura.idasignatura',
+                'asignatura.nombreasignatura as label',
+                'asignatura.tipo_asignatura',
+                'libros_series.idLibro as libros_seriesidlibro',
+                'libros_series.id_serie as libros_seriesidserie',
+                'asignatura.area_idarea',
+            ])
+            ->join('asignaturausuario as au', 'au.asignatura_idasignatura', '=', 'asignatura.idasignatura')
+            ->leftJoin('libro', 'libro.asignatura_idasignatura', '=', 'asignatura.idasignatura')
+            ->leftJoin('libros_series', 'libros_series.idLibro', '=', 'libro.idlibro')
+            ->where('au.usuario_idusuario', $id)
+            ->where('asignatura.estado', '1')
+            ->where('asignatura.tipo_asignatura', '1')
+            ->where('libro.Estado_idEstado', '1')
+            ->where('libros_series.id_serie', '<>', '19')
+            ->orderBy('asignatura.nombreasignatura')
+            ->get();
+            // $asignatura = DB::SELECT("SELECT a.idasignatura as id, a.idasignatura, a.nombreasignatura as label, a.tipo_asignatura
+            // FROM asignaturausuario au, asignatura a
+            // WHERE au.asignatura_idasignatura = a.idasignatura
+            // AND au.usuario_idusuario = $id
+            // AND a.estado = '1'
+            // ORDER BY a.nombreasignatura");
         }
 
         return $asignatura;
     }
 
 
-    
+
     public function asignaturasCreaDoc($id)
     {
         $asignatura = DB::SELECT("SELECT a.idasignatura as id, a.nombreasignatura as label, a.tipo_asignatura FROM asignaturausuario au, asignatura a WHERE au.asignatura_idasignatura = a.idasignatura AND au.usuario_idusuario = $id AND a.tipo_asignatura = 0 AND a.estado = '1' ORDER BY a.nombreasignatura");

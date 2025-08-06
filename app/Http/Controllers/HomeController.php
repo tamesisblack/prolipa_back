@@ -23,7 +23,12 @@ class HomeController extends Controller
      */
     public function index()
     {
-        return Auth::user();
+        Auth::user();
+         $user = Auth::user()->load([
+            'grupo',
+            'institucion:idInstitucion,nombreInstitucion'
+        ]);
+        return $user;
     }
     public function userInfo()
     {

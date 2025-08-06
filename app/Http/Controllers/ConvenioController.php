@@ -416,6 +416,8 @@ class ConvenioController extends Controller
             $proceso        = PedidoConvenio::where('id',$idConvenio)
             ->update(["estado" => 2 ,
             "usuario_cierre" => $user_created,
+            'comentario_cierre' => $request->comentario_cierre,
+            "fecha_cierre" => date('Y-m-d H:i:s')
             ]);
             //history
             $this->saveHistorico($institucion_id,$id_pedido,$user_created,$valor,$contrato,0,$old_values,"Se cerro el convenio");

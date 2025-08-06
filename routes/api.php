@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AuthController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Auth;
@@ -35,3 +36,24 @@ Route::post('pruebaPush', [NotificacionController::class, 'pruebaPush']);
 require_once "others/perseo/PerseoRouter.php";
 ////ACORTADORES==
 Route::get('verDataLink/{codigo}', 'LinkAcortadorController@verDataLink');
+Route::post('/mobile/login', [AuthController::class, 'login']);
+
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/mobile/user', function (Request $request) {
+        return $request->user();
+    });
+    Route::post('/mobile/logout', function (Request $request) {
+        // Borra el token actual para hacer logout
+        $request->user()->currentAccessToken()->delete();
+
+        return response()->json(['message' => 'Logged out successfully']);
+    });
+    // otras rutas protegidas
+});
+Route::resource('institucion','InstitucionController');
+Route::post('validarcodigo', 'CodigosLibrosController@validarCodigo');
+Route::get('institucionTraerPeriodo', 'CursoController@institucionTraerPeriodo');
+Route::get('libros_estudiante/{id}/{institucion}/{periodo}/{region}/{grupo}', 'CodigosLibrosController@libros_estudiante');
+Route::resource('series','SeriesController');
+Route::get('validarTipoInstitucion/{id}', 'InstitucionController@validarTipoInstitucion');
+Route::apiResource('codigoslibros', 'CodigosLibrosController');

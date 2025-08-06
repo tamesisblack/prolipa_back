@@ -13,6 +13,8 @@ use Illuminate\Provider\Image;
 use Illuminate\Support\Facades\File;
 
 use App\Models\Preguntas;//modelo Evaluaciones.php
+use App\Models\PreguntasOpciones;
+use App\Models\Temas;
 use App\Repositories\Evaluaciones\PreguntasRepository;
 
 class PreguntaController extends Controller
@@ -819,5 +821,179 @@ class PreguntaController extends Controller
         ");
         if(count($query) > 0){ return ["status" => "0", "message" => "La pregunta esta siendo utilizada en una evaluación personalizada"]; }
         $pregunta = EvaluacionInstitucionAsignada::findOrFail($request->id)->delete();
+    }
+    //api:get>>/metodosGetPreguntas
+    public function metodosGetPreguntas(Request $request){
+        $action = $request->input('action');
+        switch ($action) {
+            case 'Get_Preguntas_x_Asignatura':
+                return $this->Get_Preguntas_x_Asignatura($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+    //api:get>>//metodosGetPreguntas?action=Get_Preguntas_x_Asignatura&id_asignatura=1285
+    // public function Get_Preguntas_x_Asignatura(Request $request)
+    // {
+    //     $id_asignatura = $request->input('id_asignatura');
+
+    //     if (!$id_asignatura) {
+    //         return ["status" => "0", "message" => "El id de la asignatura es requerido"];
+    //     }
+
+    //     // Obtener preguntas usando Eloquent
+    //     $preguntas = Preguntas::whereHas('tema', function ($q) use ($id_asignatura) {
+    //             $q->where('id_asignatura', $id_asignatura)
+    //             ->where('estado', 1);
+    //         })
+    //         ->where('estado', 1)
+    //         ->where('grupo_user', 1)
+    //         ->get();
+
+    //     // Obtener temas con Eloquent
+    //     $temas = Temas::where('id_asignatura', $id_asignatura)
+    //         ->where('estado', 1)
+    //         ->get();
+
+    //     return [
+    //         'preguntas' => $preguntas,
+    //         'temas' => $temas
+    //     ];
+    // }
+    public function Get_Preguntas_x_Asignatura(Request $request)
+    {
+        $id_asignatura = $request->input('id_asignatura');
+
+        if (!$id_asignatura) {
+            return ["status" => "0", "message" => "El id de la asignatura es requerido"];
+        }
+
+        // Obtener preguntas usando Eloquent
+        $preguntas = Preguntas::whereHas('tema', function ($q) use ($id_asignatura) {
+                $q->where('id_asignatura', $id_asignatura)
+                ->where('estado', 1);
+            })
+            ->where('estado', 1)
+            ->where('grupo_user', 1)
+            ->get();
+
+        // Obtener temas con Eloquent
+        $temas = Temas::where('id_asignatura', $id_asignatura)
+            ->where('estado', 1)
+            ->get();
+
+        // Crear un mapa de temas por id
+        $temasMap = $temas->keyBy('id');
+
+        // Añadir 'unidad' y 'nombre_tema' a cada pregunta si el tema existe
+        $preguntasConDatos = $preguntas->map(function ($pregunta) use ($temasMap) {
+            $tema = $temasMap->get($pregunta->id_tema);
+            if ($tema) {
+                $pregunta->unidad = $tema->unidad;
+                $pregunta->nombre_tema = $tema->nombre_tema;
+            } else {
+                $pregunta->unidad = null;
+                $pregunta->nombre_tema = null;
+            }
+            return $pregunta;
+        });
+
+        return [
+            'preguntas' => $preguntasConDatos,
+            'temas' => $temas
+        ];
+    }
+
+
+    //api:post>>/metodosPostPreguntas
+    public function metodosPostPreguntas(Request $request){
+        $action = $request->input('action');
+        switch ($action) {
+            case 'Post_Preguntas_x_Asignatura':
+                return $this->Post_Preguntas_x_Asignatura($request);
+            default:
+                return response()->json(['error' => 'Acción no válida'], 400);
+        }
+    }
+
+    //api:post>>/metodosPostPreguntas?action=Post_Preguntas_x_Asignatura
+    public function Post_Preguntas_x_Asignatura(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            $arrayPreguntas = json_decode($request->arrayPreguntas);
+            $idusuario      = $request->idusuario;
+            $contador       = 0;
+            $arrayPreguntasExistentes = [];
+
+            foreach ($arrayPreguntas as $pregunta) {
+                $tema = Temas::where('id_asignatura', $pregunta->id_asignatura_to)
+                    ->where('estado', 1)
+                    ->where('unidad', $pregunta->unidad)
+                    ->where('nombre_tema', $pregunta->nombre_tema)
+                    ->first();
+
+                if (!$tema) {
+                    DB::rollBack();
+                    return response()->json([
+                        'status'  => '0',
+                        'message' => "No se encontró el tema {$pregunta->nombre_tema} de la unidad {$pregunta->unidad} para la asignatura especificada."
+                    ], 200);
+                }
+
+                // validar si la pregunta ya existe
+                $preguntaExistente = Preguntas::where('descripcion', $pregunta->descripcion)
+                    ->where('id_tema', $tema->id)
+                    ->where('idPreguntaMovida', $pregunta->id)
+                    ->first();
+                if ($preguntaExistente) {
+                    // Si la pregunta ya existe, no la volvemos a crear
+                    $arrayPreguntasExistentes[] = $preguntaExistente;
+                    continue;
+                }
+                $nuevaPregunta                   = new Preguntas();
+                $nuevaPregunta->idusuario        = $idusuario;
+                $nuevaPregunta->idPreguntaMovida = $pregunta->id;
+                $nuevaPregunta->id_tipo_pregunta = $pregunta->id_tipo_pregunta;
+                $nuevaPregunta->descripcion      = $pregunta->descripcion;
+                $nuevaPregunta->img_pregunta     = $pregunta->img_pregunta;
+                $nuevaPregunta->puntaje_pregunta = $pregunta->puntaje_pregunta;
+                $nuevaPregunta->estado           = 1;
+                $nuevaPregunta->grupo_user       = $pregunta->grupo_user;
+                $nuevaPregunta->id_tema          = $tema->id;
+                $nuevaPregunta->save();
+
+                if ($nuevaPregunta) {
+                    $contador++;
+                    $opciones = DB::select("SELECT * FROM opciones_preguntas WHERE id_pregunta = ?", [$pregunta->id]);
+                    foreach ($opciones as $opcion) {
+                        $nuevaOpcion                     = new PreguntasOpciones();
+                        $nuevaOpcion->id_pregunta        = $nuevaPregunta->id;
+                        $nuevaOpcion->opcion             = $opcion->opcion;
+                        $nuevaOpcion->img_opcion         = $opcion->img_opcion;
+                        $nuevaOpcion->tipo               = $opcion->tipo;
+                        $nuevaOpcion->cant_coincidencias = $opcion->cant_coincidencias;
+                        $nuevaOpcion->save();
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return response()->json([
+                "status"  => "1",
+                "message" => "Se han movido $contador preguntas correctamente.",
+                "preguntas_existentes" => $arrayPreguntasExistentes
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'status'  => '0',
+                'message' => 'Ocurrió un error al procesar las preguntas.',
+                'error'   => $e->getMessage()
+            ], 200);
+        }
     }
 }

@@ -31,6 +31,7 @@ use App\Models\Temporada;
 use App\Models\User;
 use App\Models\Usuario;
 use App\Models\Verificacion;
+use App\Models\Video;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\Facturacion\DevolucionRepository;
 use DB;
@@ -479,141 +480,137 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $query = DB::SELECT("SELECT c.id, c.estado,c.convenio_aprobado,
-            (
-            SELECT COUNT(l.doc_codigo) AS contadorPendientesConvenio
-                FROM 1_4_documento_liq l
-                WHERE l.tipo_pago_id = '4'
-                AND l.estado ='0'
-                AND l.pedidos_convenios_id = c.id
-            ) AS contadorConvenios
-
-            FROM  pedidos_convenios  c
-            where c.convenio_aprobado = 0
+        $query = DB::SELECT("SELECT * FROM video t
+        WHERE t.id_tema > 0
+        AND t.unidad_id = '0';
         ");
+        $contador = 0;
+        foreach($query as $key => $item){
+            $id_tema = $item->id_tema;
+            $id_unidad = 0;
+            $query2 = DB::SELECT("SELECT * FROM temas te WHERE te.id = $id_tema");
+            if(count($query2) > 0){
+                $id_unidad = $query2[0]->id_unidad;
+                Video::where('idvideo', $item->idvideo)
+                    ->update(['unidad_id' => $id_unidad]);
+                $contador++;
+            }
+        }
+        return response()->json([
+            'status' => '1',
+            'message' => "Se actualizaron $contador videos correctamente"
+        ]);
         return $query;
+        return;
+        $getCodigos = 'SMCLL3-7FY2HVKDHK,
+        PSMCLL3-BV8BUM2SZB,
+        SMCLL3-9DXESD9D7X,
+        PSMCLL3-3GFG8GVB24,
+        SMCM3-966G7FZGAC,
+        PSMCM3-VKRWVUMUZK,
+        SMCM3-VV8HG53RZC,
+        PSMCM3-VT9MN4A68T,
+        SMCM3-966G7FZGAC,
+        PSMCM3-VKRWVUMUZK,
+        SMCM3-VV8HG53RZC,
+        PSMCM3-VT9MN4A68T,
+        SMCB3-H5VEY2DKNM,
+        PSMCB3-YDNWHX3TFK,
+        SMCB3-H7AWXNPUFT,
+        PSMCB3-4BWTKP3PSN
+        ';
+        $lineas = explode(",", $getCodigos); // Separar por coma
+        // Recorrer y armar el array
+        foreach ($lineas as $linea) {
+            $codigoLimpio = trim($linea); // Limpiar espacios o saltos de línea
+            if (!empty($codigoLimpio)) {
+                $codigos[] = ['codigo' => $codigoLimpio];
+            }
+        }
+        // Los combos que quieres añadir, excluyendo el combo 'CMB-5YZAW6'
+        $combos = [
+            'CMB-V394YH',
+            'CMB-U72WRM',
+        ];
+        $libro = 'CFAC3';
+        $getLibrosCombo = _14Producto::findOrFail($libro);
+        if(!$getLibrosCombo){
+            return ["status" => "0", "message" => "No se encontro el libro $libro"];
+        }
+        $prefixes       = explode(',', $getLibrosCombo->codigos_combos);
+        // Los prefijos (tipos de códigos) que quieres procesar
+        // $prefixes = $request->input('prefixes', ['SEAE2', 'CERP', 'CAMM', 'CUNA']);
+        // Definir la cantidad de códigos por combo
+        $cantidadPorCombo = 8;
 
 
+        // Inicializar los arrays para almacenar los resultados
+        $comboOrdenado = [];
+        $combosSinCodigos = [];
+        $codigosProblemas = [];
 
-        // $getCodigos = 'SMLL2-P4P6X5N6X8,
-        // PSMLL2-2MW3S3BMY8,
-        // SMLL2-U2UD5HCMRD,
-        // PSMLL2-YF9BA2HNAF,
-        // SMLL2-XDBG7CE3AN,
-        // PSMLL2-S3NU2HGKYN,
-        // SMM2-AMB4RTE8ME,
-        // PSMM2-UFY99MA4S4,
-        // SMM2-DX787E5Y4R,
-        // PSMM2-SP5M8TX4BD,
-        // SMM2-KBWHCUAXBR,
-        // PSMM2-H3TDA2FB79,
-        // SMCN2-XSS6KZYHEW,
-        // PSMCN2-DXAB4VE9PH,
-        // SMCN2-YUY6ZTGGN2,
-        // PSMCN2-BFXXYDT2KM,
-        // SMCN2-ATPH88HZDY,
-        // PSMCN2-22XG4KNYY7,
-        // SMES2-PURKMWD8V9,
-        // PSMES2-VB4NYVW9BK,
-        // SMES2-GY8ZTTNSFB,
-        // PSMES2-E9Y8STK78G,
-        // SMES2-UXMSNZBPDA,
-        // PSMES2-WHBHEUE9MN,
-        // ';
-        // $lineas = explode(",", $getCodigos); // Separar por coma
-        // // Recorrer y armar el array
-        // foreach ($lineas as $linea) {
-        //     $codigoLimpio = trim($linea); // Limpiar espacios o saltos de línea
-        //     if (!empty($codigoLimpio)) {
-        //         $codigos[] = ['codigo' => $codigoLimpio];
-        //     }
-        // }
+        // Se crea un array de colecciones para cada prefijo
+        $filteredByPrefix = [];
+        foreach ($prefixes as $prefix) {
+            $filteredByPrefix[$prefix] = collect($codigos)->filter(function ($item) use ($prefix) {
+                return strpos($item['codigo'], $prefix) !== false;
+            });
+        }
 
-        // // Los combos que quieres añadir, excluyendo el combo 'CMB-5YZAW6'
-        // $combos = [
-        //     'CMB-W4WWGE',
-        //     'CMB-FVEGW4',
-        //     'CMB-YFEVEZ',
-        // ];
-        // $libro = 'CFA2';
-        // $getLibrosCombo = _14Producto::findOrFail($libro);
-        // if(!$getLibrosCombo){
-        //     return ["status" => "0", "message" => "No se encontro el libro $libro"];
-        // }
-        // $prefixes       = explode(',', $getLibrosCombo->codigos_combos);
-        // // Los prefijos (tipos de códigos) que quieres procesar
-        // // $prefixes = $request->input('prefixes', ['SEAE2', 'CERP', 'CAMM', 'CUNA']);
-        // // Definir la cantidad de códigos por combo
-        // $cantidadPorCombo = 8;
+        // Alternar entre combo y códigos
+        $comboIndex = 0;
+        while ($comboIndex < count($combos)) {
+            // Verificar si hay suficientes códigos disponibles antes de agregar el combo
+            $totalDisponibles = collect($filteredByPrefix)->sum(fn($collection) => $collection->count());
 
+            if ($totalDisponibles < $cantidadPorCombo) {
+                // Si no hay suficientes códigos, mover el combo a la lista de problemas y continuar
+                $combosSinCodigos[] = $combos[$comboIndex];
 
-        // // Inicializar los arrays para almacenar los resultados
-        // $comboOrdenado = [];
-        // $combosSinCodigos = [];
-        // $codigosProblemas = [];
+                // Capturar los códigos que no se pudieron usar
+                foreach ($filteredByPrefix as $prefix => $collection) {
+                    if ($collection->isNotEmpty()) {
+                        $codigosProblemas = array_merge($codigosProblemas, $collection->all());
+                        $filteredByPrefix[$prefix] = collect(); // Vaciar la colección para evitar duplicados
+                    }
+                }
 
-        // // Se crea un array de colecciones para cada prefijo
-        // $filteredByPrefix = [];
-        // foreach ($prefixes as $prefix) {
-        //     $filteredByPrefix[$prefix] = collect($codigos)->filter(function ($item) use ($prefix) {
-        //         return strpos($item['codigo'], $prefix) !== false;
-        //     });
-        // }
+                $comboIndex++;
+                continue;
+            }
 
-        // // Alternar entre combo y códigos
-        // $comboIndex = 0;
-        // while ($comboIndex < count($combos)) {
-        //     // Verificar si hay suficientes códigos disponibles antes de agregar el combo
-        //     $totalDisponibles = collect($filteredByPrefix)->sum(fn($collection) => $collection->count());
+            // Añadir un combo primero
+            $comboOrdenado[] = ['codigo' => $combos[$comboIndex]];
+            $comboIndex++;
 
-        //     if ($totalDisponibles < $cantidadPorCombo) {
-        //         // Si no hay suficientes códigos, mover el combo a la lista de problemas y continuar
-        //         $combosSinCodigos[] = $combos[$comboIndex];
+            // Añadir códigos
+            $codesAdded = 0;
+            while ($codesAdded < $cantidadPorCombo) {
+                foreach ($prefixes as $prefix) {
+                    if ($filteredByPrefix[$prefix]->isNotEmpty()) {
+                        // Tomar un código de este prefijo
+                        $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
+                        $codesAdded++;
 
-        //         // Capturar los códigos que no se pudieron usar
-        //         foreach ($filteredByPrefix as $prefix => $collection) {
-        //             if ($collection->isNotEmpty()) {
-        //                 $codigosProblemas = array_merge($codigosProblemas, $collection->all());
-        //                 $filteredByPrefix[$prefix] = collect(); // Vaciar la colección para evitar duplicados
-        //             }
-        //         }
+                        if ($codesAdded < $cantidadPorCombo && $filteredByPrefix[$prefix]->isNotEmpty()) {
+                            $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
+                            $codesAdded++;
+                        }
+                    }
 
-        //         $comboIndex++;
-        //         continue;
-        //     }
+                    if ($codesAdded >= $cantidadPorCombo) {
+                        break;
+                    }
+                }
+            }
+        }
 
-        //     // Añadir un combo primero
-        //     $comboOrdenado[] = ['codigo' => $combos[$comboIndex]];
-        //     $comboIndex++;
-
-        //     // Añadir códigos
-        //     $codesAdded = 0;
-        //     while ($codesAdded < $cantidadPorCombo) {
-        //         foreach ($prefixes as $prefix) {
-        //             if ($filteredByPrefix[$prefix]->isNotEmpty()) {
-        //                 // Tomar un código de este prefijo
-        //                 $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
-        //                 $codesAdded++;
-
-        //                 if ($codesAdded < $cantidadPorCombo && $filteredByPrefix[$prefix]->isNotEmpty()) {
-        //                     $comboOrdenado[] = $filteredByPrefix[$prefix]->shift();
-        //                     $codesAdded++;
-        //                 }
-        //             }
-
-        //             if ($codesAdded >= $cantidadPorCombo) {
-        //                 break;
-        //             }
-        //         }
-        //     }
-        // }
-
-        // // Retornar el array con la propiedad 'codigo', los combos con problema y los códigos con problema
-        // return response()->json([
-        //     'combo' => $comboOrdenado,
-        //     'combos_sin_codigos' => $combosSinCodigos,
-        //     'codigos_problemas' => $codigosProblemas
-        // ]);
+        // Retornar el array con la propiedad 'codigo', los combos con problema y los códigos con problema
+        return response()->json([
+            'combo' => $comboOrdenado,
+            'combos_sin_codigos' => $combosSinCodigos,
+            'codigos_problemas' => $codigosProblemas
+        ]);
 
 
         // Retorna el array con la propiedad 'codigo'

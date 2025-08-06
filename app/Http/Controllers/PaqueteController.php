@@ -1042,6 +1042,7 @@ class PaqueteController extends Controller
         set_time_limit(600000);
         ini_set('max_execution_time', 600000);
         $miArrayDeObjetos           = json_decode($request->data_codigos);
+        $codigos_inviduales         = json_decode($request->codigos_inviduales);
         $arregloProblemaPaquetes    = [];
         $codigoConProblemas         = collect();
         $contadorErrPaquetes        = 0;
@@ -1055,6 +1056,9 @@ class PaqueteController extends Controller
         $letraProceso               = $tipoBodega == 3 ? 'paquete' : 'combo';
         $fecha                      = date('Y-m-d H:i:s');
         $arregloResumen             = [];
+        $arrayCodigosDesarmados     = [];
+        $codigoslibros_devolucion_desarmados_header_id = null;
+
         //====PROCESO===================================
         try{
             DB::beginTransaction();
@@ -1126,7 +1130,7 @@ class PaqueteController extends Controller
                                 //validar si el codigo se encuentra liquidado
                                 $ifDevueltoD                = $validarD[0]->estado_liquidacion;
                                 $ifliquidado_regaladoD      = $validarD[0]->liquidado_regalado;
-                               
+
                                 //===VALIDACION====
 
                                 if($request->dLiquidado ==  '1'){
@@ -1166,6 +1170,27 @@ class PaqueteController extends Controller
                                         //====CODIGO UNION=====
                                         $this->GuardarEnHistorico(0,$institucion_id,$periodo_id,$codigoDiagnostico,$usuario_editor,$comentario,$old_valuesD,$newValuesDiagnostico,$setContrato,$verificacion_liquidada);
                                         $this->codigosRepository->saveDevolucion($codigoDiagnostico,$request->cliente,$request->institucion_id,$request->periodo_id,$fecha,$request->observacion,$request->id_usuario);
+                                        //GUARDAR EN UN ARRAY PARA DEVOLUCION CON COMBOS DESARMADOS
+                                        $info_individual = collect($codigos_inviduales)->firstWhere('codigo', $codigoActivacion);
+
+                                        if(!($info_individual)){
+                                            return [
+                                                "status" => 0,
+                                                "message" => "El codigo no se fue encontrado en los codigos individuales",
+                                            ];
+                                        }
+                                        $arrayCodigosDesarmados[] = (object)[
+                                            "codigo"             => $codigoActivacion,
+                                            "codigo_union"       => $codigoDiagnostico,
+                                            "libro_id"           => $info_individual ? $info_individual->libro_idReal : null,
+                                            "estado_liquidacion" => $validarA[0]->estado_liquidacion,
+                                            "liquidado_regalado" => $validarA[0]->liquidado_regalado,
+                                            "estado"             => $validarA[0]->estado,
+                                            "plus"               => $validarA[0]->plus,
+                                            "precio"             => $info_individual ? $info_individual->precio : null,
+                                            "combo"              => $validarA[0]->codigo_combo,
+                                            "codigo_combo"       => $validarA[0]->codigo_combo,
+                                        ];
                                     }else{
                                         //SI NO INGRESA ALGUNO DE LOS CODIGOS ENVIO AL FRONT
                                         $problemasconCodigo[$contadorProblemasCodigos] = [
@@ -1228,20 +1253,30 @@ class PaqueteController extends Controller
                     $contadorErrPaquetes++;
                 }
             }
+            //fin foreach
+             //si hay codigos desarmados
+            if(count($arrayCodigosDesarmados) > 0){
+                //desarmar los codigos de los combos
+                $codigoslibros_devolucion_desarmados_header_id =$this->codigosRepository->save_devolucion_codigos_desarmados($arrayCodigosDesarmados,$request->id_usuario,$request->institucion_id,$request->periodo_id,$request->observacion);
+            }
             DB::commit();
             if(count($codigoConProblemas) == 0){
                 return [
-                    "arregloResumen"                   => $arregloResumen,
-                    "codigoConProblemas"               => [],
-                    "arregloErroresPaquetes"           => $arregloProblemaPaquetes,
+                    "arregloResumen"                                => $arregloResumen,
+                    "codigoConProblemas"                            => [],
+                    "arregloErroresPaquetes"                        => $arregloProblemaPaquetes,
+                    "arrayCodigosDesarmados"                        => $arrayCodigosDesarmados,
+                    "codigoslibros_devolucion_desarmados_header_id" => $codigoslibros_devolucion_desarmados_header_id
                 ];
             }else{
                 $resultado = collect($codigoConProblemas);
                 $send      = $resultado->flatten(10);
                 return [
-                    "arregloResumen"                   => $arregloResumen,
-                    "codigoConProblemas"               => $send,
-                    "arregloErroresPaquetes"           => $arregloProblemaPaquetes,
+                    "arregloResumen"                                => $arregloResumen,
+                    "codigoConProblemas"                            => $send,
+                    "arregloErroresPaquetes"                        => $arregloProblemaPaquetes,
+                    "arrayCodigosDesarmados"                        => $arrayCodigosDesarmados,
+                    "codigoslibros_devolucion_desarmados_header_id" => $codigoslibros_devolucion_desarmados_header_id
                 ];
             }
         }

@@ -45,9 +45,11 @@ Route::post('codigos/ingreso', 'CodigoLibrosController@importIngresoCodigos');
 Route::get('getTipoVenta', 'CodigoLibrosController@getTipoVenta');
 Route::post('revisarUltimoHistoricoCodigo', 'CodigoLibrosController@revisarUltimoHistoricoCodigo');
 //bodega
+Route::post('codigos/bodega/devolucionBodegaSinDocumentos', 'CodigoLibrosController@devolucionBodegaSinDocumentos');
 Route::post('codigos/bodega/devolver', 'CodigoLibrosController@devolucionBodega');
 Route::post('codigos/bodega/devolver/version2', 'CodigoLibrosController@devolucionBodega2');
 Route::post('codigos/devolucionCrearDocumentos', 'CodigoLibrosController@devolucionCrearDocumentos');
+Route::post('codigos/devolucionSueltosCrearDocumentos', 'CodigoLibrosController@devolucionSueltosCrearDocumentos');
 Route::post('codigos/asignarCombos', 'CodigoLibrosController@asignarCombos');
 Route::get('procesosbodega','CodigoLibrosController@procesosbodega');
 Route::post('procesosFacturador','CodigoLibrosController@procesosFacturador');
@@ -391,6 +393,7 @@ Route::get('unidades_asignatura/{id}', 'LibroController@unidades_asignatura');
 Route::apiResource('codigoslibros', 'CodigosLibrosController');
 Route::get('codigoslibrosEstudiante', 'CodigosLibrosController@codigoslibrosEstudiante');
 Route::get('codigos_libros_estudiante/{id}/{institucion}/{periodo}/{region}/{grupo}', 'CodigosLibrosController@codigos_libros_estudiante');
+Route::get('libros_estudiante/{id}/{institucion}/{periodo}/{region}/{grupo}', 'CodigosLibrosController@libros_estudiante');
 Route::post('addContenido', 'CursoController@addContenido');
 Route::get('getContenido', 'CursoController@getContenido');
 Route::get('getContenidoTodo', 'CursoController@getContenidoTodo');
@@ -525,6 +528,8 @@ Route::post('setPlanificacion', 'PlanificacionesController@setPlanificacion');
 //apis evaluaciones
 Route::apiResource('evaluacion', 'EvaluacionController');
 Route::apiResource('pregunta', 'PreguntaController');
+Route::get('metodosGetPreguntas','PreguntaController@metodosGetPreguntas');
+Route::post('metodosPostPreguntas','PreguntaController@metodosPostPreguntas');
 Route::get('preguntasDocente/{id}', 'PreguntaController@preguntasDocente');
 Route::apiResource('tema', 'TemaController');
 Route::get('temasignunidadExport', 'TemaController@temasignunidadExport');
@@ -587,6 +592,7 @@ Route::post('generarCodigosUnicos', 'CodigosLibrosGenerarController@generarCodig
 Route::post('guardarCodigos2','CodigosLibrosGenerarController@guardarCodigos2');
 //apis codigos libros
 Route::apiResource('series', 'SeriesController');
+Route::get('librosPorSerie', 'SeriesController@librosPorSerie');
 //api para cambiar el estado de seria basica
 Route::post('cambiarSerieBasica', 'SeriesController@cambiarSerieBasica');
 //para codigos bloqueados
@@ -1253,7 +1259,10 @@ Route::get('GetGrupoProducto_SoloActivos','_14GrupoProductoController@GetGrupoPr
 Route::get('GetProducto_Reportes','_14ProductoController@GetProducto_Reportes');
 Route::get('AreaDisponibles_Asignacion','AreaController@AreaDisponibles_Asignacion');
 Route::get('GetListaCombosXTemporada','_14ProductoController@GetListaCombosXTemporada');
+Route::post('Transferencia_Videos_Asignatura','VideoController@Transferencia_Videos_Asignatura');
+Route::post('transferenciaPlanificaciones','PlanificacionesController@transferenciaPlanificaciones');
 Route::post('Recorrer_Listado_Combos_X_Temporada','_14ProductoController@Recorrer_Listado_Combos_X_Temporada');
+Route::post('Verificar_Listado_Combos_X_Temporada','_14ProductoController@Verificar_Listado_Combos_X_Temporada');
 Route::post('Post_modificar_cabecera_devolucion', 'DevolucionController@Post_modificar_cabecera_devolucion');
 Route::post('GuardarDatosEdicionStockMasiva', '_14ProductoController@GuardarDatosEdicionStockMasiva');
 Route::post('MoverInstitucionxAsesor', 'InstitucionController@MoverInstitucionxAsesor');
@@ -2094,9 +2103,9 @@ Route::group([], function () {
 });
 
 
-    //Rutas para areas
-    Route::resource('areas', 'AreaController');
-    Route::post('area-eliminar', 'AreaController@areaeliminar');
+//Rutas para areas
+Route::resource('areas', 'AreaController');
+Route::post('area-eliminar', 'AreaController@areaeliminar');
 Route::get('metodosGetCodigos','CodigoLibrosController@metodosGetCodigos');
 Route::post('metodosPostCodigos','CodigoLibrosController@metodosPostCodigos');
 //**COMBOS */
@@ -2142,3 +2151,17 @@ Route::get('getPeriodoInstitucion/{id}','PeriodoController@getPeriodoInstitucion
 
 Route::get('getVentasContratosDetallado','VentasController@getVentasContratosDetallado');
 Route::get('getDetallePorAsesor','VentasController@getDetallePorAsesor');
+
+
+
+// reporte de codigos despachados
+Route::post('guardar-reporte-versionado', 'ReporteVersionadoController@guardarVersion');
+Route::post('listar-versiones-reporte', 'ReporteVersionadoController@listarVersiones');
+Route::post('obtener-detalle-version', 'ReporteVersionadoController@obtenerDetalleVersion');
+Route::get('get-codigos/{reporte_versionado_id}', 'ReporteVersionadoController@getCodigos');
+
+Route::post('change_asesor_en_pedido', 'PedidosController@change_asesor_en_pedido');
+
+
+//validacion institucion
+Route::get('validarTipoInstitucion/{id}', 'InstitucionController@validarTipoInstitucion');

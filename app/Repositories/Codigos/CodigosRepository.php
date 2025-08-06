@@ -4,6 +4,8 @@ namespace App\Repositories\Codigos;
 use App\Models\_14Producto;
 use App\Models\CodigosDevolucion;
 use App\Models\CodigosLibros;
+use App\Models\CodigosLibrosDevolucionDesarmadoHeader;
+use App\Models\CodigosLibrosDevolucionDesarmadoSon;
 use App\Models\DetalleVentas;
 use App\Models\Ventas;
 use App\Repositories\BaseRepository;
@@ -295,6 +297,29 @@ class  CodigosRepository extends BaseRepository
             ];
         }
     }
+    public function updateDocumentoDevolucionSueltos($codigo,$codigo_union=null,$codigo_ven){
+        $estadoIngreso = 1;
+        $messageIngreso = "";
+        DB::table('codigoslibros')
+            ->where('codigo', '=', $codigo)
+            ->update(['documento_devolucion' => $codigo_ven]);
+        // Si hay un código de unión, actualizarlo también
+        if ($codigo_union !== "no") {
+            $codigoUnion = CodigosLibros::find($codigo_union);
+            if (!$codigoUnion) {
+                $estadoIngreso = 2;
+                $messageIngreso = "No se encontró el código de unión: $codigo_union.";
+            } else {
+                $codigoUnion->documento_devolucion = $codigo_ven;
+                $codigoUnion->save();
+            }
+        }
+         $sendEstadoEgreso = [
+                "ingreso"           => $estadoIngreso,
+                "messageIngreso"    => $messageIngreso,
+        ];
+        return $sendEstadoEgreso;
+    }
     public function validacionPrefacturaCodigo($datos){
         $codigo             = $datos->codigo;
         $codigo_union       = $datos->codigo_union;
@@ -452,7 +477,52 @@ class  CodigosRepository extends BaseRepository
     }
 
 
-    public function updateDevolucion($codigo,$codigo_union,$objectCodigoUnion,$request,$ifGuardarProforma=0,$codigo_liquidacion=null,$proforma_empresa=null,$codigo_proforma=null,$tipo_importacion=null){
+    public function updateDevolucion($codigo, $codigo_union)
+    {
+        try {
+            // Verificar si el código principal existe
+            $codigoExistente = DB::table('codigoslibros')->where('codigo', $codigo)->exists();
+
+            if (!$codigoExistente) {
+                return [
+                    "ingreso" => 2,
+                    "messageIngreso" => "No se encontró el código: $codigo."
+                ];
+            }
+
+            // Actualizar el código principal
+            DB::table('codigoslibros')
+                ->where('codigo', $codigo)
+                ->update(['estado_liquidacion' => 3, 'bc_estado' => 1]);
+
+            // Si hay un código de unión, actualizarlo también
+            if (!empty($codigo_union) && $codigo_union !== "no") {
+                $codigoUnion = CodigosLibros::find($codigo_union);
+                if (!$codigoUnion) {
+                    return [
+                        "ingreso" => 2,
+                        "messageIngreso" => "No se encontró el código de unión: $codigo_union."
+                    ];
+                }
+
+                $codigoUnion->estado_liquidacion = 3;
+                $codigoUnion->bc_estado = 1;
+                $codigoUnion->save();
+            }
+
+            return [
+                "ingreso" => 1,
+                "messageIngreso" => "Devolución actualizada correctamente."
+            ];
+        } catch (\Exception $e) {
+            return [
+                "ingreso" => 2,
+                "messageIngreso" => $e->getMessage()
+            ];
+        }
+    }
+
+     public function updateDevolucionSueltosSinDocumentos($codigo,$codigo_union,$objectCodigoUnion,$request,$ifGuardarProforma=0,$codigo_liquidacion=null,$proforma_empresa=null,$codigo_proforma=null,$tipo_importacion=null){
         try{
             $withCodigoUnion = 1;
             $estadoIngreso   = 0;
@@ -570,7 +640,6 @@ class  CodigosRepository extends BaseRepository
             ];
         }
     }
-
     //SAVE CODIGOS
     public function save_Codigos($request,$item,$codigo,$prueba_diagnostica,$contador){
         $contadorIngreso                            = 0;
@@ -754,6 +823,7 @@ class  CodigosRepository extends BaseRepository
                 ->leftJoin('asignatura as a_plus', 'lib_plus.asignatura_idasignatura', '=', 'a_plus.idasignatura')
                 ->where('c.bc_periodo', $periodo)
                 ->where('c.prueba_diagnostica', '0')
+                // ->where('c.bc_estado', '2')
                 ->when($liquidados, function ($query) use ($IdVerificacion, $institucion, $verif) {
                     $query->where($verif, $IdVerificacion)
                         ->where(function ($query) use ($institucion) {
@@ -1327,4 +1397,41 @@ class  CodigosRepository extends BaseRepository
 
         return $query;
     }
+    public function save_devolucion_codigos_desarmados($arrayCodigos, $id_devolucion)
+    {
+
+        try {
+            foreach ($arrayCodigos as $item) {
+                $detalle = new CodigosLibrosDevolucionDesarmadoSon();
+                //valida si el codigo ya existe
+                $validate = CodigosLibrosDevolucionDesarmadoSon::where('codigoslibros_devolucion_desarmados_header_id', $id_devolucion)
+                    ->where('codigo', $item->codigo)
+                    ->first();
+                if ($validate) {
+                    return "El código {$item->codigo} ya existe en la devolución.";
+                }
+                $detalle->codigoslibros_devolucion_desarmados_header_id = $id_devolucion;
+                $detalle->libro_id                                      = $item->libro_id;
+                $detalle->codigo                                        = $item->codigo;
+                $detalle->codigo_union                                  = $item->codigo_union;
+                $detalle->estado_liquidacion                            = $item->estado_liquidacion;
+                $detalle->liquidado_regalado                            = $item->liquidado_regalado;
+                $detalle->precio                                        = $item->precio;
+                $detalle->estado                                        = $item->estado;
+                $detalle->plus                                          = $item->plus;
+                $detalle->precio                                        = $item->precio;
+                $detalle->combo                                         = $item->combo;
+                $detalle->codigo_combo                                  = $item->codigo_combo;
+                if (!$detalle->save()) {
+                    throw new \Exception("No se pudo guardar el detalle con código: {$item->codigo}");
+                }
+            }
+
+            return ["success" => true, "message" => "Devolución de códigos desarmados guardada correctamente."];
+        } catch (\Exception $e) {
+            // Puedes registrar el error si lo necesitas, por ejemplo:
+            throw new \Exception("Error al guardar la devolución de códigos desarmados: " . $e->getMessage());
+        }
+    }
+
 }

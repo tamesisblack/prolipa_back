@@ -1012,4 +1012,19 @@ class SeriesController extends Controller
     }
 
     //FIN METODOS JEYSON
+    //API:GET/librosPorSerie?id_serie=1
+    public function librosPorSerie(Request $request)
+    {
+        $id_serie = $request->id_serie;
+
+        if (!$id_serie) {
+            return ["status" => "0", "message" => "El parámetro id_serie es requerido"];
+        }
+
+        $libros = DB::SELECT("SELECT l.* FROM libro l
+        LEFT JOIN libros_series ls ON ls.idLibro = l.idlibro
+        WHERE ls.id_serie = ?", [$id_serie]);
+
+        return response()->json($libros);
+    }
 }

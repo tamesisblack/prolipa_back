@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\_14Producto;
 use App\Models\_14ProductoStockHistorico;
 use App\Models\CodigosLibros;
+use App\Models\CodigosLibrosDevolucionDesarmadoHeader;
+use App\Models\CodigosLibrosDevolucionDesarmadoSon;
 use App\Models\CodigosLibrosDevolucionHeader;
 use App\Models\CodigosLibrosDevolucionHeaderFacturador;
 use App\Models\CodigosLibrosDevolucionSon;
@@ -68,8 +70,9 @@ class DevolucionController extends Controller
        if($request->CargarDetallesDocumentos)               { return $this->CargarDetallesDocumentos($request); }
        if($request->documentoExiste)                        { return $this->verificarDocumento($request); }
         if($request->documentoParaSinEmpresa)               { return $this->documentoParaSinEmpresa($request); }
-        if($request->InstitucionesCambio)               { return $this->InstitucionesCambio($request); }
-
+        if($request->InstitucionesCambio)                   { return $this->InstitucionesCambio($request); }
+        if($request->getDevolucionesCombosDesarmados)       { return $this->getDevolucionesCombosDesarmados($request); }
+        if($request->getDevolucionesCombosDesarmadosXId)    { return $this->getDevolucionesCombosDesarmadosXId($request); }
 
     }
     //api:get/devoluciones?listadoProformasAgrupadas=1&institucion=1620&periodo_id=27
@@ -934,6 +937,9 @@ class DevolucionController extends Controller
         if($request->actualizarDatosDevolucion) { return $this->actualizarDatosDevolucion($request); }
         if($request->returnToReview)            { return $this->returnToReview($request); }
         if($request->CambioClienteDevolucion)   { return $this->CambioClienteDevolucion($request); }
+        if($request->finalizarDevolucionSueltos) { return $this->finalizarDevolucionSueltos($request); }
+        if($request->anulacionDevolucionSueltos) { return $this->anulacionDevolucionSueltos($request); }
+        if($request->eliminarDevolucionSueltos)  { return $this->eliminarDevolucionSueltos($request); }
     }
     //api:post/validateBeforeCreate=1
     public function validateBeforeCreate($request){
@@ -2191,7 +2197,105 @@ class DevolucionController extends Controller
         }
     }
 
+    //api:post/devoluciones/finalizarDevolucionSueltos
+    public function finalizarDevolucionSueltos($request)
+    {
+        // Validación básica
+        if (!$request->has('id_devolucion') || empty($request->id_devolucion)) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'El ID de la devolución es obligatorio.'
+            ], 200); // 400 Bad Request
+        }
 
+        $id_devolucion = $request->id_devolucion;
+        $id_usuario    = $request->id_usuario ?? null;
+
+        // Opcional: puedes verificar si existe la devolución también
+        $devolucion = CodigosLibrosDevolucionDesarmadoHeader::find($id_devolucion);
+        if (!$devolucion) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'No se encontró la devolución con el ID proporcionado.'
+            ], 200);
+        }
+
+        CodigosLibrosDevolucionDesarmadoHeader::where('id', $id_devolucion)
+            ->update(['user_finaliza' => $id_usuario, 'fecha_finaliza' => now(), 'estado' => 2]);
+
+        return response()->json([
+            'status'  => 1,
+            'message' => 'Devolución finalizada correctamente.'
+        ]);
+    }
+
+
+    //api:post/devoluciones/anulacionDevolucionSueltos
+    public function anulacionDevolucionSueltos($request)
+    {
+        // Validación básica
+        if (!$request->has('id_devolucion') || empty($request->id_devolucion)) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'El ID de la devolución es obligatorio.'
+            ], 200);
+        }
+
+        $id_devolucion = $request->id_devolucion;
+        $id_usuario    = $request->id_usuario ?? null;
+
+        // Verificar si existe la devolución
+        $devolucion = CodigosLibrosDevolucionDesarmadoHeader::find($id_devolucion);
+        if (!$devolucion) {
+            return response()->json([
+                'status'  => 0,
+                'message' => 'No se encontró la devolución con el ID proporcionado.'
+            ], 200);
+        }
+
+         CodigosLibrosDevolucionDesarmadoHeader::where('id', $id_devolucion)
+            ->update(['user_anula' => $id_usuario, 'fecha_anula' => now(), 'estado' => 3]);
+
+        return response()->json([
+            'status'  => 1,
+            'message' => 'Devolución anulada correctamente.'
+        ]);
+    }
+
+    //api:post/devoluciones/eliminarDevolucionSueltos
+    public function eliminarDevolucionSueltos($request){
+        $id_devolucion  = $request->id_devolucion;
+        try {
+            DB::beginTransaction();
+            // Verificar si existe la devolución
+            $devolucion = CodigosLibrosDevolucionDesarmadoHeader::find($id_devolucion);
+            if(!$devolucion){
+                DB::rollBack();
+                return ["status" => "0", "message" => "No se encontro el documento de la devolucion con el id $id_devolucion"];
+            }
+            $estado = $devolucion->estado;
+            $codigo_devolucion = $devolucion->codigo_devolucion;
+            if($estado != 0){
+                DB::rollBack();
+                return ["status" => "0", "message" => "El documento de devolucion solo se puede eliminar en estado creado"];
+            }
+            // ELIMINAR LOS hijos primero
+            CodigosLibrosDevolucionDesarmadoSon::where('codigoslibros_devolucion_desarmados_header_id', $id_devolucion)->delete();
+            // ELIMINAR el padre
+            $devolucion->delete();
+            // QUITAR EL DOCUMENTO EN CODIGOSLIBROS
+            DB::table('codigoslibros')
+            ->where('documento_devolucion','=',$codigo_devolucion)
+            ->update([
+                'documento_devolucion' => null
+            ]);
+            DB::commit();
+            return ["status" => "1", "message" => "Documento de devolucion eliminado correctamente"];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return ["status" => "0", "message" => "Error al eliminar la devolucion: " . $e->getMessage()];
+        }
+    }
 
     public function InstitucionesCambio(Request $request)
     {
@@ -2211,6 +2315,70 @@ class DevolucionController extends Controller
             ->get();
 
         return response()->json($query);
+    }
+
+    //api:get/devoluciones?getDevolucionesCombosDesarmados=1&estadoFiltro=2
+    public function getDevolucionesCombosDesarmados($request){
+        $estadoFiltro = $request->estadoFiltro;
+        $query = DB::table('codigoslibros_devolucion_desarmados_header as h')
+            ->select(
+                'h.*',
+                'p.periodoescolar',
+                'i.nombreInstitucion',
+                'p.region_idregion as region',
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS usuarioCreador"),
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS usuarioCreador"),
+                DB::raw("CONCAT(udev.nombres, ' ', udev.apellidos) AS usuarioDevuelve"),
+                DB::raw("CONCAT(ufin.nombres, ' ', ufin.apellidos) AS usuarioFinaliza"),
+                DB::raw("CONCAT(uanul.nombres, ' ', uanul.apellidos) AS usuarioAnula"),
+                DB::raw("CONCAT(h.codigo_devolucion, ' - ', i.nombreInstitucion) AS documento_cliente"),
+                DB::raw('(SELECT COUNT(*) FROM codigoslibros_devolucion_desarmados_son s WHERE s.codigoslibros_devolucion_desarmados_header_id = h.id) as cantidadCodigos')
+            )
+            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'h.institucion_id')
+            ->leftJoin('periodoescolar as p', 'p.idperiodoescolar', '=', 'h.periodo_id')
+            ->leftJoin('usuario as u', 'u.idusuario', '=', 'h.user_created')
+            ->leftJoin('usuario as udev','udev.idusuario','=','h.user_devuelve')
+            ->leftJoin('usuario as ufin','ufin.idusuario','=','h.user_finaliza')
+            ->leftJoin('usuario as uanul','uanul.idusuario','=','h.user_anula')
+            ->where('h.estado', '=', $estadoFiltro)
+            ->OrderBy('h.id', 'DESC')
+            ->get();
+        return response()->json($query);
+    }
+    //api:get/devoluciones?getDevolucionesCombosDesarmadosXId=1&id_devolucion=1
+    public function getDevolucionesCombosDesarmadosXId($request)
+    {
+        $id_devolucion = $request->input('id_devolucion');
+
+        if (!$id_devolucion) {
+            return ["status" => "0", "message" => "ID de devolución no proporcionado"];
+        }
+
+        $query = DB::table('codigoslibros_devolucion_desarmados_header as h')
+            ->select(
+                'h.*',
+                'p.periodoescolar',
+                'i.nombreInstitucion',
+                DB::raw("CONCAT(u.nombres, ' ', u.apellidos) AS usuarioCreador")
+            )
+            ->leftJoin('institucion as i', 'i.idInstitucion', '=', 'h.institucion_id')
+            ->leftJoin('periodoescolar as p', 'p.idperiodoescolar', '=', 'h.periodo_id')
+            ->leftJoin('usuario as u', 'u.idusuario', '=', 'h.user_created')
+            ->where('h.id', '=', $id_devolucion)
+            ->get();
+
+        foreach ($query as $devolucion) {
+            $devolucion->codigos = DB::table('codigoslibros_devolucion_desarmados_son as s')
+                ->leftJoin('libro as l', 'l.idlibro', '=', 's.libro_id')
+                ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'l.idlibro')
+                ->select('s.*', 'l.nombrelibro','ls.codigo_liquidacion')
+                ->where('s.codigoslibros_devolucion_desarmados_header_id', $devolucion->id)
+                ->get();
+        }
+        if ($query->isEmpty()) {
+            return [];
+        }
+        return response()->json($query[0]);
     }
 
 }

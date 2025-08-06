@@ -317,32 +317,33 @@ class _14ProductoController extends Controller {
         foreach ($productos as &$producto) {
             $codigo_combo = $producto['pro_codigo'] ?? null;
             $producto['pro_codigos_desglose'] = [];
+            $producto['pro_reservar'] = null; // Inicializa el campo
             if ($codigo_combo) {
-                // Consultar el campo codigos_combos desde la tabla 1_4_cal_producto
-                $comboData = DB::select("
-                    SELECT codigos_combos
+                // Consultar codigos_combos Y pro_reservar desde la tabla 1_4_cal_producto
+                $comboData = DB::select("SELECT codigos_combos, pro_reservar
                     FROM 1_4_cal_producto
                     WHERE pro_codigo = ?
                     LIMIT 1
                 ", [$codigo_combo]);
-                if (!empty($comboData) && !empty($comboData[0]->codigos_combos)) {
-                    $codigos_combos = $comboData[0]->codigos_combos;
-                    $codigos_array = explode(',', $codigos_combos);
-                    foreach ($codigos_array as $codigo) {
-                        $desglose = DB::select("
-                            SELECT ls.codigo_liquidacion, l.nombrelibro
-                            FROM libros_series ls
-                            LEFT JOIN libro l ON ls.idLibro = l.idlibro
-                            WHERE ls.codigo_liquidacion = ?
-                        ", [$codigo]);
-                        if (empty($desglose)) {
-                            // ⚠️ Si no se encuentra el código, lanzar error
-                            throw new \Exception("⚠️ Código '$codigo' asociado al combo '$codigo_combo' no fue encontrado. Verifica los códigos del combo.");
+                if (!empty($comboData)) {
+                    $producto['pro_reservar'] = $comboData[0]->pro_reservar;
+                    if (!empty($comboData[0]->codigos_combos)) {
+                        $codigos_combos = $comboData[0]->codigos_combos;
+                        $codigos_array = explode(',', $codigos_combos);
+                        foreach ($codigos_array as $codigo) {
+                            $desglose = DB::select("SELECT ls.codigo_liquidacion, l.nombrelibro
+                                FROM libros_series ls
+                                LEFT JOIN libro l ON ls.idLibro = l.idlibro
+                                WHERE ls.codigo_liquidacion = ?
+                            ", [$codigo]);
+                            if (empty($desglose)) {
+                                throw new \Exception("⚠️ Código '$codigo' asociado al combo '$codigo_combo' no fue encontrado. Verifica los códigos del combo.");
+                            }
+                            $producto['pro_codigos_desglose'][] = [
+                                "codigo_liquidacion" => $desglose[0]->codigo_liquidacion,
+                                "nombrelibro" => $desglose[0]->nombrelibro,
+                            ];
                         }
-                        $producto['pro_codigos_desglose'][] = [
-                            "codigo_liquidacion" => $desglose[0]->codigo_liquidacion,
-                            "nombrelibro" => $desglose[0]->nombrelibro,
-                        ];
                     }
                 }
             }
@@ -352,6 +353,35 @@ class _14ProductoController extends Controller {
             'status' => 1,
         ]);
     }
+    public function Verificar_Listado_Combos_X_Temporada(Request $request)
+    {
+        $producto = $request->input('producto');
+        $periodo_escolar = $request->input('periodo_escolar');
+        // return [
+        //     'producto' => $producto,
+        //     'periodo_escolar' => $periodo_escolar,
+        // ];
+        $producto_enviado_desde_front = $producto; // lo que devolverás en ProductoReporte
+        $producto_sin_stock_sin_codigoslibros = null;
+        if (isset($producto['pro_reservar']) && $producto['pro_reservar'] == 0) {
+            $existeEnCodigosLibros = DB::table('codigoslibros')
+                ->where('bc_periodo', $periodo_escolar)
+                ->where('combo', $producto['pro_codigo'])
+                ->whereNotNull('combo')
+                ->where('estado_liquidacion', '<>', '3')
+                ->where('prueba_diagnostica', 0)
+                ->exists();
+            if (!$existeEnCodigosLibros) {
+                $producto_sin_stock_sin_codigoslibros = $producto;
+            }
+        }
+        return response()->json([
+            'producto_enviado_desde_front' => $producto_enviado_desde_front,
+            'producto_sin_stock_sin_codigoslibros' => $producto_sin_stock_sin_codigoslibros,
+            'status' => 1
+        ]);
+    }
+
     //FIN SECCION OBETENER LISTADO COMBOS X TEMPORADA
     public function Mover_Stock_SoloTxt_Todo_A_DepositoCALMED() {
         // 1. Obtener productos antes del cambio
@@ -564,7 +594,9 @@ class _14ProductoController extends Controller {
                     'pro_depositoCalmed' => $request->pro_depositoCalmed,
                     'pro_stockCalmed' => $request->pro_stockCalmed,
                     'user_created' => $request->user_created,
-                    'updated_at' => now()
+                    'updated_at' => now(),
+                    'ifcombo'           => $request->ifcombo,
+                    'codigos_combos'    => $request->codigos_combos ?? null,
                 ]
             );
 
@@ -602,7 +634,8 @@ class _14ProductoController extends Controller {
                     'c_pdfconguia' => $request->c_pdfconguia,
                     'c_guiadidactica' => $request->c_guiadidactica,
                     'c_portada' => $request->c_portada ?? 'portada.png',
-                    'demo' => $request->demo
+                    'demo' => $request->demo,
+                    'id_folleto' => $request->id_folleto
                 ]
             );
 

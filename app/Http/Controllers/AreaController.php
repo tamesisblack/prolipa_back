@@ -168,4 +168,11 @@ class AreaController extends Controller
         return $data;
     }
     //FIN METODOS JEYSON
+
+    /**
+     * Obtener libros por serie
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
 }

@@ -2017,7 +2017,7 @@ class VentasController extends Controller
         $query = DetalleVentas::where('ven_codigo', $ven_codigo)
             ->leftjoin('1_4_cal_producto as p','p.pro_codigo','=','f_detalle_venta.pro_codigo')
             ->where('id_empresa', $id_empresa)
-            ->select('f_detalle_venta.*','p.ifcombo',DB::raw('CONCAT(p.pro_codigo, " - ", p.pro_nombre )as combolibro'))
+            ->select('f_detalle_venta.*','p.ifcombo','p.codigos_combos','p.pro_codigo as codigo_liquidacion','p.pro_nombre as nombre',DB::raw('CONCAT(p.pro_codigo, " - ", p.pro_nombre )as combolibro'))
             ->get(); // Usar 'get()' si esperas varios resultados
 
         // Retornar la respuesta
@@ -3712,7 +3712,7 @@ public function getVentasContratosDetallado(Request $request)
     $pedidos = \DB::table('pedidos')
         ->whereIn('ca_codigo_agrupado', $codigosAgrupados)
         ->get();
-    
+
     $pedidos = \DB::table('pedidos')
     ->whereIn('ca_codigo_agrupado', $codigosAgrupados)
     ->get();
@@ -3720,7 +3720,7 @@ public function getVentasContratosDetallado(Request $request)
     // 5. Sacar id_asesor y otros datos que quieras mostrar
     $asesoresIds = $pedidos->pluck('id_asesor')->unique()->toArray();
 
-   
+
 
     $venCodigosPedidosObsequios = $ventas->pluck('ven_p_libros_obsequios')
         ->filter(function($value) {
@@ -3732,7 +3732,7 @@ public function getVentasContratosDetallado(Request $request)
     $pedidosObsequios = \DB::table('p_libros_obsequios')
     ->whereIn('id', $venCodigosPedidosObsequios)
     ->get();
-    
+
 
     $obsequiosUnicos = $pedidosObsequios->pluck('id_pedido')->unique()->toArray();
 
@@ -3742,7 +3742,7 @@ public function getVentasContratosDetallado(Request $request)
         ->get();
 
     $asesoresObsequios = $pedidosObsquiosContratos->pluck('id_asesor')->unique()->toArray();
-    
+
     $asesoresIdsObsequiosContratos = array_merge($asesoresIds, $asesoresObsequios);
 
      // Por ejemplo, sacar datos de asesores (si tienes tabla usuarios o asesores)

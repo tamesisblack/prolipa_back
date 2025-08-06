@@ -943,7 +943,7 @@ class UsuarioController extends Controller
     }
     public function asesores()
     {
-        $asesores = Usuario::select(DB::raw("CONCAT(nombres, ' ', apellidos) as nombres, cedula,idusuario "))
+        $asesores = Usuario::select(DB::raw("CONCAT(nombres, ' ', apellidos) as nombres, cedula,idusuario, estado_idEstado as estado "))
         ->where('id_group', 11)
         ->get();
         return $asesores;
@@ -1434,7 +1434,6 @@ class UsuarioController extends Controller
         )   AS cantidad_instituciones
         FROM usuario u
         WHERE u.id_group = '11'
-        AND u.estado_idEstado = '1'
         ");
         return $asesoresInstituciones;
     }

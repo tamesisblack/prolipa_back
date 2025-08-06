@@ -8529,4 +8529,11 @@ class PedidosController extends Controller
             ]);
         }
     }
+    public function change_asesor_en_pedido(Request $request){
+         // Buscar el pedido usando Eloquent (findOrFail lanza una excepción si no se encuentra)
+            $pedido = Pedidos::findOrFail($request->id_pedido);
+            $pedido->id_asesor = $request->id_asesor;
+            $pedido->save();
+            return $pedido;
+    }
 }

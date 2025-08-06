@@ -38,6 +38,7 @@ class Pedidos2Controller extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         if($request->getReportePedidos)             { return $this->getReportePedidos($request); }
+        if($request->getReportePedidos_new)         { return $this->getReportePedidos_new($request); }
         if($request->getLibrosFormato)              { return $this->getLibrosFormato($request->periodo_id); }
         if($request->getLibrosFormato_new)          { return $this->getLibrosFormato_new($request->periodo_id); }
         if($request->geAllLibrosxAsesorEscuelas)    { return $this->geAllLibrosxAsesorEscuelas($request->asesor_id,$request->periodo_id); }
@@ -115,6 +116,77 @@ class Pedidos2Controller extends Controller
         foreach ($getPedidos as $key => $item10) {
             $pedido = $item10->id_pedido;
             $libroSolicitados = $this->pedidosRepository->obtenerLibroxPedidoTodo($pedido);
+            $arrayDetalles[$key] = $libroSolicitados;
+        }
+
+        $agrupado = [];
+        $arrayDetalles = collect($arrayDetalles)->flatten(10);
+
+        // 4. Agrupar los datos por código de liquidación
+        foreach ($arrayDetalles as $detalle) {
+            $codigo_liquidacion = $detalle->codigo_liquidacion;
+
+            if (isset($agrupado[$codigo_liquidacion])) {
+                $agrupado[$codigo_liquidacion]['valor'] += $detalle->valor;
+                $agrupado[$codigo_liquidacion]['total'] += $detalle->valor * $detalle->precio;
+
+                if (empty($agrupado[$codigo_liquidacion]['nombrelibro'])) {
+                    $agrupado[$codigo_liquidacion]['nombrelibro'] = $detalle->nombrelibro;
+                }
+            } else {
+                $agrupado[$codigo_liquidacion] = [
+                    'codigo_liquidacion' => $codigo_liquidacion,
+                    'valor' => $detalle->valor,
+                    'nombrelibro' => $detalle->nombrelibro,
+                    'precio' => $detalle->precio,
+                    'total' => $detalle->valor * $detalle->precio,
+                ];
+            }
+        }
+
+        // 5. Retornar los datos agrupados
+        return array_values($agrupado);
+    }
+
+    //API:GET/pedidos2/pedidos?getReportePedidos_new=1&periodo_id=26&ifContratos=1
+    public function getReportePedidos_new($request) {
+        // 1. Validar que el periodo_id esté presente
+        $periodo_id = $request->periodo_id;
+        $ifContratos = $request->ifContratos;
+
+        if (!$periodo_id) {
+            return ["status" => "0", "message" => "Falta el periodo_id"];
+        }
+
+        // 2. Obtener los pedidos
+        if ($ifContratos == 1) {
+            // Con contratos
+            $getPedidos = DB::SELECT("
+                SELECT p.*
+                FROM pedidos p
+                WHERE p.id_periodo = ?
+                AND p.estado = '1'
+                AND p.tipo = '0'
+                AND p.contrato_generado IS NOT NULL
+            ", [$periodo_id]);
+        } else {
+            // Sin contratos
+            $getPedidos = DB::SELECT("
+                SELECT p.*
+                FROM pedidos p
+                WHERE p.id_periodo = ?
+                AND p.estado = '1'
+                AND p.tipo = '0'
+                AND p.contrato_generado IS NULL
+            ", [$periodo_id]);
+        }
+
+        $arrayDetalles = [];
+
+        // 3. Recorrer los pedidos y obtener los detalles de cada uno
+        foreach ($getPedidos as $key => $item10) {
+            $pedido = $item10->id_pedido;
+            $libroSolicitados = $this->pedidosRepository->obtenerLibroxPedidoTodo_new($pedido);
             $arrayDetalles[$key] = $libroSolicitados;
         }
 
@@ -1349,7 +1421,7 @@ class Pedidos2Controller extends Controller
     public function obtenerValores($arrayLibros,$id_pedido){
         $validate               = [];
         $libroSolicitados       = [];
-        $libroSolicitados       = $this->pedidosRepository->obtenerLibroxPedidoTodo($id_pedido);
+        $libroSolicitados       = $this->pedidosRepository->obtenerLibroxPedidoTodo_new($id_pedido);
         foreach($arrayLibros as $key =>  $item){
             $validate[$key] = $this->validarIfExistsLibro($item,$libroSolicitados);
         }

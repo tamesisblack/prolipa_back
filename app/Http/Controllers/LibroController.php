@@ -527,10 +527,12 @@ class LibroController extends Controller
         $query = DB::table('libro as l')
         ->select('l.*', 'a.nombreasignatura as asignatura',
                 'ls.iniciales', 'ls.codigo_liquidacion', 'ls.year', 'ls.version',
-                's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos')
+                's.id_serie', 's.nombre_serie', 'ls.nombre', 'p.ifcombo', 'p.codigos_combos','folleto.nombrelibro as folleto_nombre','folleto_ls.id_serie as folleto_id_serie')
         ->leftJoin('asignatura as a', 'a.idasignatura', '=', 'l.asignatura_idasignatura')
         ->leftJoin('libros_series as ls', 'ls.idLibro', '=', 'l.idlibro')
         ->leftJoin('series as s', 's.id_serie', '=', 'ls.id_serie')
+        ->leftJoin('libro as folleto', 'folleto.idlibro', '=', 'l.id_folleto')
+        ->leftJoin('libros_series as folleto_ls', 'folleto_ls.idLibro', '=', 'folleto.idlibro')
         ->leftJoin('1_4_cal_producto as p', 'ls.codigo_liquidacion', '=', 'p.pro_codigo');
 
     // Determine the WHERE clause based on the 'tipo' parameter
@@ -607,6 +609,8 @@ class LibroController extends Controller
                 $libro->c_pdfconguia                = ($request->c_pdfconguia    == null     || $request->c_pdfconguia    == "null") ? null : $request->c_pdfconguia;
                 $libro->c_guiadidactica             = ($request->c_guiadidactica == null     || $request->c_guiadidactica == "null") ? null : $request->c_guiadidactica;
                 $libro->c_portada                   = ($request->c_portada       == null     || $request->c_portada       == "null") ? null : $request->c_portada;
+                // folleto
+                $libro->id_folleto                  = ($request->id_folleto       == null     || $request->id_folleto       == "null") ? null : $request->id_folleto;
                 $libro->save();
                 if($request->idlibro ){
                     $librosSerie  = DB::table('libros_series')
@@ -716,7 +720,7 @@ class LibroController extends Controller
     {
         // Consulta para obtener los libros de la institución y el periodo
         $lista = DB::select("
-            SELECT l.*, ls.nombre 
+            SELECT l.*, ls.nombre
             FROM librosinstituciones_detalle l
             INNER JOIN librosinstituciones li ON li.li_id = l.li_id
             LEFT JOIN libros_series ls ON l.lid_idLibro = ls.idLibro

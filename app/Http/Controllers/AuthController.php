@@ -7,6 +7,7 @@ use DB;
 use App\Quotation;
 use Illuminate\Http\Request;
 use JWTAuth;
+use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Exceptions\JWTException;
 class AuthController extends Controller {
     public $loginAfterSignUp = true;
@@ -129,34 +130,62 @@ class AuthController extends Controller {
             return ["status" =>"0","message" => "No existe la cedula"];
         }
     }
-    public function login(Request $request) {
-        $usuario = DB::SELECT("SELECT usuario.*,periodoescolar.idperiodoescolar AS periodoescolar_idperiodoescolar FROM `usuario` 
-        LEFT JOIN institucion ON institucion.idInstitucion = usuario.institucion_idInstitucion 
-        LEFT JOIN periodoescolar_has_institucion ON periodoescolar_has_institucion.institucion_idInstitucion = institucion.idInstitucion 
-        LEFT JOIN periodoescolar ON periodoescolar.idperiodoescolar = periodoescolar_has_institucion.periodoescolar_idperiodoescolar
-        WHERE `name_usuario` LIKE ? AND `password` = ? AND periodoescolar.estado like '1' LIMIT 1",[$request->name_usuario,sha1(md5($request->password))]);           
-        if(empty($usuario)){
-            $usuario = DB::SELECT("SELECT * FROM `usuario` WHERE `name_usuario` = ? AND `password` = ?",[$request->name_usuario,sha1(md5($request->password))]);           
+    // public function login(Request $request) {
+    //     $usuario = DB::SELECT("SELECT usuario.*,periodoescolar.idperiodoescolar AS periodoescolar_idperiodoescolar FROM `usuario` 
+    //     LEFT JOIN institucion ON institucion.idInstitucion = usuario.institucion_idInstitucion 
+    //     LEFT JOIN periodoescolar_has_institucion ON periodoescolar_has_institucion.institucion_idInstitucion = institucion.idInstitucion 
+    //     LEFT JOIN periodoescolar ON periodoescolar.idperiodoescolar = periodoescolar_has_institucion.periodoescolar_idperiodoescolar
+    //     WHERE `name_usuario` LIKE ? AND `password` = ? AND periodoescolar.estado like '1' LIMIT 1",[$request->name_usuario,sha1(md5($request->password))]);           
+    //     if(empty($usuario)){
+    //         $usuario = DB::SELECT("SELECT * FROM `usuario` WHERE `name_usuario` = ? AND `password` = ?",[$request->name_usuario,sha1(md5($request->password))]);           
+    //     }
+    //     $input = $request->only('name_usuario', 'password');
+    //     $jwt_token = JWTAuth::attempt($input);
+    //     if (!$jwt_token = JWTAuth::attempt($input)) {
+    //         return response()->json([
+    //         'status' => 'invalid_credentials',
+    //         'message' => 'Correo o contraseña no válidos.',
+    //         ], 401);
+    //     }else{
+    //         $id = 0;
+    //         foreach ($usuario as $key => $value) {
+    //             $id = $value->idusuario;
+    //         }
+    //         DB::update('update usuario set remember_token = ? where idusuario = ?', [$jwt_token,$id]);
+    //         return response()->json([
+    //             'datos' =>$usuario,
+    //             'status' => 'ok',
+    //             'token' => $jwt_token,
+    //         ]);
+    //     }
+    // }
+    public function login(Request $request)
+    {
+        $request->validate([
+            'name_usuario' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        $credentials = $request->only('name_usuario', 'password');
+
+        // IMPORTANTE: Indica explícitamente que 'name_usuario' es el campo de usuario
+        if (!Auth::attempt($credentials)) {
+            return response()->json(['errors' => 'Credenciales incorrectas'], 412);
         }
-        $input = $request->only('name_usuario', 'password');
-        $jwt_token = JWTAuth::attempt($input);
-        if (!$jwt_token = JWTAuth::attempt($input)) {
-            return response()->json([
-            'status' => 'invalid_credentials',
-            'message' => 'Correo o contraseña no válidos.',
-            ], 401);
-        }else{
-            $id = 0;
-            foreach ($usuario as $key => $value) {
-                $id = $value->idusuario;
-            }
-            DB::update('update usuario set remember_token = ? where idusuario = ?', [$jwt_token,$id]);
-            return response()->json([
-                'datos' =>$usuario,
-                'status' => 'ok',
-                'token' => $jwt_token,
-            ]);
-        }
+
+         // Carga las relaciones grupo e institucion
+        $user = Auth::user()->load([
+            'grupo',
+            'institucion:idInstitucion,nombreInstitucion'
+        ]);
+
+        // Crea un token personal (para Flutter o React Native)
+        $token = $user->createToken('react-native')->plainTextToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ]);
     }
     public function logout(Request $request) {
         $this->validate($request, [
