@@ -10,6 +10,9 @@ use App\Http\Controllers\JuegosController;
 use App\Http\Controllers\TemporadaController;
 use App\Http\Controllers\EstudianteController;
 use App\Http\Controllers\NotificacionController;
+use App\Events\MessageSent;
+use App\Http\Controllers\AiMessageController;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -57,3 +60,8 @@ Route::get('libros_estudiante/{id}/{institucion}/{periodo}/{region}/{grupo}', 'C
 Route::resource('series','SeriesController');
 Route::get('validarTipoInstitucion/{id}', 'InstitucionController@validarTipoInstitucion');
 Route::apiResource('codigoslibros', 'CodigosLibrosController');
+
+
+// Get message
+Route::post('/send-message', [
+    AiMessageController::class, 'sendMessage']);

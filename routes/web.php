@@ -3,6 +3,7 @@
 
 use App\Http\Controllers\SimuladorController;
 use Illuminate\Support\Facades\Route;
+use BeyondCode\LaravelWebSockets\Facades\WebSocketsRouter;
 
 /*
 |--------------------------------------------------------------------------
