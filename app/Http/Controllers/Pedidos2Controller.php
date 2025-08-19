@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\CodigosLibros;
+use App\Models\Contratos_agrupados;
 use App\Models\Models\Pedidos\PedidosDocumentosLiq;
 use App\Models\Institucion;
 use App\Models\User;
@@ -242,27 +243,28 @@ class Pedidos2Controller extends Controller
     //api:get/pedidos2/pedidos?getInstitucionesDespacho=1
     public function getInstitucionesDespacho($request){
         $id_periodo = $request->id_periodo;
-        $query      = $this->tr_getInstitucionesDespacho($id_periodo);
+        $query      = $this->tr_getAgrupadoPeriodo($id_periodo);
         $datos = [];
         //sacar el id de pedido de cada ca_codigo_agrupado
         foreach($query as $key => $item){
             $datos[$key] = [
+                'ca_id'             => $item->ca_id,
                 'ca_codigo_agrupado' => $item->ca_codigo_agrupado,
+                'ca_estado'         => $item->ca_estado,
                 'id_periodo'        => $item->id_periodo,
                 'codigo_contrato'   => $item->codigo_contrato,
                 'pedidos'           => $this->tr_pedidosXDespacho($item->ca_codigo_agrupado,$id_periodo),
                 'preproformas'      => $this->tr_getPreproformas($item->ca_codigo_agrupado),
-                'datoAgrupado'      => $this->tr_getAgrupado($item->ca_codigo_agrupado),
+                'datoAgrupado'      => $this->tr_getAgrupado($item->ca_codigo_agrupado,$item->ca_id),
                 'Instituciones'     => $this->tr_getPreproformasInstitucion($item->ca_codigo_agrupado),
                 'documentos'        => $this->tr_getDocumentos($item->ca_codigo_agrupado),
                 'ruc_ci'            => $this->tr_getDocumentosRuc($item->ca_codigo_agrupado),
                 'ca_descripcion'    => $item->ca_descripcion,
                 'ca_tipo_pedido'    => $item->ca_tipo_pedido,
-                'ca_id'             => $item->ca_id,
             ];
         }
         //que sean unicos
-        $datos = collect($datos)->unique('ca_codigo_agrupado')->values();
+        // $datos = collect($datos)->unique('ca_codigo_agrupado')->values();
         return $datos;
     }
     public function editarInstitucionDespacho(Request $request){
@@ -1203,6 +1205,7 @@ class Pedidos2Controller extends Controller
         if($request->getValoresLibrosContratosInstitucionesAsesor_new)  { return $this->getValoresLibrosContratosInstitucionesAsesor_new($request); }
         if($request->crearUsuario)                                      { return $this->crearUsuario($request); }
         if($request->updateClienteInstitucion)                          { return $this->updateClienteInstitucion($request); }
+        if($request->cambiarEstadoAgrupado )                            { return $this->cambiarEstadoAgrupado($request); }
     }
       //API:POST/pedidos2/pedidos?getValoresLibrosContratos
       public function getValoresLibrosContratos($asesor_id,$periodo_id,$request){
@@ -1348,6 +1351,27 @@ class Pedidos2Controller extends Controller
         }else{
             return ["status" => "0", "message" => "No se pudo actualizar"];
         }
+    }
+    //API:POST/pedidos2/pedidos/cambiarEstadoAgrupado=1
+    public function cambiarEstadoAgrupado($request){
+        $estado = $request->estado;
+        $ca_id     = $request->ca_id;
+        $user_edited = $request->user_edited;
+        // desactivar
+        if($estado == 0){
+            $Contratos_agrupados = Contratos_agrupados::find($ca_id);
+            $Contratos_agrupados->ca_estado = 0;
+            $Contratos_agrupados->user_edited = $user_edited;
+            $Contratos_agrupados->save();
+        }
+        // activar
+        else{
+            $Contratos_agrupados = Contratos_agrupados::find($ca_id);
+            $Contratos_agrupados->ca_estado = 1;
+            $Contratos_agrupados->user_edited = $user_edited;
+            $Contratos_agrupados->save();
+        }
+        return ["status" => "1", "message" => "Se actualizó correctamente"];
     }
     //api:get/pedidosDespacho?ca_codigo_agrupado=1265&id_periodo=23
     public function pedidosDespacho(Request $request){

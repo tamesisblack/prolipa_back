@@ -1287,6 +1287,7 @@ class  CodigosRepository extends BaseRepository
                 $comboInfo = $getCombos->firstWhere('codigo_liquidacion', $group->first()->combo);
 
                 // Retornar el formato solicitado con la información adicional del combo
+
                 return(object)[
                     'codigo_libro'              => $group->first()->combo,
                     'combo'                     => $group->first()->combo,   // Nombre del combo
@@ -1356,12 +1357,6 @@ class  CodigosRepository extends BaseRepository
         }
     }
     public function reporteCombos($periodo){
-            // SELECT c.codigo_combo, c.combo, COUNT(*) AS cantidad_codigos
-        // FROM codigoslibros c
-        // WHERE c.prueba_diagnostica = '0'
-        // AND c.codigo_combo IS NOT NULL
-        // AND c.bc_periodo = '26'
-        // GROUP BY c.codigo_combo, c.combo;
          $query = DB::select("SELECT
             sub.combo AS codigo,
             COUNT(DISTINCT sub.codigo_combo) AS cantidad,
@@ -1391,8 +1386,16 @@ class  CodigosRepository extends BaseRepository
         ");
 
         foreach ($query as $key => $item) {
-            // Asegurarse de que cantidad y precio no sean nulos y luego realizar el cálculo y redondear a 2 decimales
+            // Calcular precio total
             $item->precio_total = round(($item->cantidad ?? 0) * ($item->precio ?? 0), 2);
+
+            // Calcular cantidad de códigos por combo
+            if (!empty($item->codigos_combos)) {
+                $codigosArray = explode(',', $item->codigos_combos);
+                $item->codigosPorCombo = count($codigosArray);
+            } else {
+                $item->codigosPorCombo = 0;
+            }
         }
 
         return $query;

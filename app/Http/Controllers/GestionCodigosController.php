@@ -104,45 +104,128 @@ class GestionCodigosController extends Controller
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
         $codigos    = json_decode($request->data_codigos);
-        $todate     = date('Y-m-d H:i:s');
+        $withCodigoUnion = $request->withCodigoUnion;
         $contador   = 0;
-        //editar
-        foreach($codigos as $key => $item){
-            $codigo     = CodigosLibros::findOrFail($item->codigo);
-            $old_values = $codigo;
-            $comentario = $request->comentario;
-            //update
-            if($request->chkIdusuario                   == '1') $codigo->idusuario                  = $request->idusuario;
-            if($request->chkBc_Estado                   == '1') $codigo->estado                     = $request->estado;
-            if($request->chkId_periodo                  == '1') $codigo->id_periodo                 = $request->id_periodo;
-            if($request->chkContrato                    == '1') $codigo->contrato                   = $request->contrato;
-            if($request->chkBc_Venta_lista_institucion  == '1') $codigo->venta_lista_institucion    = $request->venta_lista_institucion;
-            if($request->chkBc_Verif1                   == '1') $codigo->verif1                     = $request->verif1;
-            if($request->chkBc_Verif2                   == '1') $codigo->verif2                     = $request->verif2;
-            if($request->chkBc_Verif3                   == '1') $codigo->verif3                     = $request->verif3;
-            if($request->chkBc_Verif4                   == '1') $codigo->verif4                     = $request->verif4;
-            if($request->chkBc_Verif5                   == '1') $codigo->verif5                     = $request->verif5;
-            if($request->chkEstado_liquidacion          == '1') $codigo->estado_liquidacion         = $request->estado_liquidacion;
-            if($request->chkBc_estado                   == '1') $codigo->bc_estado                  = $request->bc_estado;
-            if($request->chkBc_Bc_institucion           == '1') $codigo->bc_institucion             = $request->bc_institucion;
-            if($request->chkBc_Bc_periodo               == '1') $codigo->bc_periodo                 = $request->bc_periodo;
-            if($request->chkBc_Venta_estado             == '1') $codigo->venta_estado               = $request->venta_estado;
-            if($request->chkBc_codigo_union             == '1') $codigo->codigo_union               = $request->codigo_union;
-            if($request->chkBc_liquidado_regalado       == '1') $codigo->liquidado_regalado         = $request->liquidado_regalado;
-            if($request->chkBc_codigo_proforma          == '1') $codigo->codigo_proforma            = $request->codigo_proforma ;
-            if($request->chkBc_proforma_empresa         == '1') $codigo->proforma_empresa           = $request->proforma_empresa;
-            $codigo->save();
-            if($codigo){
-                $contador++;
-                // $new_values = $codigo->getAttributes(); // Obtén los nuevos valores
-                //Guardar en el historico
-                $this->GuardarEnHistorico($request->user_created,$request->institucion_id,$request->periodo_id,$item->codigo,$request->user_created,$comentario,$old_values,$codigo,json_encode($codigo->getAttributes()));
+        $arrayProblemas = [];
+        // transaccion
+        try {
+            DB::beginTransaction();
+
+            //editar
+            foreach($codigos as $key => $item){
+                $codigo     = CodigosLibros::findOrFail($item->codigo);
+                $old_values = clone $codigo;
+                $comentario = $request->comentario;
+                $codigo_union = $codigo->codigo_union;
+                $bc_periodo  = $codigo->bc_periodo;
+                //update
+                if($request->chkIdusuario                   == '1') $codigo->idusuario                  = $request->idusuario;
+                if($request->chkBc_Estado                   == '1') $codigo->estado                     = $request->estado;
+                if($request->chkId_periodo                  == '1') $codigo->id_periodo                 = $request->id_periodo;
+                if($request->chkContrato                    == '1') $codigo->contrato                   = $request->contrato;
+                if($request->chkBc_Venta_lista_institucion  == '1') $codigo->venta_lista_institucion    = $request->venta_lista_institucion;
+                if($request->chkBc_Verif1                   == '1') $codigo->verif1                     = $request->verif1;
+                if($request->chkBc_Verif2                   == '1') $codigo->verif2                     = $request->verif2;
+                if($request->chkBc_Verif3                   == '1') $codigo->verif3                     = $request->verif3;
+                if($request->chkBc_Verif4                   == '1') $codigo->verif4                     = $request->verif4;
+                if($request->chkBc_Verif5                   == '1') $codigo->verif5                     = $request->verif5;
+                if($request->chkEstado_liquidacion          == '1') $codigo->estado_liquidacion         = $request->estado_liquidacion;
+                if($request->chk_estado                     == '1') $codigo->bc_estado                  = $request->bc_estado;
+                if($request->chkBc_Bc_institucion           == '1') $codigo->bc_institucion             = $request->bc_institucion;
+                if($request->chkBc_Bc_periodo               == '1') $codigo->bc_periodo                 = $request->bc_periodo;
+                if($request->chkBc_Venta_estado             == '1') $codigo->venta_estado               = $request->venta_estado;
+                if($request->chkBc_codigo_union             == '1') $codigo->codigo_union               = $request->codigo_union;
+                if($request->chkBc_liquidado_regalado       == '1') $codigo->liquidado_regalado         = $request->liquidado_regalado;
+                if($request->chkBc_codigo_proforma          == '1') $codigo->codigo_proforma            = $request->codigo_proforma ;
+                if($request->chkBc_proforma_empresa         == '1') $codigo->proforma_empresa           = $request->proforma_empresa;
+                if($request->chkCombo                       == '1') $codigo->combo                      = $request->combo;
+                if($request->chkCodigo_combo                == '1') $codigo->codigo_combo               = $request->codigo_combo;
+                if($request->chkFactura                     == '1') $codigo->factura                    = $request->factura;
+                // validacion codigo_combo
+                if($request->chkCodigo_combo                == '1'){
+                    //validar que el combo exista en la codigos_combos columna codigo
+                    $validarCombo = DB::SELECT("SELECT * FROM codigos_combos WHERE codigo = '$request->codigo_combo'");
+                    if(empty($validarCombo)){
+                        $arrayProblemas[] = [
+                            "codigo" => $item->codigo,
+                            "message" => "El codigo combo no existe en la tabla codigos_combos"
+                        ];
+                        continue;
+                    }
+                }
+                $codigo->save();
+                if($codigo){
+                    //Guardar en el historico
+                    $this->GuardarEnHistorico($request->user_created,$request->institucion_id,$bc_periodo,$item->codigo,$request->user_created,$comentario,$old_values,json_encode($codigo->getAttributes()));
+                    //actualizar codigo_union si la opcion esta seleccionada
+                    if($withCodigoUnion == "1"){
+                        $this->actualizarCodigoUnion($codigo_union,$request);
+                        $contador++;
+                    }else{
+                        $contador++;
+                    }
+                }
             }
+            // Commit the transaction
+            DB::commit();
+            return [
+                "contador" => $contador,
+                "arrayProblemas" => $arrayProblemas,
+            ];
+
+        } catch (\Exception $e) {
+            // Rollback the transaction if something goes wrong
+            DB::rollback();
+            return [
+                "status" => "0",
+                "message" => "Error al guardar los codigos: " . $e->getMessage(),
+            ];
         }
-        return [
-            "contador" => $contador
-        ];
     }
+
+    public function actualizarCodigoUnion($codigo_union, $request)
+    {
+        $codigoActualizar = CodigosLibros::findOrFail($codigo_union);
+         // 👉 Clonar antes de hacer cambios para conservar los valores originales
+        $old_values = clone $codigoActualizar;
+
+        if($request->chkIdusuario                   == '1') $codigoActualizar->idusuario                  = $request->idusuario;
+        if($request->chkBc_Estado                   == '1') $codigoActualizar->estado                     = $request->estado;
+        if($request->chkId_periodo                  == '1') $codigoActualizar->id_periodo                 = $request->id_periodo;
+        if($request->chkContrato                    == '1') $codigoActualizar->contrato                   = $request->contrato;
+        if($request->chkBc_Venta_lista_institucion  == '1') $codigoActualizar->venta_lista_institucion    = $request->venta_lista_institucion;
+        if($request->chkBc_Verif1                   == '1') $codigoActualizar->verif1                     = $request->verif1;
+        if($request->chkBc_Verif2                   == '1') $codigoActualizar->verif2                     = $request->verif2;
+        if($request->chkBc_Verif3                   == '1') $codigoActualizar->verif3                     = $request->verif3;
+        if($request->chkBc_Verif4                   == '1') $codigoActualizar->verif4                     = $request->verif4;
+        if($request->chkBc_Verif5                   == '1') $codigoActualizar->verif5                     = $request->verif5;
+        if($request->chkEstado_liquidacion          == '1') $codigoActualizar->estado_liquidacion         = $request->estado_liquidacion;
+        if($request->chk_estado                     == '1') $codigoActualizar->bc_estado                  = $request->bc_estado;
+        if($request->chkBc_Bc_institucion           == '1') $codigoActualizar->bc_institucion             = $request->bc_institucion;
+        if($request->chkBc_Bc_periodo               == '1') $codigoActualizar->bc_periodo                 = $request->bc_periodo;
+        if($request->chkBc_Venta_estado             == '1') $codigoActualizar->venta_estado               = $request->venta_estado;
+        if($request->chkBc_liquidado_regalado       == '1') $codigoActualizar->liquidado_regalado         = $request->liquidado_regalado;
+        if($request->chkBc_codigo_proforma          == '1') $codigoActualizar->codigo_proforma            = $request->codigo_proforma;
+        if($request->chkBc_proforma_empresa         == '1') $codigoActualizar->proforma_empresa           = $request->proforma_empresa;
+        if($request->chkCombo                       == '1') $codigoActualizar->combo                      = $request->combo;
+        if($request->chkCodigo_combo                == '1') $codigoActualizar->codigo_combo               = $request->codigo_combo;
+        if($request->chkFactura                     == '1') $codigoActualizar->factura                    = $request->factura;
+
+        $codigoActualizar->save();
+
+        // Guardar en el histórico
+        $this->GuardarEnHistorico(
+            $request->user_created,
+            $request->institucion_id,
+            $codigoActualizar->bc_periodo,
+            $codigoActualizar->codigo,
+            $request->user_created,
+            $request->comentario,
+            $old_values,
+            json_encode($codigoActualizar->getAttributes())
+        );
+    }
+
     //api:get>/traerCodigosParametros
     public function traerCodigosParametros(Request $request){
         set_time_limit(6000000);

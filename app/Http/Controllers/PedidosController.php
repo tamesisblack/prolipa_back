@@ -138,7 +138,8 @@ class PedidosController extends Controller
     }
     public function GetContratoagrupa(Request $request){
         $query = DB::SELECT("SELECT *FROM f_contratos_agrupados where
-                id_periodo=$request->periodo");
+                id_periodo=$request->periodo
+                and ca_estado=1");
         return $query;
     }
     public function RegistroAgrupacion(Request $request){
@@ -147,17 +148,35 @@ class PedidosController extends Controller
                 set_time_limit(6000000);
                 ini_set('max_execution_time', 6000000);
                 $miarray = json_decode($request->pedidos);
-                DB::beginTransaction();
+                $query1 = DB::SELECT("SELECT tdo_letra, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_letra='AG'");
+                if(!empty($query1)){
+                    $secuencia=(int)$query1[0]->cod+1;
+                }else{
+                    return ["status" => "0", "message" => "No se encontró el tipo de documento."];
+                }
+
+
+                   DB::beginTransaction();
+                   //validar si ya existe un agrupado con la ca_descripcion y el id_periodo no dejar
+                   $validateDescription = DB::table('f_contratos_agrupados')
+                       ->where('ca_descripcion', $request->ca_descripcion)
+                       ->where('id_periodo', $request->id_periodo)
+                       ->first();
+                    if($validateDescription){
+                        return ["status" => "0", "message" => "Ya existe el agrupado $validateDescription->ca_codigo_agrupado con la misma descripción $validateDescription->ca_descripcion."];
+                    }
+                   $ca_codigo_agrupado = "AG-".$secuencia;
                 //crea el grupo
                     $agrupa                     = new Contratos_agrupados;
                     $agrupa->id_periodo         = $request->id_periodo;
                     $agrupa->ca_descripcion     = $request->ca_descripcion;
-                    $agrupa->ca_codigo_agrupado = $request->ca_codigo_agrupado;
+                    $agrupa->ca_codigo_agrupado = $ca_codigo_agrupado;
                     $agrupa->ca_tipo_pedido     = (int)$request->ca_tipo_pedido;
                     $agrupa->ca_cantidad        = $request->ca_cantidad;
                     $agrupa->ca_estado          = $request->ca_estado;
                     $agrupa->created_at         = now();
                     $agrupa->updated_at         = now();
+                    $agrupa->user_created       = $request->user_created;
                     $agrupa->save();
                     //actualiza secuencial
                     $query1 = DB::SELECT("SELECT tdo_id as id, tdo_secuencial_calmed as cod from  f_tipo_documento where tdo_letra='AG'");
@@ -170,7 +189,7 @@ class PedidosController extends Controller
                     //agrupa los pedidos
                     foreach($miarray as $key => $item){
                         $pedido= pedidos::findOrFail($item->id_pedido);
-                        $pedido->ca_codigo_agrupado = $request->ca_codigo_agrupado;
+                        $pedido->ca_codigo_agrupado = $ca_codigo_agrupado;
                         $pedido->permitir_editar_despues_contrato = 0;
                         $pedido->save();
                     }
@@ -186,18 +205,26 @@ class PedidosController extends Controller
                 ini_set('max_execution_time', 6000000);
                 $miarray = json_decode($request->pedidos);
                 DB::beginTransaction();
-                $pedido= Contratos_agrupados::where('ca_codigo_agrupado',$request->id)->first();
-                $pedido->ca_cantidad = (int)$pedido->ca_cantidad +(int)$request->ca_cantidad;
-                $pedido->updated_at         = now();
-                $pedido->save();
+                $getAgrupado= Contratos_agrupados::where('ca_codigo_agrupado',$request->id)->first();
+                if (!$getAgrupado) {
+                    DB::rollback();
+                    return response()->json(['error' => 'No existe el agrupado.'], 404);
+                }
+                $getAgrupado->ca_cantidad = (int)$getAgrupado->ca_cantidad +(int)$request->ca_cantidad;
+                $getAgrupado->updated_at         = now();
+                $getAgrupado->save();
                 foreach($miarray as $key => $item){
-                    $pedido= pedidos::findOrFail($item->id_pedido);
-                    $pedido->ca_codigo_agrupado = $request->ca_codigo_agrupado;
+                    $pedido= pedidos::find($item->id_pedido);
+                    if (!$pedido) {
+                        DB::rollback();
+                        return response()->json(['error' => "No existe el pedido con id {$item->id_pedido}."], 404);
+                    }
+                    $pedido->ca_codigo_agrupado = $request->id;
                     $pedido->permitir_editar_despues_contrato = 0;
                     $pedido->save();
                 }
                 DB::commit();
-                    return response()->json(['message' => 'Pedidos agrupados con éxito.'], 200);
+                return response()->json(['message' => 'Pedidos agrupados con éxito.'], 200);
             } catch (\Exception $e) {
                 DB::rollback();
                 return ["error" => "0", "message" => "No se pudo agrupar.", "exception" => $e->getMessage()];
@@ -4264,6 +4291,7 @@ class PedidosController extends Controller
     public function changeEstadoAlcance(Request $request){
         $alcance = PedidoAlcance::findOrFail($request->id);
         $alcance->estado_alcance = $request->estado_alcance;
+        $alcance->usuario_editor_estado = $request->usuario_editor_estado;
         $alcance->save();
         if($alcance){
             return ["status" => "1", "message" => "Se guardo correctamente"];
@@ -4416,6 +4444,7 @@ class PedidosController extends Controller
                     $alcance = PedidoAlcance::findOrFail($id_alcance);
                     $alcance->estado_alcance = 1;
                     $alcance->fecha_aprobacion = date('Y-m-d H:i:s');
+                    $alcance->usuario_editor_estado = $user_created;
                     $alcance->save();
                     return $alcance;
                 }else{

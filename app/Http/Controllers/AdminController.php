@@ -480,44 +480,23 @@ class AdminController extends Controller
         return $result;
     }
     public function pruebaData(Request $request){
-        $query = DB::SELECT("SELECT * FROM video t
-        WHERE t.id_tema > 0
-        AND t.unidad_id = '0';
-        ");
-        $contador = 0;
-        foreach($query as $key => $item){
-            $id_tema = $item->id_tema;
-            $id_unidad = 0;
-            $query2 = DB::SELECT("SELECT * FROM temas te WHERE te.id = $id_tema");
-            if(count($query2) > 0){
-                $id_unidad = $query2[0]->id_unidad;
-                Video::where('idvideo', $item->idvideo)
-                    ->update(['unidad_id' => $id_unidad]);
-                $contador++;
-            }
-        }
-        return response()->json([
-            'status' => '1',
-            'message' => "Se actualizaron $contador videos correctamente"
-        ]);
-        return $query;
-        return;
-        $getCodigos = 'SMCLL3-7FY2HVKDHK,
-        PSMCLL3-BV8BUM2SZB,
-        SMCLL3-9DXESD9D7X,
-        PSMCLL3-3GFG8GVB24,
-        SMCM3-966G7FZGAC,
-        PSMCM3-VKRWVUMUZK,
-        SMCM3-VV8HG53RZC,
-        PSMCM3-VT9MN4A68T,
-        SMCM3-966G7FZGAC,
-        PSMCM3-VKRWVUMUZK,
-        SMCM3-VV8HG53RZC,
-        PSMCM3-VT9MN4A68T,
-        SMCB3-H5VEY2DKNM,
-        PSMCB3-YDNWHX3TFK,
-        SMCB3-H7AWXNPUFT,
-        PSMCB3-4BWTKP3PSN
+        return "hola mundo";
+        $getCodigos = 'SMCLL3-CFZCY9WFCC,
+        PSMCLL3-8E7RBKE7Y7,
+        SMCLL3-N9TKFGNVT2,
+        PSMCLL3-99KD9EWVD5,
+        SMCM3-HC2E4KCV9Z,
+        PSMCM3-YDAV4898MG,
+        SMCM3-TZRZ8CPKXW,
+        PSMCM3-8P2XNPBHGF,
+        SMCH3-4YZCDREM4A,
+        PSMCH3-SX7YU6CHAK,
+        SMCH3-9YBRZPPFRV,
+        PSMCH3-5FHKADR6HD,
+        SMCB3-YT535X2C36,
+        PSMCB3-97ETA4K26B,
+        SMCB3-CW829B4S4K,
+        PSMCB3-ESBSM2FS95
         ';
         $lineas = explode(",", $getCodigos); // Separar por coma
         // Recorrer y armar el array
@@ -529,8 +508,8 @@ class AdminController extends Controller
         }
         // Los combos que quieres añadir, excluyendo el combo 'CMB-5YZAW6'
         $combos = [
-            'CMB-V394YH',
-            'CMB-U72WRM',
+            'CMB-444UPF',
+            'CMB-FCV984',
         ];
         $libro = 'CFAC3';
         $getLibrosCombo = _14Producto::findOrFail($libro);

@@ -323,12 +323,13 @@ class UsuarioController extends Controller
     public function usuarioVisitasAll(Request $request){
         set_time_limit(6000000);
         ini_set('max_execution_time', 6000000);
+        $id_group = $request->id_group;
         $usuarios = DB::SELECT("SELECT u.idusuario ,CONCAT(u.nombres,' ', u.apellidos) as usuario, u.cedula,u.email,
             u.cedula
             FROM usuario u
             WHERE u.institucion_idInstitucion = '$request->institucion_id'
             AND u.estado_idEstado = '1'
-            AND u.id_group = '6'
+            AND u.id_group = '$id_group'
         ");
         $datos = [];
         foreach($usuarios as $key => $item){
@@ -346,7 +347,41 @@ class UsuarioController extends Controller
         }
         return $datos;
     }
+    //api:get/usuarioVisitasXUsuarioRecurso?idusuario=62129&institucion_id=1167&recurso=16&fromDate=2025-08-01&toDate=2025-08-31
+    public function usuarioVisitasXUsuarioRecurso(Request $request){
+        set_time_limit(6000000);
+        ini_set('max_execution_time', 6000000);
+        $idusuario      = $request->idusuario;
+        $institucion_id = $request->institucion_id;
+        $recurso        = $request->recurso;
+        $fromDate       = $request->fromDate;
+        $toDate         = $request->toDate;
 
+        $usuarios = DB::SELECT("SELECT u.idusuario ,CONCAT(u.nombres,' ', u.apellidos) as usuario, u.cedula,u.email,
+            u.cedula
+            FROM usuario u
+            WHERE u.institucion_idInstitucion = '$institucion_id'
+            AND u.estado_idEstado = '1'
+            AND u.idusuario = '$idusuario'
+        ");
+        $datos = [];
+        foreach($usuarios as $key => $item){
+            $visitas = DB::SELECT("SELECT id,h.recurso, nombreasignatura, created_at
+            FROM historico_visitas h
+            where h.idusuario = '$item->idusuario'
+            AND h.recurso = '$recurso'
+            AND h.created_at  BETWEEN '$fromDate' AND '$toDate'
+            ");
+            $datos[$key] = [
+                "idusuario"     => $item->idusuario,
+                "usuario"       => $item->usuario,
+                "cedula"        => $item->cedula,
+                "email"         => $item->email,
+                "visitas"       => $visitas,
+            ];
+        }
+        return $datos;
+    }
     public function datosUsuario(Request $request)
     {
         $idusuario = auth()->user()->idusuario;
@@ -1072,6 +1107,37 @@ class UsuarioController extends Controller
         WHERE di.director_id = '$request->idusuario'
         ");
         return $consulta;
+    }
+
+    public function VerificarDirectorGeneralComiles(Request $request)
+    {
+        $ids_instituciones = [1892, 1865];
+        $query = DB::table('director_has_institucion as dhi')
+            ->where('dhi.director_id', $request->idusuario)
+            ->whereIn('dhi.institucion_id', $ids_instituciones)
+            ->get();
+        if ($query->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No se encontró un usuario asignado a esas instituciones',
+                'data' => []
+            ], 200);
+        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Usuario asignado correctamente',
+            'data' => $query
+        ]);
+    }
+
+    public function getTodas_FAE_NAVAL_TERESTRE_BACK() {
+        $query = DB::SELECT("SELECT *
+            FROM institucion ins
+            WHERE ins.tipo_institucion = 3
+            OR ins.tipo_institucion = 4
+            OR ins.tipo_institucion = 5
+        ");
+        return $query;
     }
     //para quitar la asignacion al director la institucion
     //api::>>post/quitarAsignacion

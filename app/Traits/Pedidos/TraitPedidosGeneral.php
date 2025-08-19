@@ -171,15 +171,18 @@ trait TraitPedidosGeneral
             AND c.estado <> 2
             AND c.convenio_aprobado = 4
         ) AS contadorConvenioAprobadoFacturador,
-        (
-            SELECT COUNT(p.id) AS convenioAnulado FROM pedidos_convenios p
-            WHERE p.id = p.pedidos_convenios_id
-            AND p.estado = 2
+       (
+            SELECT COUNT(pc.id)
+            FROM pedidos_convenios pc
+            WHERE pc.id = p.pedidos_convenios_id
+            AND pc.estado = 2
         ) AS convenioAnulado,
-         (
-            SELECT COUNT(p.id) AS convenioFinalizados FROM pedidos_convenios p
-            WHERE p.id = p.pedidos_convenios_id
-            AND p.estado = 0
+
+        (
+            SELECT COUNT(pc.id)
+            FROM pedidos_convenios pc
+            WHERE pc.id = p.pedidos_convenios_id
+            AND pc.estado = 0
         ) AS convenioFinalizados,
         (
             SELECT con.anticipo_global FROM pedidos_convenios con
@@ -203,7 +206,11 @@ trait TraitPedidosGeneral
         ->leftjoin('pedidos_historico as ph','p.id_pedido',         'ph.id_pedido')
         ->leftjoin('pedidos_solicitudes_gerencia as ps','p.id_solicitud_gerencia_comision','ps.id')
         ->leftJoin('usuario as editComsion',   'ps.user_finaliza',     'editComsion.idusuario')
-        ->leftjoin('f_contratos_agrupados as des','p.ca_codigo_agrupado','des.ca_codigo_agrupado')
+        // ->leftjoin('f_contratos_agrupados as des','p.ca_codigo_agrupado','des.ca_codigo_agrupado')
+        ->leftJoin('f_contratos_agrupados as des', function($join) {
+            $join->on('p.ca_codigo_agrupado', '=', 'des.ca_codigo_agrupado')
+                ->where('des.ca_estado', '=', 1);
+        })
         ->where('p.tipo','=','0');
         //fitlro por x id
         if($filtro == 0) { $resultado->where('p.id_pedido', '=', $parametro1); }
@@ -340,15 +347,11 @@ trait TraitPedidosGeneral
         ",[$id_periodo]);
         return $query;
     }
-    public function tr_getInstitucionesDespacho($id_periodo){
-        $query = DB::SELECT("SELECT DISTINCT p.ca_codigo_agrupado, i.ca_descripcion,p.id_periodo,i.ca_id,
-        pe.codigo_contrato, i.ca_tipo_pedido,p.descuento
-        FROM  pedidos p
-        LEFT JOIN f_contratos_agrupados i ON i.ca_codigo_agrupado = p.ca_codigo_agrupado
-        LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = p.id_periodo
-        WHERE p.ca_codigo_agrupado IS NOT NULL
-        AND p.id_periodo = '$id_periodo'
-        ORDER BY i.ca_id DESC
+    public function tr_getAgrupadoPeriodo($id_periodo){
+        $query = DB::SELECT("SELECT g.*, pe.codigo_contrato FROM f_contratos_agrupados g
+            LEFT JOIN periodoescolar pe ON pe.idperiodoescolar = g.id_periodo
+            WHERE g.id_periodo = '$id_periodo'
+            -- and g.ca_estado = 1
        ");
         return $query;
     }
@@ -422,10 +425,11 @@ trait TraitPedidosGeneral
         ");
         return $query;
     }
-    public function tr_getAgrupado($ca_codigo_agrupado){
+    public function tr_getAgrupado($ca_codigo_agrupado,$ca_id){
         $query = DB::SELECT("SELECT *
         FROM  f_contratos_agrupados fp
         WHERE fp.ca_codigo_agrupado = '$ca_codigo_agrupado'
+        AND fp.ca_id = '$ca_id'
         ORDER BY fp.created_at DESC
        ");
         return $query;

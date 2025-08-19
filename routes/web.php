@@ -635,6 +635,7 @@ Route::get('docentes', 'UsuarioController@docentes');
 Route::get('docentesVisitas', 'UsuarioController@docentesVisitas');
 Route::get('usuarioVisitas', 'UsuarioController@usuarioVisitas');
 Route::get('usuarioVisitasAll', 'UsuarioController@usuarioVisitasAll');
+Route::get('usuarioVisitasXUsuarioRecurso','UsuarioController@usuarioVisitasXUsuarioRecurso');
 // Estadisticas
 Route::get('contenidos', 'EstadisticasController@contenidos');
 //JUEGOS
@@ -1259,6 +1260,8 @@ Route::get('GetGrupoProducto_SoloActivos','_14GrupoProductoController@GetGrupoPr
 Route::get('GetProducto_Reportes','_14ProductoController@GetProducto_Reportes');
 Route::get('AreaDisponibles_Asignacion','AreaController@AreaDisponibles_Asignacion');
 Route::get('GetListaCombosXTemporada','_14ProductoController@GetListaCombosXTemporada');
+Route::get('VerificarDirectorGeneralComiles','UsuarioController@VerificarDirectorGeneralComiles');
+Route::get('getTodas_FAE_NAVAL_TERESTRE_BACK','UsuarioController@getTodas_FAE_NAVAL_TERESTRE_BACK');
 Route::post('Transferencia_Videos_Asignatura','VideoController@Transferencia_Videos_Asignatura');
 Route::post('transferenciaPlanificaciones','PlanificacionesController@transferenciaPlanificaciones');
 Route::post('Recorrer_Listado_Combos_X_Temporada','_14ProductoController@Recorrer_Listado_Combos_X_Temporada');
