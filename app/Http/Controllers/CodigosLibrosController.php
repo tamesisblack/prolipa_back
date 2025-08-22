@@ -992,4 +992,657 @@ class CodigosLibrosController extends Controller
             }
         }
     }
+
+    //INICIO METODOS JEYSON
+    public function Regalado_NoLiquidado_Temporada(Request $request)
+    {
+        try {
+            $periodo = $request->PeriodoSelect;
+            $query = DB::select('SELECT
+                    c.codigo_proforma,
+                    c.proforma_empresa,
+                    c.libro_idlibro,
+                    c.combo,
+                    c.plus,
+                    COUNT(*) as cantidad_regalados_leidos
+                FROM codigoslibros c
+                WHERE c.bc_periodo = ?
+                    -- Regalado
+                    AND c.estado_liquidacion = 2
+                    -- Solo codigos sin prueba diagnostica
+                    AND c.prueba_diagnostica = 0
+                    -- Que tenga documento
+                    AND c.codigo_proforma IS NOT NULL
+                    -- Que sea regalado y no esten liquidados
+                    -- AND c.liquidado_regalado = 0
+                GROUP BY c.codigo_proforma, c.proforma_empresa, c.libro_idlibro, c.combo, c.plus
+                ORDER BY c.libro_idlibro, c.codigo_proforma, c.proforma_empresa, c.combo, c.plus',
+                [$periodo]
+            );
+            // Recorremos cada resultado para agregar nombre, codigo_liquidacion e idlibro real
+            foreach ($query as &$registro) {
+                if ($registro->plus == 1) {
+                    // Paso 1: Buscar id_libro_plus desde libro original
+                    $libro_original = DB::table('libros_series')
+                        ->select('id_libro_plus')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro_original && $libro_original->id_libro_plus) {
+                        // Paso 2: Buscar datos del libro plus
+                        $libro_plus = DB::table('libros_series')
+                            ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                            ->where('idLibro', $libro_original->id_libro_plus)
+                            ->first();
+                        // Si existe el libro plus, asignamos
+                        if ($libro_plus) {
+                            $registro->idLibro_normal_plus = $libro_plus->idLibro;
+                            $registro->nombre = $libro_plus->nombre;
+                            $registro->codigo_liquidacion = $libro_plus->codigo_liquidacion;
+                            continue;
+                        }
+                    }
+                    // Si no se encuentra el libro plus, colocamos valores por defecto
+                    $registro->idLibro_normal_plus = null;
+                    $registro->nombre = null;
+                    $registro->codigo_liquidacion = null;
+                } else {
+                    // Caso plus == 0, libro normal
+                    $libro = DB::table('libros_series')
+                        ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro) {
+                        $registro->idLibro_normal_plus = $libro->idLibro;
+                        $registro->nombre = $libro->nombre;
+                        $registro->codigo_liquidacion = $libro->codigo_liquidacion;
+                    } else {
+                        $registro->idLibro_normal_plus = null;
+                        $registro->nombre = null;
+                        $registro->codigo_liquidacion = null;
+                    }
+                }
+            }
+            return response()->json([
+                'status' => 1,
+                'data' => $query
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Ocurrió un error al obtener los datos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function Regalado_Leido_Temporada(Request $request)
+    {
+        try {
+            $periodo = $request->PeriodoSelect;
+            $query = DB::select('SELECT
+                    c.codigo_proforma,
+                    c.proforma_empresa,
+                    c.libro_idlibro,
+                    c.combo,
+                    c.plus,
+                    COUNT(*) as cantidad_regalado_leido
+                FROM codigoslibros c
+                WHERE c.bc_periodo = ?
+                    -- Regalado
+                    AND c.estado_liquidacion = 2
+                    -- Solo codigos sin prueba diagnostica
+                    AND c.prueba_diagnostica = 0
+                    -- Que tenga documento
+                    AND c.codigo_proforma IS NOT NULL
+                    -- Que sea regalado y esten liquidados
+                    AND c.bc_estado = 2
+                GROUP BY c.codigo_proforma, c.proforma_empresa, c.libro_idlibro, c.combo, c.plus
+                ORDER BY c.libro_idlibro, c.codigo_proforma, c.proforma_empresa, c.combo, c.plus',
+                [$periodo]
+            );
+            // Recorremos cada resultado para agregar nombre, codigo_liquidacion e idlibro real
+            foreach ($query as &$registro) {
+                if ($registro->plus == 1) {
+                    // Paso 1: Buscar id_libro_plus desde libro original
+                    $libro_original = DB::table('libros_series')
+                        ->select('id_libro_plus')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro_original && $libro_original->id_libro_plus) {
+                        // Paso 2: Buscar datos del libro plus
+                        $libro_plus = DB::table('libros_series')
+                            ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                            ->where('idLibro', $libro_original->id_libro_plus)
+                            ->first();
+                        // Si existe el libro plus, asignamos
+                        if ($libro_plus) {
+                            $registro->idLibro_normal_plus = $libro_plus->idLibro;
+                            $registro->nombre = $libro_plus->nombre;
+                            $registro->codigo_liquidacion = $libro_plus->codigo_liquidacion;
+                            continue;
+                        }
+                    }
+                    // Si no se encuentra el libro plus, colocamos valores por defecto
+                    $registro->idLibro_normal_plus = null;
+                    $registro->nombre = null;
+                    $registro->codigo_liquidacion = null;
+                } else {
+                    // Caso plus == 0, libro normal
+                    $libro = DB::table('libros_series')
+                        ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro) {
+                        $registro->idLibro_normal_plus = $libro->idLibro;
+                        $registro->nombre = $libro->nombre;
+                        $registro->codigo_liquidacion = $libro->codigo_liquidacion;
+                    } else {
+                        $registro->idLibro_normal_plus = null;
+                        $registro->nombre = null;
+                        $registro->codigo_liquidacion = null;
+                    }
+                }
+            }
+            return response()->json([
+                'status' => 1,
+                'data' => $query
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Ocurrió un error al obtener los datos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function Regalado_Liquidado_Temporada(Request $request)
+    {
+        try {
+            $periodo = $request->PeriodoSelect;
+            $query = DB::select('SELECT
+                    c.codigo_proforma,
+                    c.proforma_empresa,
+                    c.libro_idlibro,
+                    c.combo,
+                    c.plus,
+                    COUNT(*) as cantidad_regalados_liquidados
+                FROM codigoslibros c
+                WHERE c.bc_periodo = ?
+                    -- Regalado
+                    AND c.estado_liquidacion = 2
+                    -- Solo codigos sin prueba diagnostica
+                    AND c.prueba_diagnostica = 0
+                    -- Que tenga documento
+                    AND c.codigo_proforma IS NOT NULL
+                    -- Que sea regalado y esten liquidados
+                    AND c.liquidado_regalado = 1
+                GROUP BY c.codigo_proforma, c.proforma_empresa, c.libro_idlibro, c.combo, c.plus
+                ORDER BY c.libro_idlibro, c.codigo_proforma, c.proforma_empresa, c.combo, c.plus',
+                [$periodo]
+            );
+            // Recorremos cada resultado para agregar nombre, codigo_liquidacion e idlibro real
+            foreach ($query as &$registro) {
+                if ($registro->plus == 1) {
+                    // Paso 1: Buscar id_libro_plus desde libro original
+                    $libro_original = DB::table('libros_series')
+                        ->select('id_libro_plus')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro_original && $libro_original->id_libro_plus) {
+                        // Paso 2: Buscar datos del libro plus
+                        $libro_plus = DB::table('libros_series')
+                            ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                            ->where('idLibro', $libro_original->id_libro_plus)
+                            ->first();
+                        // Si existe el libro plus, asignamos
+                        if ($libro_plus) {
+                            $registro->idLibro_normal_plus = $libro_plus->idLibro;
+                            $registro->nombre = $libro_plus->nombre;
+                            $registro->codigo_liquidacion = $libro_plus->codigo_liquidacion;
+                            continue;
+                        }
+                    }
+                    // Si no se encuentra el libro plus, colocamos valores por defecto
+                    $registro->idLibro_normal_plus = null;
+                    $registro->nombre = null;
+                    $registro->codigo_liquidacion = null;
+                } else {
+                    // Caso plus == 0, libro normal
+                    $libro = DB::table('libros_series')
+                        ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                        ->where('idLibro', $registro->libro_idlibro)
+                        ->first();
+                    if ($libro) {
+                        $registro->idLibro_normal_plus = $libro->idLibro;
+                        $registro->nombre = $libro->nombre;
+                        $registro->codigo_liquidacion = $libro->codigo_liquidacion;
+                    } else {
+                        $registro->idLibro_normal_plus = null;
+                        $registro->nombre = null;
+                        $registro->codigo_liquidacion = null;
+                    }
+                }
+            }
+            return response()->json([
+                'status' => 1,
+                'data' => $query
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Ocurrió un error al obtener los datos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function Regalado_Devuelto_Temporada(Request $request)
+    {
+        try {
+            $periodo = $request->PeriodoSelect;
+            $query = DB::select('SELECT
+                    s.documento,
+                    s.id_empresa,
+                    s.id_libro,
+                    s.combo,
+                    s.plus,
+                    COUNT(*) AS cantidad_devueltos
+                FROM codigoslibros_devolucion_son s
+                LEFT JOIN codigoslibros_devolucion_header h ON h.id = s.codigoslibros_devolucion_id
+                WHERE s.id_periodo = ?
+                    -- Código normal
+                    AND s.tipo_codigo = 0
+                    -- Diferente de creado
+                    AND s.estado <> 0
+                    -- Regalado
+                    AND s.documento_estado_liquidacion = 2
+                    -- Que tenga documento
+                    AND s.documento IS NOT NULL
+                    -- Diferente de anulado
+                    AND h.estado <> "3"
+                GROUP BY s.documento, s.id_empresa, s.id_libro, s.combo, s.plus
+                ORDER BY s.id_libro, s.documento, s.id_empresa, s.combo, s.plus',
+                [$periodo]
+            );
+            // Obtener todos los id_libro únicos
+            $ids_libros = collect($query)->pluck('id_libro')->unique();
+            // Obtener datos de esos libros en una sola consulta
+            $libros_info = DB::table('libros_series')
+                ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                ->whereIn('idLibro', $ids_libros)
+                ->get()
+                ->keyBy('idLibro');
+            // Añadir info a cada registro
+            foreach ($query as &$registro) {
+                if (isset($libros_info[$registro->id_libro])) {
+                    $registro->idLibro_normal_plus = $libros_info[$registro->id_libro]->idLibro;
+                    $registro->nombre = $libros_info[$registro->id_libro]->nombre;
+                    $registro->codigo_liquidacion = $libros_info[$registro->id_libro]->codigo_liquidacion;
+                } else {
+                    $registro->idLibro_normal_plus = 0;
+                    $registro->nombre = '';
+                    $registro->codigo_liquidacion = '';
+                }
+            }
+            return response()->json([
+                'status' => 1,
+                'data' => $query
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Ocurrió un error al obtener los datos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+    public function Regalado_DevueltoyLiquidado_Temporada(Request $request)
+    {
+        try {
+            $periodo = $request->PeriodoSelect;
+            $query = DB::select('SELECT
+                    s.documento,
+                    s.id_empresa,
+                    s.id_libro,
+                    s.combo,
+                    s.plus,
+                    COUNT(*) AS cantidad_devueltosliquidados
+                FROM codigoslibros_devolucion_son s
+                LEFT JOIN codigoslibros_devolucion_header h ON h.id = s.codigoslibros_devolucion_id
+                WHERE s.id_periodo = ?
+                    -- Código normal
+                    AND s.tipo_codigo = 0
+                    -- Diferente de creado
+                    AND s.estado <> 0
+                    -- Regalado
+                    AND s.documento_estado_liquidacion = 2
+                    -- Regalado y liquidado
+                    AND s.documento_regalado_liquidado = 1
+                    -- Que tenga documento
+                    AND s.documento IS NOT NULL
+                    -- Diferente de anulado
+                    AND h.estado <> "3"
+                GROUP BY s.documento, s.id_empresa, s.id_libro, s.combo, s.plus
+                ORDER BY s.id_libro, s.documento, s.id_empresa, s.combo, s.plus',
+                [$periodo]
+            );
+            // Obtener todos los id_libro únicos
+            $ids_libros = collect($query)->pluck('id_libro')->unique();
+            // Obtener datos de esos libros en una sola consulta
+            $libros_info = DB::table('libros_series')
+                ->select('idLibro', 'nombre', 'codigo_liquidacion')
+                ->whereIn('idLibro', $ids_libros)
+                ->get()
+                ->keyBy('idLibro');
+            // Añadir info a cada registro
+            foreach ($query as &$registro) {
+                if (isset($libros_info[$registro->id_libro])) {
+                    $registro->idLibro_normal_plus = $libros_info[$registro->id_libro]->idLibro;
+                    $registro->nombre = $libros_info[$registro->id_libro]->nombre;
+                    $registro->codigo_liquidacion = $libros_info[$registro->id_libro]->codigo_liquidacion;
+                } else {
+                    $registro->idLibro_normal_plus = 0;
+                    $registro->nombre = '';
+                    $registro->codigo_liquidacion = '';
+                }
+            }
+            return response()->json([
+                'status' => 1,
+                'data' => $query
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 0,
+                'message' => 'Ocurrió un error al obtener los datos.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function Agrupar_Regalados_Devueltos_Temporada(Request $request)
+    {
+        $devueltos = $request->devueltos;
+        $devueltos_liquidados = $request->devueltos_liquidados;
+        $agrupados = [];
+        // Procesar los devueltos
+        foreach ($devueltos as $item) {
+            $key = $item['id_empresa'] . '_' . $item['documento'] . '_' . $item['id_libro'] . '_' . $item['combo'] . '_' . $item['plus'];
+            $agrupados[$key] = [
+                'id_empresa' => $item['id_empresa'],
+                'documento' => $item['documento'],
+                'id_libro' => $item['id_libro'],
+                'combo' => $item['combo'],
+                'plus' => $item['plus'],
+                'idLibro_normal_plus' => $item['idLibro_normal_plus'] ?? null,
+                'nombre' => $item['nombre'] ?? null,
+                'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                'cantidad_devueltos_total' => $item['cantidad_devueltos']
+            ];
+        }
+        // Procesar los devueltos liquidados
+        foreach ($devueltos_liquidados as $item) {
+            $key = $item['id_empresa'] . '_' . $item['documento'] . '_' . $item['id_libro'] . '_' . $item['combo'] . '_' . $item['plus'];
+            if (isset($agrupados[$key])) {
+                $agrupados[$key]['cantidad_devueltos_total'] += $item['cantidad_devueltosliquidados'];
+            } else {
+                $agrupados[$key] = [
+                    'id_empresa' => $item['id_empresa'],
+                    'documento' => $item['documento'],
+                    'id_libro' => $item['id_libro'],
+                    'combo' => $item['combo'],
+                    'plus' => $item['plus'],
+                    'idLibro_normal_plus' => $item['idLibro_normal_plus'] ?? null,
+                    'nombre' => $item['nombre'] ?? null,
+                    'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                    'cantidad_devueltos_total' => $item['cantidad_devueltosliquidados']
+                ];
+            }
+        }
+        return response()->json([
+            'status' => 1,
+            'data' => array_values($agrupados)
+        ]);
+    }
+    public function Agrupar_Regalados_Temporada(Request $request)
+    {
+        $no_liquidados = $request->no_liquidados;
+        $liquidados = $request->liquidados;
+        $devueltos = $request->devueltos;
+        $leidos = $request->leidos;
+        $agrupado = [];
+        // 🔹 Unificar NO liquidados DESPACHADOS
+        foreach ($no_liquidados as $item) {
+            $empresa = $item['proforma_empresa'];
+            $key = $empresa . '_' . $item['codigo_proforma'] . '_' . $item['idLibro_normal_plus'] . '_' . $item['combo'] . '_' . $item['plus'];
+            $agrupado[$key] = [
+                'empresa_id' => $empresa,
+                'codigo_proforma' => $item['codigo_proforma'],
+                'idLibro_normal_plus' => $item['idLibro_normal_plus'],
+                'nombre' => $item['nombre'] ?? null,
+                'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                'combo' => $item['combo'],
+                'plus' => $item['plus'],
+                'cantidad_despachados' => $item['cantidad_regalados_leidos'],
+                'cantidad_liquidados' => 0,
+                'cantidad_devueltos_total' => 0,
+                'cantidad_leidos' => 0
+            ];
+        }
+        // 🔹 Unificar LIQUIDADOS
+        foreach ($liquidados as $item) {
+            $empresa = $item['proforma_empresa'];
+            $key = $empresa . '_' . $item['codigo_proforma'] . '_' . $item['idLibro_normal_plus'] . '_' . $item['combo'] . '_' . $item['plus'];
+            if (!isset($agrupado[$key])) {
+                $agrupado[$key] = [
+                    'empresa_id' => $empresa,
+                    'codigo_proforma' => $item['codigo_proforma'],
+                    'idLibro_normal_plus' => $item['idLibro_normal_plus'],
+                    'nombre' => $item['nombre'] ?? null,
+                    'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                    'combo' => $item['combo'],
+                    'plus' => $item['plus'],
+                    'cantidad_despachados' => 0,
+                    'cantidad_liquidados' => $item['cantidad_regalados_liquidados'],
+                    'cantidad_devueltos_total' => 0,
+                    'cantidad_leidos' => 0
+                ];
+            } else {
+                $agrupado[$key]['cantidad_liquidados'] = $item['cantidad_regalados_liquidados'];
+                // 🛠 Validar consistencia de nombre y código_liquidacion
+                if (
+                    $agrupado[$key]['nombre'] !== ($item['nombre'] ?? null) ||
+                    $agrupado[$key]['codigo_liquidacion'] !== ($item['codigo_liquidacion'] ?? null)
+                ) {
+                    \Log::warning("Inconsistencia detectada en nombre/código_liquidacion para key: $key");
+                }
+            }
+        }
+
+        // 🔹 Unificar DEVUELTOS
+        foreach ($devueltos as $item) {
+            $empresa = $item['id_empresa'];
+            $key = $empresa . '_' . $item['documento'] . '_' . $item['idLibro_normal_plus'] . '_' . $item['combo'] . '_' . $item['plus'];
+            if (isset($agrupado[$key])) {
+                $agrupado[$key]['cantidad_devueltos_total'] = $item['cantidad_devueltos_total'];
+            } else {
+                $agrupado[$key] = [
+                    'empresa_id' => $empresa,
+                    'codigo_proforma' => $item['documento'],
+                    'idLibro_normal_plus' => $item['idLibro_normal_plus'],
+                    'nombre' => $item['nombre'] ?? null,
+                    'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                    'combo' => $item['combo'],
+                    'plus' => $item['plus'],
+                    'cantidad_despachados' => 0,
+                    'cantidad_liquidados' => 0,
+                    'cantidad_devueltos_total' => $item['cantidad_devueltos_total'],
+                    'cantidad_leidos' => 0
+                ];
+            }
+        }
+        // 🔹 Unificar LEÍDOS EXTRA
+        foreach ($leidos as $item) {
+            $empresa = $item['proforma_empresa'];
+            $key = $empresa . '_' . $item['codigo_proforma'] . '_' . $item['idLibro_normal_plus'] . '_' . $item['combo'] . '_' . $item['plus'];
+            if (isset($agrupado[$key])) {
+                $agrupado[$key]['cantidad_leidos'] = $item['cantidad_regalado_leido'];
+            } else {
+                $agrupado[$key] = [
+                    'empresa_id' => $empresa,
+                    'codigo_proforma' => $item['codigo_proforma'],
+                    'idLibro_normal_plus' => $item['idLibro_normal_plus'],
+                    'nombre' => $item['nombre'] ?? null,
+                    'codigo_liquidacion' => $item['codigo_liquidacion'] ?? null,
+                    'combo' => $item['combo'],
+                    'plus' => $item['plus'],
+                    'cantidad_despachados' => 0,
+                    'cantidad_liquidados' => 0,
+                    'cantidad_devueltos_total' => 0,
+                    'cantidad_leidos' => $item['cantidad_regalado_leido']
+                ];
+            }
+        }
+        // 🔹 Agrupar por código_proforma y empresa
+        $porDocumento = [];
+        foreach ($agrupado as $item) {
+            $empresa_y_proforma = $item['empresa_id'] . '_' . $item['codigo_proforma'];
+            if (!isset($porDocumento[$empresa_y_proforma])) {
+                $porDocumento[$empresa_y_proforma] = [
+                    'empresa_id' => $item['empresa_id'],
+                    'codigo_proforma' => $item['codigo_proforma'],
+                    'libros' => []
+                ];
+            }
+            $porDocumento[$empresa_y_proforma]['libros'][] = [
+                'idLibro_normal_plus' => $item['idLibro_normal_plus'],
+                'nombre' => $item['nombre'],
+                'codigo_liquidacion' => $item['codigo_liquidacion'],
+                'combo' => $item['combo'],
+                'plus' => $item['plus'],
+                'cantidad_despachados' => $item['cantidad_despachados'],
+                'cantidad_liquidados' => $item['cantidad_liquidados'],
+                'cantidad_devueltos_total' => $item['cantidad_devueltos_total'],
+                'cantidad_leidos' => $item['cantidad_leidos']
+            ];
+        }
+        return response()->json([
+            'status' => 1,
+            'data' => array_values($porDocumento)
+        ]);
+    }
+
+
+    // public function Agregar_Nombres_ConsultaFinalRegalados(Request $request)
+    // {
+    //     $documentos_agrupados = $request->documentos_agrupados;
+    //     // Paso 1: Obtener todos los libro_idlibro únicos
+    //     $ids_libros = [];
+    //     $ids_empresas = [];
+    //     foreach ($documentos_agrupados as $documento) {
+    //         $ids_empresas[] = $documento['empresa_id'];
+    //         foreach ($documento['libros'] as $libro) {
+    //             $ids_libros[] = $libro['libro_idlibro'];
+    //         }
+    //     }
+    //     $ids_libros = array_unique($ids_libros);
+    //     $ids_empresas = array_unique($ids_empresas);
+    //     // Paso 2: Obtener todos los libros de la base de datos en una sola consulta
+    //     $libros_info = DB::table('libros_series')
+    //         ->select('idLibro', 'nombre', 'codigo_liquidacion')
+    //         ->whereIn('idLibro', $ids_libros)
+    //         ->get()
+    //         ->keyBy('idLibro'); // Indexa por idLibro para acceso rápido
+    //     // Paso 3: Obtener info de las empresas
+    //     $empresas_info = DB::table('empresas')
+    //         ->select('id', 'descripcion_corta')
+    //         ->whereIn('id', $ids_empresas)
+    //         ->get()
+    //         ->keyBy('id');
+    //     // Paso 4: Recorremos y asignamos los valores
+    //     foreach ($documentos_agrupados as &$documento) {
+    //         // Añadir descripción corta de empresa
+    //         $empresa_id = $documento['empresa_id'];
+    //         $documento['empresa_nombre'] = isset($empresas_info[$empresa_id])
+    //             ? $empresas_info[$empresa_id]->descripcion_corta
+    //             : null;
+    //         // Añadir nombre y código de los libros
+    //         foreach ($documento['libros'] as &$libro) {
+    //             $id = $libro['libro_idlibro'];
+    //             if (isset($libros_info[$id])) {
+    //                 $libro['nombre'] = $libros_info[$id]->nombre;
+    //                 $libro['codigo_liquidacion'] = $libros_info[$id]->codigo_liquidacion;
+    //             } else {
+    //                 $libro['nombre'] = null;
+    //                 $libro['codigo_liquidacion'] = null;
+    //             }
+    //         }
+    //     }
+    //     return response()->json([
+    //         'status' => 1,
+    //         'data' => $documentos_agrupados
+    //     ]);
+    // }
+
+    public function Agregar_F_DetalleVenta_ConsultaFinalRegalados(Request $request)
+    {
+        $documentos = $request->documentos_con_cod_y_nombre;
+        // Paso 1: Reunimos todos los posibles filtros para hacer solo una consulta
+        $filtros = [];
+        foreach ($documentos as $documento) {
+            $empresa_id = $documento['empresa_id'];
+            $codigo_proforma = $documento['codigo_proforma'];
+            foreach ($documento['libros'] as $libro) {
+                $pro_codigo = $libro['combo'] ?? $libro['codigo_liquidacion'];
+                if ($pro_codigo) {
+                    $filtros[] = [
+                        'id_empresa' => $empresa_id,
+                        'ven_codigo' => $codigo_proforma,
+                        'pro_codigo' => $pro_codigo
+                    ];
+                }
+            }
+        }
+        // Paso 2: Eliminamos duplicados
+        $filtros = collect($filtros)->unique();
+        // Paso 3: Consultamos todos los det_ven_cantidad que coincidan
+        $query = DB::table('f_detalle_venta')
+            ->select('id_empresa', 'ven_codigo', 'pro_codigo', 'det_ven_cantidad');
+        foreach ($filtros as $i => $filtro) {
+            if ($i === 0) {
+                $query->where(function ($q) use ($filtro) {
+                    $q->where('id_empresa', $filtro['id_empresa'])
+                        ->where('ven_codigo', $filtro['ven_codigo'])
+                        ->where('pro_codigo', $filtro['pro_codigo']);
+                });
+            } else {
+                $query->orWhere(function ($q) use ($filtro) {
+                    $q->where('id_empresa', $filtro['id_empresa'])
+                        ->where('ven_codigo', $filtro['ven_codigo'])
+                        ->where('pro_codigo', $filtro['pro_codigo']);
+                });
+            }
+        }
+        $resultados = $query->get();
+        // Paso 4: Indexamos resultados para acceso rápido
+        $mapa_cantidades = [];
+        foreach ($resultados as $fila) {
+            $key = "{$fila->id_empresa}|{$fila->ven_codigo}|{$fila->pro_codigo}";
+            $mapa_cantidades[$key] = $fila->det_ven_cantidad;
+        }
+        // Paso 5: Añadimos det_ven_cantidad al JSON recibido
+        foreach ($documentos as &$documento) {
+            $empresa_id = $documento['empresa_id'];
+            $codigo_proforma = $documento['codigo_proforma'];
+
+            foreach ($documento['libros'] as &$libro) {
+                $pro_codigo = $libro['combo'] ?? $libro['codigo_liquidacion'];
+                $key = "{$empresa_id}|{$codigo_proforma}|{$pro_codigo}";
+
+                $libro['det_ven_cantidad'] = $mapa_cantidades[$key] ?? 0;
+            }
+        }
+        return response()->json([
+            'status' => 1,
+            'data' => $documentos
+        ]);
+    }
+    //FIN METODOS JEYSON
 }

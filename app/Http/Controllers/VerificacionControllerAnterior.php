@@ -14,6 +14,7 @@ use App\Models\VerificacionHasInstitucion;
 use App\Models\VerificacionHistoricoCambios;
 use App\Models\NotificacionGeneral;
 use App\Models\Usuario;
+use App\Models\VerificacionComboLiquidado;
 use App\Repositories\Codigos\CodigosRepository;
 use App\Repositories\pedidos\NotificacionRepository;
 use App\Repositories\pedidos\VerificacionRepository;
@@ -124,6 +125,49 @@ class VerificacionControllerAnterior extends Controller
         AND ls.idLibro = c.libro_idlibro
         LIMIT 2000
         ");
+        return $traerCodigosIndividual;
+    }
+     public function getCodigosIndividualLiquidarFaltante($institucion, $periodo,$contrato) {
+
+        $traerCodigosIndividual = DB::select("
+            SELECT
+                c.codigo,
+                ls.codigo_liquidacion,
+                c.serie,
+                c.libro_idlibro,
+                c.libro as nombrelibro,
+                c.codigo_combo,
+                c.combo,
+                c.prueba_diagnostica
+            FROM codigoslibros c
+            LEFT JOIN usuario u ON c.idusuario = u.idusuario
+            LEFT JOIN libros_series ls ON ls.idLibro = c.libro_idlibro
+            LEFT JOIN codigoslibros cu ON cu.codigo_union = c.codigo
+            WHERE c.bc_estado = '2'
+                AND c.estado <> 2
+                AND c.estado_liquidacion = '1'
+                AND c.bc_periodo = '$periodo'
+                AND c.bc_institucion = '$institucion'
+                AND ls.idLibro = c.libro_idlibro
+                AND (
+                    (c.prueba_diagnostica = 0 AND NOT EXISTS (
+                        SELECT 1
+                        FROM verificaciones_combos_liquidados_detalle v
+                        WHERE v.codigo = c.codigo
+                        AND v.contrato_relacion = '$contrato'
+                    ))
+                    OR
+                    (c.prueba_diagnostica = 1 AND NOT EXISTS (
+                        SELECT 1
+                        FROM verificaciones_combos_liquidados_detalle v
+                        WHERE v.codigo = c.codigo_union
+                        AND v.contrato_relacion = '$contrato'
+                    ))
+                )
+            LIMIT 2000;
+
+        ");
+
         return $traerCodigosIndividual;
     }
     public function getRegaladosXLiquidar($institucion,$periodo){
@@ -270,128 +314,7 @@ class VerificacionControllerAnterior extends Controller
             }
         }
      }
-    // public function updateCodigoIndividualInicial($traerNumeroVerificacionInicialId,$traerCodigosIndividual,$contrato,$num_verificacion,$periodo,$institucion,$observacion,$user_created = 0,$searchComboEtiquetas){
-    //     $columnaVerificacion = "verif".$num_verificacion;
-    //     $idVerificacion      = $traerNumeroVerificacionInicialId;
-    //     //PARA RECORRER Y IR ACTUALIZANDO A CADA CODIGO LA VERIFICACION
-    //     $datos =[];
-    //     $mensaje = "";
-    //     if($observacion == "regalado"){
-    //         $mensaje = "liquidacion regalado";
-    //         $datos =  [
-    //             $columnaVerificacion =>  $idVerificacion,
-    //             'liquidado_regalado' => "1",
-    //             'contrato' => $contrato,
-    //         ];
-    //     }else{
-    //         $mensaje = "liquidacion";
-    //         $datos = [
-    //             $columnaVerificacion =>  $idVerificacion,
-    //             'estado_liquidacion' => "0",
-    //             'contrato'           => $contrato,
-    //         ];
-    //     }
-    //     foreach($traerCodigosIndividual as $item){
-    //         $codigo_combo = $item->codigo_combo;
 
-    //         // Clonar las variables originales para que no se sobrescriban globalmente
-    //         $columnaVerificacionLocal = $columnaVerificacion;
-    //         $idVerificacionLocal = $idVerificacion;
-
-    //         // si tiene codigo_combo, buscar en searchComboEtiquetas
-    //         if($codigo_combo){
-    //             $getComboEtiqueta = collect($searchComboEtiquetas)->where('codigo_combo', $codigo_combo)->first();
-    //             if($getComboEtiqueta){
-    //                 $columnaVerificacionLocal = $getComboEtiqueta->columna_verificacion;
-    //                 $idVerificacionLocal = $getComboEtiqueta->valor_verificacion;
-    //             }
-    //         }
-
-    //         // Armar datos por código individual usando las variables locales
-    //         $datosCodigo = $datos; // Copiar el array base
-    //         $datosCodigo[$columnaVerificacionLocal] = $idVerificacionLocal;
-
-    //         $ingresar =  DB::table('codigoslibros')
-    //             ->where('codigo', $item->codigo)
-    //             ->update($datosCodigo);
-
-    //         if($ingresar){
-    //             $historico = new HistoricoCodigos();
-    //             $historico->id_usuario = "0";
-    //             $historico->idInstitucion = $user_created;
-    //             $historico->codigo_libro = $item->codigo;
-    //             $historico->usuario_editor = $institucion;
-    //             $historico->id_periodo = $periodo;
-    //             $historico->observacion = $mensaje;
-    //             $historico->contrato_actual = $contrato;
-    //             $historico->save();
-    //         }
-    //     }
-
-    //  }
-    public function updateCodigoIndividualInicial($traerNumeroVerificacionInicialId, $traerCodigosIndividual, $contrato, $num_verificacion, $periodo, $institucion, $observacion, $user_created = 0, $searchComboEtiquetas) {
-        $columnaVerificacion = "verif" . $num_verificacion;
-        $idVerificacion = $traerNumeroVerificacionInicialId;
-
-        $mensaje = $observacion === "regalado" ? "liquidacion regalado" : "liquidacion";
-
-        // Campos comunes
-        $datosBase = [
-            'contrato' => $contrato,
-        ];
-        if ($observacion === "regalado") {
-            $datosBase['liquidado_regalado'] = "1";
-        } else {
-            $datosBase['estado_liquidacion'] = "0";
-        }
-
-        foreach ($traerCodigosIndividual as $item) {
-            $codigo_combo = $item->codigo_combo;
-
-            // Clonar valores por defecto
-            $columnaVerificacionLocal = $columnaVerificacion;
-            $idVerificacionLocal = $idVerificacion;
-
-            // Si hay combo, buscar verificación personalizada
-            if ($codigo_combo) {
-                $getComboEtiqueta = collect($searchComboEtiquetas)->firstWhere('codigo_combo', $codigo_combo);
-                if ($getComboEtiqueta) {
-                    $columnaVerificacionLocal = $getComboEtiqueta->columna_verificacion;
-                    $idVerificacionLocal = $getComboEtiqueta->valor_verificacion;
-                }else{
-                    $buscarComboIndividual = DB::SELECT("CALL obtener_verificacion_minima_por_combo('$codigo_combo');");
-                    if(count($buscarComboIndividual) > 0){
-                        $getContratoComboIndividual = $buscarComboIndividual[0]->contrato;
-                        if($getContratoComboIndividual != $contrato){
-                            throw new \Exception("El contrato $getContratoComboIndividual del combo $codigo_combo no coincide con el contrato $contrato");
-                        }
-                        $columnaVerificacionLocal = $buscarComboIndividual[0]->columna_verificacion;
-                        $idVerificacionLocal = $buscarComboIndividual[0]->valor_verificacion;
-                    }
-                }
-            }
-
-            // Crear nuevo array para este código individual
-            $datosCodigo = $datosBase;
-            $datosCodigo[$columnaVerificacionLocal] = $idVerificacionLocal;
-
-            $ingresar = DB::table('codigoslibros')
-                ->where('codigo', $item->codigo)
-                ->update($datosCodigo);
-
-            if ($ingresar) {
-                HistoricoCodigos::create([
-                    'id_usuario'       => "0",
-                    'idInstitucion'    => $user_created,
-                    'codigo_libro'     => $item->codigo,
-                    'usuario_editor'   => $institucion,
-                    'id_periodo'       => $periodo,
-                    'observacion'      => $mensaje,
-                    'contrato_actual'  => $contrato,
-                ]);
-            }
-        }
-    }
 
      //API:GET/n_verificacion
      public function index(Request $request)
@@ -1627,6 +1550,30 @@ class VerificacionControllerAnterior extends Controller
         return $papa;
     }
 
+    //api:get/metodosGetVerificaciones?getCombosLiquidadosAnteriores=1&contrato=C-C25-0000009-JME
+    public function getCombosLiquidadosAnteriores($request){
+        $contrato = $request->contrato;
+        if(!$contrato){
+            return response()->json(["status" => "0", "message" => "Contrato no proporcionado"], 200);
+        }
+
+        $combosLiquidados = DB::SELECT("SELECT * FROM verificaciones_combos_liquidados l
+        WHERE l.contrato = '$contrato'
+        AND l.estado = '1'
+        ");
+        //traer el detalle
+        foreach($combosLiquidados as $item => $key){
+            $detalles = DB::SELECT("SELECT d.*, i.nombreInstitucion, ilista.nombreInstitucion as nombre_lista, v.fecha_fin as fecha_verificacion
+            FROM verificaciones_combos_liquidados_detalle d
+            LEFT JOIN institucion i ON i.idinstitucion = d.institucion_liquidada
+            LEFT JOIN institucion ilista ON ilista.idinstitucion = d.venta_lista_institucion
+            LEFT JOIN verificaciones v ON  v.id = d.verificacion_id
+            WHERE d.verificaciones_combos_liquidados_id = '$key->id'
+            ");
+            $combosLiquidados[$item]->detalles = $detalles;
+        }
+        return response()->json($combosLiquidados);
+    }
 
     private function obtenerArchivosRevision($idVerificacion) {
         return DB::table('evidencia_global_files as e')
@@ -2121,7 +2068,7 @@ class VerificacionControllerAnterior extends Controller
         }
     }
     /***LIQUIDAR EN SISTEMA DE FACTURACION VERSION */
-    //api:Get/liquidarFacturacionVersion2/{contrato}
+     //api:Get/liquidarFacturacionVersion2/{contrato}
     public function liquidarFacturacionVersion2($contrato,$user_created){
         try{
             set_time_limit(6000000);
@@ -2160,7 +2107,7 @@ class VerificacionControllerAnterior extends Controller
             //======================FIN VALIDACIONES=========================================================
             else{
                 DB::commit();
-                //buscar combos etiquetas si ya fueron liquidados si fueron liquidados buscar el id
+                //buscar combos etiquetas si ya fueron liquidados si fueron liquidados buscar el id de verificacion
                 $searchComboEtiquetas = DB::SELECT("CALL obtener_verificacion_minima('$contrato');");
                 // //estadoVerificacion: 0 => ya realizada; 1 =>  la verificacion abierta; 2 => pendientes
                 if ($estadoVerificacion == 1) {
@@ -2195,7 +2142,7 @@ class VerificacionControllerAnterior extends Controller
         try {
             //traigo la liquidacion actual por cantidad GRUPAL
             $data = $this->getCodigosGrupalLiquidar($institucion, $periodo);
-
+            $consultarGuardado = [];
             //INVIVIDUAL VERSION 1
             //traigo la liquidacion con los codigos invidivuales con limite de 2000
             $traerCodigosIndividual = $this->getCodigosIndividualLiquidar($institucion, $periodo);
@@ -2222,18 +2169,17 @@ class VerificacionControllerAnterior extends Controller
                     return ["status" => "0", "message" => "Ha alcanzado el límite de verificaciones permitidas"];
                 } else {
                     //OBTENER LA CANTIDAD DE LA VERIFICACION ACTUAL
-                    $this->updateCodigoIndividualInicial($traeridVerificacion, $traerCodigosIndividual, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "liquidacion", $user_created, $searchComboEtiquetas);
-
+                    $consultarGuardado[] =  $this->updateCodigoIndividualInicial($traeridVerificacion, $traerCodigosIndividual, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "liquidacion", $user_created, $searchComboEtiquetas);
                     //ACTUALIZAR EN LOS CODIGOS REGALADOS LOS DATOS DE VERIFICACION
                     if (count($arregloRegalados) > 0) {
-                        $this->updateCodigoIndividualInicial($traeridVerificacion, $arregloRegalados, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "regalado", $user_created, $searchComboEtiquetas);
+                        $consultarGuardado[] =  $this->updateCodigoIndividualInicial($traeridVerificacion, $arregloRegalados, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "regalado", $user_created, $searchComboEtiquetas);
                     }
 
                     //Ingresar la liquidacion en la base
                     $this->guardarLiquidacionCodigosDemasiados($data, $traerNumeroVerificacion, $contrato);
 
                     //consultar si todavía existe codigos individuales
-                    $codigosFaltante = $this->getCodigosIndividualLiquidar($institucion, $periodo);
+                    $codigosFaltante = $this->getCodigosIndividualLiquidarFaltante($institucion, $periodo, $contrato);
 
                     //si no hay códigos faltantes, actualizar el estado de la verificación
                     if (count($codigosFaltante) > 0) {
@@ -2271,7 +2217,7 @@ class VerificacionControllerAnterior extends Controller
                     // Confirmar los cambios realizados en la transacción
                     DB::commit();
 
-                    return ['status' => 1, 'guardados' => count($traerCodigosIndividual), "faltante" => count($codigosFaltante)];
+                    return ['status' => 1, 'guardados' => count($traerCodigosIndividual), "faltante" => count($codigosFaltante), "consultarGuardado" => $consultarGuardado];
                 }
             } else {
                 DB::rollBack(); // Revertir transacción si no hay datos
@@ -2284,7 +2230,6 @@ class VerificacionControllerAnterior extends Controller
         }
     }
 
-
     public function generateLiquidacionDespues2000($institucion, $periodo, $contrato, $idVerificacionActual, $num_verificacionaActual, $user_created, $searchComboEtiquetas){
         DB::beginTransaction();  // Iniciar transacción
 
@@ -2293,15 +2238,16 @@ class VerificacionControllerAnterior extends Controller
             $fechaActual = date('Y-m-d');
             $traerNumeroVerificacion = $num_verificacionaActual;
             $traeridVerificacion = $idVerificacionActual;
+            $consultarGuardado = [];
 
             // Traer la liquidación con los códigos individuales
             $traerCodigosIndividual = $this->getCodigosIndividualLiquidar($institucion, $periodo);
 
             // Obtener la cantidad de la verificación actual
-            $this->updateCodigoIndividualInicial($traeridVerificacion, $traerCodigosIndividual, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "liquidacion", $user_created, $searchComboEtiquetas);
+            $consultarGuardado[] = $this->updateCodigoIndividualInicial($traeridVerificacion, $traerCodigosIndividual, $contrato, $traerNumeroVerificacion, $periodo, $institucion, "liquidacion", $user_created, $searchComboEtiquetas);
 
             // Consultar si todavía existe códigos individuales
-            $codigosFaltante = $this->getCodigosIndividualLiquidar($institucion, $periodo);
+            $codigosFaltante = $this->getCodigosIndividualLiquidarFaltante($institucion, $periodo, $contrato);
 
             // Si existen códigos faltantes, actualizar el estado de la verificación a pendiente
             if (count($codigosFaltante) > 0) {
@@ -2313,7 +2259,12 @@ class VerificacionControllerAnterior extends Controller
 
                 // Confirmar transacción y devolver respuesta
                 DB::commit();
-                return ['status' => 1, 'guardados' => count($traerCodigosIndividual), "faltante" => count($codigosFaltante)];
+                return [
+                    'status' => 1,
+                    'guardados' => count($traerCodigosIndividual),
+                    'faltante' => count($codigosFaltante),
+                    'consultarGuardado' => $consultarGuardado
+                ];
             } else {
                 // Actualizar la verificación anterior a estado 0 para cerrarla
                 DB::table('verificaciones')
@@ -2334,13 +2285,93 @@ class VerificacionControllerAnterior extends Controller
                 // Confirmar transacción después de todas las operaciones
                 DB::commit();
 
-                return ['status' => 1, 'guardados' => count($traerCodigosIndividual), "faltante" => count($codigosFaltante)];
+                return ['status' => 1, 'guardados' => count($traerCodigosIndividual), "faltante" => count($codigosFaltante), "consultarGuardado" => $consultarGuardado];
             }
         } catch (\Exception $e) {
             // En caso de error, revertir la transacción
             DB::rollBack();
             throw new \Exception("Error al generar liquidación: " . $e->getMessage());
         }
+    }
+
+    public function updateCodigoIndividualInicial($traerNumeroVerificacionInicialId, $traerCodigosIndividual, $contrato, $num_verificacion, $periodo, $institucion, $observacion, $user_created = 0, $searchComboEtiquetas) {
+        $arrayErroresCombo = [];
+        $columnaVerificacion = "verif" . $num_verificacion;
+        $idVerificacion = $traerNumeroVerificacionInicialId;
+
+        $mensaje = $observacion === "regalado" ? "liquidacion regalado" : "liquidacion";
+
+        // Campos comunes
+        $datosBase = [
+            'contrato' => $contrato,
+        ];
+        if ($observacion === "regalado") {
+            $datosBase['liquidado_regalado'] = "1";
+        } else {
+            $datosBase['estado_liquidacion'] = "0";
+        }
+
+        foreach ($traerCodigosIndividual as $item) {
+            $codigo_combo               = $item->codigo_combo;
+
+            // Clonar valores por defecto
+            $columnaVerificacionLocal   = $columnaVerificacion;
+            $idVerificacionLocal        = $idVerificacion;
+            $errorCombo                 = 0;
+
+            // Si hay combo, buscar verificación personalizada si el parte del combo fue liquidad en la primera verificacion trare el id de verificacion
+            if ($codigo_combo) {
+                $getComboEtiqueta = collect($searchComboEtiquetas)->firstWhere('codigo_combo', $codigo_combo);
+                if ($getComboEtiqueta) {
+                    $columnaVerificacionLocal = $getComboEtiqueta->columna_verificacion;
+                    $idVerificacionLocal      = $getComboEtiqueta->valor_verificacion;
+                }else{
+                    $buscarComboIndividual = DB::SELECT("CALL obtener_verificacion_minima_por_combo('$codigo_combo');");
+                    if(count($buscarComboIndividual) > 0){
+                        // Validar si existe algun combo liquidado en otra escuela
+                        foreach ($buscarComboIndividual as $item) {
+                            if ($item->contrato != $contrato) {
+                                $this->verificacionRepository->saveComboLiquidado($periodo, $codigo_combo, $contrato, collect($buscarComboIndividual));
+                                // throw new \Exception("El contrato {$item->contrato} del combo $codigo_combo no coincide con el contrato $contrato");
+                                $arrayErroresCombo[] =
+                                [
+                                    'codigo' => $codigo_combo,
+                                    'error'  => "El contrato {$item->contrato} del combo $codigo_combo no coincide con el contrato $contrato"
+                                ];
+                                $errorCombo = 1;
+                                continue;
+                            }
+                        }
+
+
+                    }
+                }
+            }
+
+            if($errorCombo == 1){
+                continue;
+            }
+            // Crear nuevo array para este código individual
+            $datosCodigo = $datosBase;
+            $datosCodigo[$columnaVerificacionLocal] = $idVerificacionLocal;
+
+            $ingresar = DB::table('codigoslibros')
+                ->where('codigo', $item->codigo)
+                ->update($datosCodigo);
+
+            if ($ingresar) {
+                HistoricoCodigos::create([
+                    'id_usuario'       => "0",
+                    'idInstitucion'    => $user_created,
+                    'codigo_libro'     => $item->codigo,
+                    'usuario_editor'   => $institucion,
+                    'id_periodo'       => $periodo,
+                    'observacion'      => $mensaje,
+                    'contrato_actual'  => $contrato,
+                ]);
+            }
+        }
+        return $arrayErroresCombo; // o cualquier dato relevante
     }
 
     //api:get/getcodigosLiquidar/{contrato}
@@ -2475,6 +2506,9 @@ class VerificacionControllerAnterior extends Controller
        }
        if($request->getVerificacionesRevisionCount){
             return $this->getVerificacionesRevisionCount($request);
+       }
+       if($request->getCombosLiquidadosAnteriores){
+            return $this->getCombosLiquidadosAnteriores($request);
        }
     }
     // api:get/metodosGetVerificaciones?getVerificaciones=1&id_asesor=4179&pendientesNot=1&soloLongitud=1
@@ -2791,6 +2825,7 @@ class VerificacionControllerAnterior extends Controller
     //api:post/metodosPostVerificaciones
     public function metodosPostVerificaciones(Request $request){
         if($request->guardarNotificacionVerificacion){ return $this->guardarNotificacionVerificacion($request); }
+        if($request->ocultarCodigosCombosLiquidados) { return $this->ocultarCodigosCombosLiquidados($request); }
     }
     //api:post/metodosPostVerificaciones?guardarNotificacionVerificacion=1
     public function guardarNotificacionVerificacion($request)
@@ -2847,6 +2882,22 @@ class VerificacionControllerAnterior extends Controller
             DB::rollback();
             return response()->json(["error" => "0", "message" => $e->getMessage()], 200);
         }
+    }
+
+    //api:post/metodosPostVerificaciones?ocultarCodigosCombosLiquidados=1
+    public function ocultarCodigosCombosLiquidados(Request $request)
+    {
+        $id = $request->id;
+        $user_oculta = $request->user_oculta;
+        //VerificacionComboLiquidado
+        $verificacion = VerificacionComboLiquidado::find($id);
+        if ($verificacion) {
+            $verificacion->estado = 0;
+            $verificacion->user_oculta = $user_oculta;
+            $verificacion->save();
+            return response()->json(["success" => "1", "message" => "Registro eliminado"], 200);
+        }
+        return response()->json(["error" => "0", "message" => "Registro no encontrado"], 200);
     }
 
     public function eliminarNotificacion(Request $request)

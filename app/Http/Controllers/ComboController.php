@@ -425,7 +425,7 @@ class ComboController extends Controller
                         if($libroSeleccionado == '1'){
                             $mensajeRegalado = '_Regalado';
                         }
-                        IF($tipoRegalado == '2'){
+                        if($tipoRegalado == '2'){
                             $mensajeRegalado = '_Regalado_y_bloqueado';
                         }
                         $comentario             = "Se agregó al combo " . $codigoCombo.$mensajeRegalado;
@@ -436,7 +436,6 @@ class ComboController extends Controller
                         if($variosCodigos == '0'){
                             $codigoA            = strtoupper($tr->codigo);
                         }
-
                         //validar si el codigo existe
                         $validarA = CodigosLibros::where('codigo', $codigoA)->get();
                         if (count($validarA) > 0) {
@@ -511,12 +510,12 @@ class ComboController extends Controller
                                     $ingresoB       = $this->updatecodigosCombo($codigoCombo, $codigoB, $codigoA, $libroSeleccionado, $tipoRegalado,$comboIgualAnteriorB);
 
                                     if($ingresoA && $ingresoB){
-                                        // if($comboIgualAnteriorA){}
-                                        // else{ $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoB, $usuario_editor, $comentario, $old_valuesB, null); }
-                                        // if($comboIgualAnteriorB){}
-                                        // else{ $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoA, $usuario_editor, $comentario, $old_valuesA, null); }
-                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoB, $usuario_editor, $comentario, $old_valuesB, null);
-                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoA, $usuario_editor, $comentario, $old_valuesA, null);
+                                        // Recarga los modelos actualizados
+                                        // Ya actualizaste, ahora obtén los valores nuevos:
+                                        $new_valuesA = json_encode(CodigosLibros::where('codigo', $codigoA)->first()->getAttributes());
+                                        $new_valuesB = json_encode(CodigosLibros::where('codigo', $codigoB)->first()->getAttributes());
+                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoB, $usuario_editor, $comentario, $old_valuesB, $new_valuesB);
+                                        $this->GuardarEnHistorico(0, $institucion_id, $periodo_id, $codigoA, $usuario_editor, $comentario, $old_valuesA, $new_valuesA);
                                         $contadorA++;
                                         $contadorB++;
                                     }

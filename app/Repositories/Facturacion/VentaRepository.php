@@ -23,12 +23,13 @@ class  VentaRepository extends BaseRepository
         $query = DB::select("
             SELECT
                 fdv.pro_codigo AS codigo_liquidacion,
-                p.pro_nombre AS nombrelibro,
+                ls.nombre AS nombrelibro,
                 SUM(fdv.det_ven_cantidad - fdv.det_ven_dev) AS valor
             FROM f_detalle_venta fdv
             INNER JOIN f_venta fv ON fv.ven_codigo = fdv.ven_codigo
                 AND fv.id_empresa = fdv.id_empresa
             INNER JOIN 1_4_cal_producto p ON fdv.pro_codigo = p.pro_codigo
+            LEFT JOIN libros_series ls ON ls.codigo_liquidacion = p.pro_codigo
             WHERE fv.periodo_id = ?
                 AND fv.tip_ven_codigo IN ($placeholders)
                 AND fv.idtipodoc IN (1, 3, 4)

@@ -4532,6 +4532,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
     public function metodosPostCodigos(Request $request){
         if($request->getPrevisualizarCodigos)                   { return $this->getPrevisualizarCodigos($request); }
         if($request->getPrevisualizarPaquetes)                  { return $this->getPrevisualizarPaquetes($request); }
+        if($request->formatoPaqueteCodigos)                     { return $this->formatoPaqueteCodigos($request); }
         if($request->getPrevisualizarCodigosTablaSon)           { return $this->getPrevisualizarCodigosTablaSon($request); }
         if($request->getPrevisualizarPaquetesTablaSon)          { return $this->getPrevisualizarPaquetesTablaSon($request); }
         if($request->saveImportPlus)                            { return $this->saveImportPlus($request); }
@@ -4553,7 +4554,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
         $codigosABuscar = array_column($codigos, 'codigo');
         // Filtrar la colección usando whereIn y hacer un LEFT JOIN
         $resultados = CodigosLibros::whereIn('codigo', $codigosABuscar)
-            // ->where('proforma_empresa', $empresa['idEmpresa'])
+            // ->where('proforma_empresa', $empresa['idEmpresa']) nombrelibro
             ->leftJoin('institucion', 'codigoslibros.bc_institucion', '=', 'institucion.idInstitucion')
             ->leftJoin('institucion as i2', 'codigoslibros.venta_lista_institucion', '=', 'i2.idInstitucion')
             ->leftJoin('periodoescolar as pe', 'codigoslibros.bc_periodo', '=', 'pe.idperiodoescolar')
@@ -4571,9 +4572,10 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             'codigoslibros.estado_liquidacion','codigoslibros.liquidado_regalado', 'codigoslibros.venta_estado',
             'codigoslibros.codigo_paquete','codigoslibros.permitir_devolver_nota',
             'codigoslibros.prueba_diagnostica', 'codigoslibros.plus',
-            'ls.nombre as nombrelibro',
+            // 'ls.nombre as nombrelibro',
             'codigoslibros.estado', 'institucion.nombreInstitucion as institucionDirecta','i2.nombreInstitucion as institucionPuntoVenta','pe.periodoescolar',
             'ls.year','ls.id_libro_plus',
+            DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.nombre ELSE l.nombrelibro END AS nombrelibro"),
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.codigo_liquidacion ELSE ls.codigo_liquidacion END AS codigo_liquidacion"), // Lógica para la nueva columna
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.id_serie ELSE ls.id_serie END AS id_serie"), // Lógica para la nueva columna
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN a_plus.area_idarea ELSE a.area_idarea END AS area_idarea"), // Lógica para la nueva columna
@@ -4840,12 +4842,14 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             'codigoslibros.venta_lista_institucion', 'codigoslibros.libro_idlibro', 'codigoslibros.documento_devolucion',
             'codigoslibros.combo','codigoslibros.codigo_combo', 'codigoslibros.proforma_empresa', 'codigoslibros.codigo_proforma',
             'codigoslibros.estado_liquidacion', 'codigoslibros.liquidado_regalado', 'codigoslibros.venta_estado',
-            'codigoslibros.codigo_paquete', 'ls.nombre as nombrelibro',
+            'codigoslibros.codigo_paquete',
+            // 'ls.nombre as nombrelibro',
             'codigoslibros.permitir_devolver_nota', 'codigoslibros.plus',
             'codigoslibros.estado', 'institucion.nombreInstitucion as institucionDirecta',
             'i2.nombreInstitucion as institucionPuntoVenta', 'pe.periodoescolar',
             'ls.year', 'ls.id_libro_plus',
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.codigo_liquidacion ELSE ls.codigo_liquidacion END AS codigo_liquidacion"), // Lógica para la nueva columna
+            DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.nombre ELSE l.nombrelibro END AS nombrelibro"),
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN l_plus.id_serie ELSE ls.id_serie END AS id_serie"), // Lógica para la nueva columna
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN a_plus.area_idarea ELSE a.area_idarea END AS area_idarea"), // Lógica para la nueva columna
             DB::raw("CASE WHEN codigoslibros.plus = 1 THEN ls.id_libro_plus ELSE codigoslibros.libro_idlibro END AS libro_idReal"), // Lógica para la nueva columna
@@ -4989,6 +4993,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             'encontrados'           => $agrupadosPorInstitucion,
         ];
     }
+
 
     //api:post/metodosPostCodigos?getPrevisualizarPaquetesTablaSon=1
     public function getPrevisualizarPaquetesTablaSon($request) {

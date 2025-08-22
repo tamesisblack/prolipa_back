@@ -1263,6 +1263,16 @@ Route::get('AreaDisponibles_Asignacion','AreaController@AreaDisponibles_Asignaci
 Route::get('GetListaCombosXTemporada','_14ProductoController@GetListaCombosXTemporada');
 Route::get('VerificarDirectorGeneralComiles','UsuarioController@VerificarDirectorGeneralComiles');
 Route::get('getTodas_FAE_NAVAL_TERESTRE_BACK','UsuarioController@getTodas_FAE_NAVAL_TERESTRE_BACK');
+Route::get('Todo_Libros_Series_Nombre_y_Codigo','LibroSerieController@Todo_Libros_Series_Nombre_y_Codigo');
+Route::post('Agregar_F_DetalleVenta_ConsultaFinalRegalados','CodigosLibrosController@Agregar_F_DetalleVenta_ConsultaFinalRegalados');
+Route::post('Agregar_Nombres_ConsultaFinalRegalados','CodigosLibrosController@Agregar_Nombres_ConsultaFinalRegalados');
+Route::post('Agrupar_Regalados_Devueltos_Temporada','CodigosLibrosController@Agrupar_Regalados_Devueltos_Temporada');
+Route::post('Agrupar_Regalados_Temporada','CodigosLibrosController@Agrupar_Regalados_Temporada');
+Route::post('Regalado_Devuelto_Temporada','CodigosLibrosController@Regalado_Devuelto_Temporada');
+Route::post('Regalado_DevueltoyLiquidado_Temporada','CodigosLibrosController@Regalado_DevueltoyLiquidado_Temporada');
+Route::post('Regalado_Leido_Temporada','CodigosLibrosController@Regalado_Leido_Temporada');
+Route::post('Regalado_Liquidado_Temporada','CodigosLibrosController@Regalado_Liquidado_Temporada');
+Route::post('Regalado_NoLiquidado_Temporada','CodigosLibrosController@Regalado_NoLiquidado_Temporada');
 Route::post('Transferencia_Videos_Asignatura','VideoController@Transferencia_Videos_Asignatura');
 Route::post('transferenciaPlanificaciones','PlanificacionesController@transferenciaPlanificaciones');
 Route::post('Recorrer_Listado_Combos_X_Temporada','_14ProductoController@Recorrer_Listado_Combos_X_Temporada');
@@ -1383,6 +1393,7 @@ Route::get('filtroLibros', 'LinkAcortadorController@filtroLibros');
 //API PARA NOTIFICACIONES
 Route::post('saveNotification', 'ConfiguracionController@saveNotification');
 Route::get('getNotifications', 'ConfiguracionController@getNotifications');
+Route::get('getConfiguracionGenerlaXId/{id}','ConfiguracionController@getConfiguracionGenerlaXId');
 //===========API PARA FORMULARIO DOCENTE===========================
 Route::resource('formularioDocente', 'FormularioDocenteController');
 Route::post('GenerarFormulario', 'FormularioDocenteController@GenerarFormulario');

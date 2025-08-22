@@ -35,10 +35,10 @@ class ConfiguracionController extends Controller
                 ORDER BY id DESC
             ");
             return $root;
-    
+
        }
-        
-      
+
+
     }
 
     /**
@@ -48,7 +48,7 @@ class ConfiguracionController extends Controller
      */
     public function create()
     {
-     
+
 
     }
 
@@ -69,21 +69,21 @@ class ConfiguracionController extends Controller
             $validar = DB::SELECT("SELECT * FROM permisos_super r WHERE r.usuario_id = '$request->usuario_id'
             ");
             if(count($validar) > 0){
-            return ["status" => "0", "message"=>"El usuario ya  se encuentra asignado"]; 
+            return ["status" => "0", "message"=>"El usuario ya  se encuentra asignado"];
             }
             //guardar
             $permiso = new  PermisoSuper;
             $permiso->usuario_id = $request->usuario_id;
             $permiso->id_group = $request->id_group;
             $permiso->save();
-            
+
             if($permiso){
                 return ["status" => "1", "message"=>"Se asigno el permiso correctamente"];
             }else{
                 return ["status" => "0", "message"=>"No se asigno el permiso"];
             }
         }
-       
+
     }
 
     /**
@@ -148,7 +148,7 @@ class ConfiguracionController extends Controller
     //api:get/getNotifications
     public function getNotifications(Request $request){
         $notificacions = DB::SELECT("SELECT * FROM notificaciones
-        ORDER BY id DESC 
+        ORDER BY id DESC
         LIMIT 20
         ");
         return $notificacions;
@@ -157,5 +157,10 @@ class ConfiguracionController extends Controller
         $enc = encrypt(uniqid());
         $url = "https://plataforma.prolipadigital.com.ec/v/".$enc;
         return redirect($url);
+    }
+    public function getConfiguracionGenerlaXId($id){
+        $query = DB::SELECT("SELECT * FROM configuracion_general c
+        WHERE c.id = '$id'");
+        return $query;
     }
 }

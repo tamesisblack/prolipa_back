@@ -134,16 +134,21 @@ class PedidosGerenciaController extends Controller
     //api:post/pedidos_gerencia/aprobarSolicitud
     public function aprobarSolicitud($request){
         try{
+            $aprobadoDespues                    = $request->aprobadoDespues;
             //transaccion
             DB::beginTransaction();
             $solicitud                          = PedidosSolicitudesGerencia::findOrFail($request->id);
             $id_pedido                          = $solicitud->id_pedido;
             $solicitud->cantidad_finalizada     = $request->cantidad_finalizada;
             $solicitud->estado                  = $request->estado;
-            $solicitud->user_finaliza           = $request->user_finaliza;
             $solicitud->observacion_finaliza    = $request->observacion_finaliza;
             $solicitud->fecha_finaliza          = date("Y-m-d H:i:s");
-            $solicitud->id_grupo_finaliza       = $request->id_grupo_finaliza;
+            if($aprobadoDespues == 1){
+                // si aprueba despues el root no cambio quien aprueba mantengo
+            }else{
+                $solicitud->id_grupo_finaliza       = $request->id_grupo_finaliza;
+                $solicitud->user_finaliza           = $request->user_finaliza;
+            }
             $solicitud->save();
             //convenio autorizar cierre
             if($solicitud->tipo == 1){

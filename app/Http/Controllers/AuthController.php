@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use JWTAuth;
 use Illuminate\Support\Facades\Auth;
 use Tymon\JWTAuth\Exceptions\JWTException;
+use Illuminate\Support\Facades\Hash;
 class AuthController extends Controller {
     public $loginAfterSignUp = true;
 
@@ -25,7 +26,7 @@ class AuthController extends Controller {
             }
             $datosValidados=$request->validate([
                 'cedula' => 'required|max:15',
-                'seminario' => 'required', 
+                'seminario' => 'required',
             ]);
             $buscarCedula = DB::SELECT("SELECT * FROM usuario WHERE cedula = '$request->cedula'
             ");
@@ -45,7 +46,7 @@ class AuthController extends Controller {
         if($request->seminario){
             if($request->institucion_nombre){
                 $datosValidados=$request->validate([
-                    'cedula' => 'required|max:15|unique:usuario', 
+                    'cedula' => 'required|max:15|unique:usuario',
                     'nombres' => 'required',
                     'apellidos' => 'required',
                     'email' => 'required|email|unique:usuario',
@@ -58,11 +59,11 @@ class AuthController extends Controller {
                     'apellidos' => 'required',
                     'email' => 'required|email|unique:usuario',
                     'seminario' => 'required',
-                
+
                 ]);
             }
-        
-           
+
+
         }else{
             $datosValidados=$request->validate([
                 'cedula' => 'required|max:15|unique:usuario',
@@ -123,42 +124,43 @@ class AuthController extends Controller {
     public function verificarCedula(Request $request){
         $buscarCedula = DB::SELECT("SELECT * FROM usuario WHERE cedula = '$request->cedula'
         ");
-        
+
         if(count($buscarCedula) >0){
             return ["status" =>"1","message" => "Ya existe la cedula","usuario"=> $buscarCedula];
         }else{
             return ["status" =>"0","message" => "No existe la cedula"];
         }
     }
-    // public function login(Request $request) {
-    //     $usuario = DB::SELECT("SELECT usuario.*,periodoescolar.idperiodoescolar AS periodoescolar_idperiodoescolar FROM `usuario` 
-    //     LEFT JOIN institucion ON institucion.idInstitucion = usuario.institucion_idInstitucion 
-    //     LEFT JOIN periodoescolar_has_institucion ON periodoescolar_has_institucion.institucion_idInstitucion = institucion.idInstitucion 
-    //     LEFT JOIN periodoescolar ON periodoescolar.idperiodoescolar = periodoescolar_has_institucion.periodoescolar_idperiodoescolar
-    //     WHERE `name_usuario` LIKE ? AND `password` = ? AND periodoescolar.estado like '1' LIMIT 1",[$request->name_usuario,sha1(md5($request->password))]);           
-    //     if(empty($usuario)){
-    //         $usuario = DB::SELECT("SELECT * FROM `usuario` WHERE `name_usuario` = ? AND `password` = ?",[$request->name_usuario,sha1(md5($request->password))]);           
+
+    // public function login(Request $request)
+    // {
+    //     $request->validate([
+    //         'name_usuario' => 'required|string',
+    //         'password' => 'required|string',
+    //     ]);
+
+    //     $credentials = $request->only('name_usuario', 'password');
+
+    //     // IMPORTANTE: Indica explícitamente que 'name_usuario' es el campo de usuario
+    //     if (!Auth::attempt($credentials)) {
+    //         return response()->json(['errors' => 'Credenciales incorrectas'], 412);
     //     }
-    //     $input = $request->only('name_usuario', 'password');
-    //     $jwt_token = JWTAuth::attempt($input);
-    //     if (!$jwt_token = JWTAuth::attempt($input)) {
-    //         return response()->json([
-    //         'status' => 'invalid_credentials',
-    //         'message' => 'Correo o contraseña no válidos.',
-    //         ], 401);
-    //     }else{
-    //         $id = 0;
-    //         foreach ($usuario as $key => $value) {
-    //             $id = $value->idusuario;
-    //         }
-    //         DB::update('update usuario set remember_token = ? where idusuario = ?', [$jwt_token,$id]);
-    //         return response()->json([
-    //             'datos' =>$usuario,
-    //             'status' => 'ok',
-    //             'token' => $jwt_token,
-    //         ]);
-    //     }
+
+    //      // Carga las relaciones grupo e institucion
+    //     $user = Auth::user()->load([
+    //         'grupo',
+    //         'institucion:idInstitucion,nombreInstitucion'
+    //     ]);
+
+    //     // Crea un token personal (para Flutter o React Native)
+    //     $token = $user->createToken('react-native')->plainTextToken;
+
+    //     return response()->json([
+    //         'user' => $user,
+    //         'token' => $token,
+    //     ]);
     // }
+
     public function login(Request $request)
     {
         $request->validate([
@@ -166,20 +168,40 @@ class AuthController extends Controller {
             'password' => 'required|string',
         ]);
 
-        $credentials = $request->only('name_usuario', 'password');
+        $user = User::where('name_usuario', $request->name_usuario)->first();
 
-        // IMPORTANTE: Indica explícitamente que 'name_usuario' es el campo de usuario
-        if (!Auth::attempt($credentials)) {
-            return response()->json(['errors' => 'Credenciales incorrectas'], 412);
+        if (!$user) {
+            return response()->json(['errors' => 'Su usuario no existe', 'tipo' => 'user'], 412);
         }
 
-         // Carga las relaciones grupo e institucion
+        // Validar estado del usuario
+        $estado = $user->estado_idEstado;
+        if (in_array($estado, [2, 3, 4]) || $estado === null) {
+            return response()->json([
+                'errors' => 'Su usuario se encuentra bloqueado, por favor envíe un correo a soporte@prolipa.com.ec, para reestablecer su acceso.'
+            ], 412);
+        }
+
+        $sha1md5Password = sha1(md5($request->password));
+        $bcryptPassword = $user->password;
+
+        if ($user->password === $sha1md5Password) {
+            // Autenticación exitosa con SHA1(MD5)
+            Auth::login($user);
+        } elseif (Hash::check($request->password, $bcryptPassword)) {
+            // Autenticación exitosa con bcrypt
+            Auth::login($user);
+        } else {
+            return response()->json(['errors' => 'Su contraseña es incorrecta', 'tipo' => 'password'], 412);
+        }
+
+        // Cargar relaciones necesarias
         $user = Auth::user()->load([
             'grupo',
             'institucion:idInstitucion,nombreInstitucion'
         ]);
 
-        // Crea un token personal (para Flutter o React Native)
+        // Crear token personal (para app móvil, por ejemplo)
         $token = $user->createToken('react-native')->plainTextToken;
 
         return response()->json([
@@ -187,6 +209,7 @@ class AuthController extends Controller {
             'token' => $token,
         ]);
     }
+
     public function logout(Request $request) {
         $this->validate($request, [
             'token' => 'required'

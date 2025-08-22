@@ -3,6 +3,8 @@ namespace App\Repositories\pedidos;
 
 use App\Models\NotificacionGeneral;
 use App\Models\Verificacion;
+use App\Models\VerificacionComboLiquidado;
+use App\Models\VerificacionComboLiquidadoDetalle;
 use App\Repositories\BaseRepository;
 use App\Services\PusherService;
 use DB;
@@ -93,4 +95,79 @@ class  VerificacionRepository extends BaseRepository
         }
     }
 
+    public function saveComboLiquidado($periodo,$combo_etiqueta,$contrato_relacion,$datosDetalle)
+    {
+        $idComboLiquidado = null;
+        // validar si existe no crear el combo etiqueta
+        $validateComboEtiqueta = VerificacionComboLiquidado::where('contrato', $contrato_relacion)
+            ->where('combo_etiqueta', $combo_etiqueta)
+            ->first();
+        // si existe obtener el id
+        if ($validateComboEtiqueta) {
+            $idComboLiquidado = $validateComboEtiqueta->id;
+        }
+        // crear el combo etiqueta
+        else{
+            $comboEtiqueta                      = new VerificacionComboLiquidado();
+            $comboEtiqueta->periodo_id          = $periodo;
+            $comboEtiqueta->contrato            = $contrato_relacion;
+            $comboEtiqueta->combo_etiqueta      = $combo_etiqueta;
+            $comboEtiqueta->save();
+            $idComboLiquidado                   = $comboEtiqueta->id;
+        }
+
+
+        // crear los detalles del combo
+        foreach ($datosDetalle as $detalle) {
+            //validar si ya existe no crear , validar el codigo, contrato_relacion
+            $validateDetalle = VerificacionComboLiquidadoDetalle::where('codigo', $detalle->codigo)
+                ->where('contrato_relacion', $contrato_relacion)
+                ->where('combo_etiqueta', $combo_etiqueta)
+                ->first();
+            if ($validateDetalle) {
+                continue;
+            }
+            $detalleCombo                           = new VerificacionComboLiquidadoDetalle();
+            $detalleCombo->verificaciones_combos_liquidados_id = $idComboLiquidado;
+            $detalleCombo->codigo                   = $detalle->codigo;
+            $detalleCombo->combo_etiqueta           = $combo_etiqueta;
+            $detalleCombo->combo                    = $detalle->combo;
+            $detalleCombo->contrato_liquidada       = $detalle->contrato;
+            $detalleCombo->institucion_liquidada    = $detalle->bc_institucion;
+            $detalleCombo->periodo_liquidada        = $detalle->bc_periodo;
+            $detalleCombo->contrato_relacion        = $contrato_relacion;
+            $detalleCombo->columna_verificacion     = $detalle->columna_verificacion;
+            $detalleCombo->verificacion_id          = $detalle->valor_verificacion;
+            $detalleCombo->save();
+        }
+
+        //traer todos los codigos del combo para registralos
+        $getAllCodigosCombo = DB::SELECT("SELECT * FROM codigoslibros c
+        WHERE c.codigo_combo = '$combo_etiqueta'
+        AND c.prueba_diagnostica = '0'
+        ");
+        foreach($getAllCodigosCombo as $codigoCombo){
+            //validar si ya existe no crear , validar el codigo, contrato_relacion
+            $validateDetalle = VerificacionComboLiquidadoDetalle::where('codigo', $codigoCombo->codigo)
+                ->where('contrato_relacion', $contrato_relacion)
+                ->where('combo_etiqueta', $combo_etiqueta)
+                ->first();
+            if ($validateDetalle) {
+                continue;
+            }
+            $detalleCombo                           = new VerificacionComboLiquidadoDetalle();
+            $detalleCombo->verificaciones_combos_liquidados_id = $idComboLiquidado;
+            $detalleCombo->codigo                   = $codigoCombo->codigo;
+            $detalleCombo->combo_etiqueta           = $combo_etiqueta;
+            $detalleCombo->combo                    = $codigoCombo->combo;
+            $detalleCombo->contrato_liquidada       = $codigoCombo->contrato;
+            $detalleCombo->institucion_liquidada    = $codigoCombo->bc_institucion;
+            $detalleCombo->periodo_liquidada        = $codigoCombo->bc_periodo;
+            $detalleCombo->contrato_relacion        = $contrato_relacion;
+            $detalleCombo->venta_lista_institucion   = $codigoCombo->venta_lista_institucion;
+            $detalleCombo->columna_verificacion     = null;
+            $detalleCombo->verificacion_id          = null; // valor por defecto
+            $detalleCombo->save();
+        }
+    }
 }
