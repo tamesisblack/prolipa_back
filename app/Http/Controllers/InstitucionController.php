@@ -1341,17 +1341,39 @@ public function Delete_TipoInstitucion($request) {
     }
 }
 
-    public function validarTipoInstitucion($id)
+    public function validarTipoInstitucion($id, Request $request)
     {
         $institucion = Institucion::where('idInstitucion', $id)
-                                ->select('tipo_institucion')
-                                ->first();
+            ->select('tipo_institucion')
+            ->first();
 
         if (!$institucion) {
             return "false";
         }
 
+        // Aquí lees el nuevo parámetro (si lo mandas)
+        $extra = $request->query('tipo'); // ejemplo: ?extra=abc
+
+        // Puedes usarlo en tu lógica
+        if ($extra == '3') {
+            if($institucion->tipo_institucion == 3){
+                return "true";
+            }else{
+                return "false";
+            }
+        }else if ($extra == '4') {
+            if($institucion->tipo_institucion == 4){
+                return "true";
+            }else{
+                return "false";
+            }
+        }else if ($extra == '5') {
+            if($institucion->tipo_institucion == 5){
+                return "true";
+            }else{
+                return "false";
+            }
+        }
         return in_array($institucion->tipo_institucion, [3, 4, 5]) ? "true" : "false";
     }
-
 }

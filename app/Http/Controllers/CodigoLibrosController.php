@@ -4570,7 +4570,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             'codigoslibros.venta_lista_institucion','codigoslibros.libro_idlibro','codigoslibros.documento_devolucion',
             'codigoslibros.combo','codigoslibros.codigo_combo','codigoslibros.proforma_empresa','codigoslibros.codigo_proforma',
             'codigoslibros.estado_liquidacion','codigoslibros.liquidado_regalado', 'codigoslibros.venta_estado',
-            'codigoslibros.codigo_paquete','codigoslibros.permitir_devolver_nota',
+            'codigoslibros.codigo_paquete','codigoslibros.contrato','codigoslibros.permitir_devolver_nota',
             'codigoslibros.prueba_diagnostica', 'codigoslibros.plus',
             // 'ls.nombre as nombrelibro',
             'codigoslibros.estado', 'institucion.nombreInstitucion as institucionDirecta','i2.nombreInstitucion as institucionPuntoVenta','pe.periodoescolar',
@@ -4842,7 +4842,7 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             'codigoslibros.venta_lista_institucion', 'codigoslibros.libro_idlibro', 'codigoslibros.documento_devolucion',
             'codigoslibros.combo','codigoslibros.codigo_combo', 'codigoslibros.proforma_empresa', 'codigoslibros.codigo_proforma',
             'codigoslibros.estado_liquidacion', 'codigoslibros.liquidado_regalado', 'codigoslibros.venta_estado',
-            'codigoslibros.codigo_paquete',
+            'codigoslibros.codigo_paquete','codigoslibros.contrato',
             // 'ls.nombre as nombrelibro',
             'codigoslibros.permitir_devolver_nota', 'codigoslibros.plus',
             'codigoslibros.estado', 'institucion.nombreInstitucion as institucionDirecta',
@@ -4911,9 +4911,11 @@ private function agruparPorCodigoPrimerValor($arrayOldValues) {
             ->map(function ($items) {
                 return [
                     'codigoCombo'  => $items->first()->codigo_combo,
+                    'combo'        => $items->first()->combo,
                     'codigosHijos' => $items->map(function ($item) {
                         return [
                             'codigoActivacion'   => $item->codigo,
+                            'contrato'           => $item->contrato,
                             'codigoDiagnostico'  => $item->codigo_union,
                             'codigo_liquidacion' => $item->codigo_liquidacion
                         ];

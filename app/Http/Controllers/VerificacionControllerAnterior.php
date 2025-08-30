@@ -123,7 +123,7 @@ class VerificacionControllerAnterior extends Controller
         AND c.bc_periodo  = '$periodo'
         AND c.bc_institucion = '$institucion'
         AND ls.idLibro = c.libro_idlibro
-        LIMIT 2000
+        LIMIT 80
         ");
         return $traerCodigosIndividual;
     }
@@ -164,7 +164,7 @@ class VerificacionControllerAnterior extends Controller
                         AND v.contrato_relacion = '$contrato'
                     ))
                 )
-            LIMIT 2000;
+            LIMIT 80;
 
         ");
 
@@ -175,7 +175,7 @@ class VerificacionControllerAnterior extends Controller
         FROM codigoslibros c
         WHERE  c.estado_liquidacion = '2'
         AND (c.bc_institucion       = '$institucion' OR c.venta_lista_institucion = '$institucion')
-        -- AND c.prueba_diagnostica = '0'
+        -- AND c.prueba_diagnostica    = '0'
         AND c.bc_periodo            = '$periodo'
         AND c.liquidado_regalado    = '0'
         ");
@@ -2148,7 +2148,6 @@ class VerificacionControllerAnterior extends Controller
             $traerCodigosIndividual = $this->getCodigosIndividualLiquidar($institucion, $periodo);
             //TRAER LOS CODIGOS REGALADOS
             $arregloRegalados = $this->getRegaladosXLiquidar($institucion, $periodo);
-
             //SI TODO HA SALIDO BIEN TRAEMOS LA DATA
             if (count($data) > 0) {
                 //====PROCESO GUARDAR EN FACTURACION=======
@@ -2300,7 +2299,6 @@ class VerificacionControllerAnterior extends Controller
         $idVerificacion = $traerNumeroVerificacionInicialId;
 
         $mensaje = $observacion === "regalado" ? "liquidacion regalado" : "liquidacion";
-
         // Campos comunes
         $datosBase = [
             'contrato' => $contrato,
@@ -2310,7 +2308,6 @@ class VerificacionControllerAnterior extends Controller
         } else {
             $datosBase['estado_liquidacion'] = "0";
         }
-
         foreach ($traerCodigosIndividual as $item) {
             $codigo_combo               = $item->codigo_combo;
 
@@ -2318,7 +2315,6 @@ class VerificacionControllerAnterior extends Controller
             $columnaVerificacionLocal   = $columnaVerificacion;
             $idVerificacionLocal        = $idVerificacion;
             $errorCombo                 = 0;
-
             // Si hay combo, buscar verificación personalizada si el parte del combo fue liquidad en la primera verificacion trare el id de verificacion
             if ($codigo_combo) {
                 $getComboEtiqueta = collect($searchComboEtiquetas)->firstWhere('codigo_combo', $codigo_combo);
